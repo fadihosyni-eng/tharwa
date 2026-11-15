@@ -396,14 +396,24 @@ table.rent tr.now td { color: var(--gold); }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 95; }
 
 /* players panel */
-.prow.big { flex-direction: column; align-items: stretch; gap: 6px; }
-.prow-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.worth { display: flex; align-items: center; gap: 8px; }
-.worth-bar { flex: 1; height: 5px; background: #22334a; border-radius: 99px; overflow: hidden; }
+.prow.big { flex-direction: column; align-items: stretch; gap: 3px; padding: 4px 8px; margin-bottom: 4px; }
+.prow-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.prow.big .tk.av { width: 26px; height: 26px; }
+.pinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0; line-height: 1.15; }
+.pline { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.prow.big .pname { flex: 0 1 auto; font-size: 13.5px; }
+.prow.big .icons { font-size: 12px; }
+.prow.big .pmoney { font-size: 14px; line-height: 1.15; }
+.prow .pmoney.neg, .worth small.neg { color: var(--danger); }
+.debt-tag { font-size: 10.5px; font-weight: 800; color: var(--danger); background: rgba(255, 107, 122, .12); border: 1px solid rgba(255, 107, 122, .45); border-radius: 99px; padding: 0 6px; white-space: nowrap; }
+.pdeal { display: flex; gap: 4px; flex: 0 0 auto; }
+.pdeal .btn.sm { padding: 2px 6px; font-size: 12px; }
+.worth { display: flex; align-items: center; gap: 6px; }
+.worth-bar { flex: 1; height: 3px; background: #22334a; border-radius: 99px; overflow: hidden; }
 .worth-bar i { display: block; height: 100%; border-radius: 99px; transition: width .6s ease; }
-.worth small { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.pchips { display: flex; flex-wrap: wrap; gap: 3px; }
-.pchip { width: 11px; height: 11px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
+.worth small { font-size: 10.5px; color: var(--muted); white-space: nowrap; line-height: 1.2; }
+.pchips { display: flex; flex-wrap: wrap; gap: 2px; }
+.pchip { width: 8px; height: 8px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
 .pchip.mort { opacity: .3; }
 .piece-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .piece-btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 2px 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; min-width: 0; }
@@ -488,6 +498,7 @@ input[type=text], input:not([type]), input[type=number], select { background: va
 .prow { background: linear-gradient(90deg, rgba(0, 180, 255, .05), transparent), var(--panel2); border-radius: 12px; }
 .prow.turn-on { border-color: var(--cyan); box-shadow: inset -3px 0 0 var(--cyan), 0 0 18px rgba(0, 180, 255, .18); }
 .prow .pmoney { color: var(--ok); }
+.prow .pmoney.neg { color: var(--danger); }
 .piece-btn.on, .cpick.on, .tchip.on { border-color: var(--cyan); background: rgba(0, 180, 255, .12); }
 .country.pick:hover, .cpick:hover { border-color: var(--cyan); }
 .pick-h { color: var(--cyan2); }

@@ -6,6 +6,7 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = (n) => '$' + Math.round(Number(n) || 0).toLocaleString('en-US');
+  const sfmt = (n) => (n < 0 ? '-' : '') + fmt(Math.abs(n)); // signed: «-$300»
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -274,7 +275,7 @@
       if (d) {
         const kind = d > 0 ? 'plus' : 'minus', txt = (d > 0 ? '+' : '−') + fmt(Math.abs(d));
         const m = document.querySelector(`[data-prow="${p.id}"] .pmoney`);
-        if (m) { const r = m.getBoundingClientRect(); FX.floatText(r.left + r.width / 2, r.top, txt, kind); countUp(m, o.money || 0, p.money || 0); }
+        if (m) { const r = m.getBoundingClientRect(); FX.floatText(r.left + r.width / 2, r.top, txt, kind); if (!owedBy(st, p)) countUp(m, o.money || 0, p.money || 0); }
         const tok = document.getElementById('tok-' + p.id);
         if (tok && !document.hidden) { const r = tok.getBoundingClientRect(); FX.floatText(r.left + r.width / 2, r.top - 6, txt, kind + ' small'); }
         if (p.id === me) FX.Sound.play(d > 0 ? 'coin' : 'pay');
@@ -722,6 +723,13 @@
     ['mortgage', 'الرهن', 'بتقدر ترهن عقاراتك للبنك بنص سعرها'],
     ['randomOrder', 'ترتيب عشوائي', 'ترتيب الأدوار بيتحدّد عشوائي ببداية اللعبة'],
   ];
+  // Unpaid debt of a player. The engine keeps money >= 0 and puts the shortfall in
+  // g.debts, which always belongs to the current player; we show it as negative money.
+  function owedBy(st, p) {
+    const g = st.game;
+    if (!g || !g.debts || !g.debts.length || p.bankrupt || g.order[g.turn] !== p.id) return 0;
+    return g.debts.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  }
   function netWorth(st, p) {
     const g = st.game;
     if (!g || p.bankrupt) return 0;
@@ -732,7 +740,7 @@
       w += pr.mortgaged ? t.price / 2 : t.price;
       if (pr.houses) w += pr.houses * t.houseCost;
     }
-    return w;
+    return w - owedBy(st, p);
   }
   function playerRow(p, st, maxWorth) {
     const g = st.game, me = meP(st);
@@ -746,15 +754,19 @@
     }
     const canDeal = st.status === 'playing' && me && !me.bankrupt && p.id !== me.id && !p.bankrupt;
     const trade = canDeal ? `<button class="btn sm" data-trade="${p.id}" title="تبادل عقارات ومصاري">🤝</button><button class="btn sm" data-loan="${p.id}" title="قرض">💰</button>` : '';
-    const worth = netWorth(st, p);
+    const worth = netWorth(st, p), owed = owedBy(st, p);
+    const cash = owed > 0 ? -owed : p.money;
     const chips = ownedBy(st, p.id).map((i) => {
       const t = T(i), pr = g.props[i];
       const c = t.type === 'city' ? SET(t.set).color : '#8ea3b8';
       return `<i class="pchip ${pr.mortgaged ? 'mort' : ''}" style="background:${c}" title="${esc(t.name)}"></i>`;
     }).join('');
+    // Compact row: avatar | name over money (money on the right, under the name) | deal buttons.
+    const money = p.bankrupt ? '<span class="pmoney">—</span>'
+      : `<span class="pmoney ${owed > 0 ? 'neg' : ''}" data-money="${p.money}">${sfmt(cash)}</span>${owed > 0 ? '<small class="debt-tag">عليه دين</small>' : ''}`;
     return `<div class="prow big ${isCur ? 'turn-on' : ''} ${p.bankrupt || p.left ? 'dead' : ''}" data-prow="${p.id}">
-      <div class="prow-top">${avatar}${name}<span class="pmoney" data-money="${p.money}">${p.bankrupt ? '—' : fmt(p.money)}</span></div>
-      ${p.bankrupt ? '' : `<div class="worth"><div class="worth-bar"><i style="width:${maxWorth ? Math.round((worth / maxWorth) * 100) : 0}%;background:${p.color}"></i></div><small>الثروة ${fmt(worth)}</small>${trade}</div>
+      <div class="prow-top">${avatar}<div class="pinfo"><div class="pline">${name}</div><div class="pline">${money}</div></div>${trade ? `<span class="pdeal">${trade}</span>` : ''}</div>
+      ${p.bankrupt ? '' : `<div class="worth"><div class="worth-bar"><i style="width:${maxWorth ? Math.max(0, Math.round((worth / maxWorth) * 100)) : 0}%;background:${p.color}"></i></div><small class="${worth < 0 ? 'neg' : ''}">الثروة ${sfmt(worth)}</small></div>
       ${chips ? `<div class="pchips">${chips}</div>` : ''}`}
     </div>`;
   }

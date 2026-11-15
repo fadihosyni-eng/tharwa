@@ -27,6 +27,9 @@ for (const [deckName, list, tiles] of [['chance', B.CHANCE, CHANCE_TILES], ['che
       const g = room.game, p = room.players[0], others = room.players.slice(1);
       p.pos = fromTile;
       g[deckName] = [ci];
+      // «ارجع 3 خانات» can land on a «خزنة» tile: make that follow-up draw a harmless money card
+      // (a random «اذهب إلى السجن» there made this test fail now and then).
+      if (card.kind === 'back') g.chest = [B.CHEST.findIndex((c) => c.kind === 'money' && c.amount > 0)];
       // give the player some buildings for the repairs cards
       if (card.kind === 'repairs') {
         for (const i of B.SET_TILES.c1) g.props[i] = { owner: p.id, houses: 2, mortgaged: false };
