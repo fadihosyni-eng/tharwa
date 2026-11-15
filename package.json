@@ -1,0 +1,14 @@
+{
+  "name": "tharwa-game",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ثروة — لعبة المدن والعقارات أونلاين (من Serva)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/run-all.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

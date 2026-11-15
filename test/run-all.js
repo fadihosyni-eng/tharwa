@@ -1,0 +1,43 @@
+'use strict';
+// Runs every test against a temporary server on its own port, so a live game
+// on 8700 is never touched. Run: node tharwa-game/test/run-all.js
+const { spawn, spawnSync } = require('child_process');
+const path = require('path');
+
+const ROOT = path.join(__dirname, '..');
+const PORT = process.env.TEST_PORT || '8701';
+const BASE = `http://localhost:${PORT}`;
+
+function run(file, args = []) {
+  const r = spawnSync(process.execPath, [path.join(__dirname, file), ...args], { stdio: 'inherit' });
+  if (r.status !== 0) throw new Error(file + ' failed');
+}
+
+(async () => {
+  run('cards.js');
+  run('sim.js', ['150']);
+  const srv = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env: { ...process.env, PORT }, stdio: 'ignore' });
+  try {
+    for (let k = 0; k < 40; k++) {
+      try { const r = await fetch(BASE + '/api/board'); if (r.ok) break; } catch (e) { /* not up yet */ }
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    const net = await (await fetch(BASE + '/api/net')).json();
+    console.log('invite addresses:', net.map((n) => `${n.kind} ${n.url}`).join(' | ') || '(none)');
+    if (!Array.isArray(net)) throw new Error('/api/net did not return a list');
+    run('api.js', [BASE]);
+    // spam protection: one IP cannot create rooms without limit
+    let limited = false;
+    for (let k = 0; k < 14; k++) {
+      const r = await fetch(BASE + '/api/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'spam', isPrivate: true }) });
+      if (r.status === 429) { limited = true; break; }
+    }
+    if (!limited) throw new Error('room creation is not rate limited');
+    const fwd = await (await fetch(BASE + '/api/net', { headers: { 'X-Forwarded-For': '8.8.8.8' } })).json();
+    if (fwd.length) throw new Error('/api/net leaks addresses to remote clients');
+    console.log('spam limit + address privacy OK');
+    console.log('ALL TESTS PASSED');
+  } finally {
+    srv.kill();
+  }
+})().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });

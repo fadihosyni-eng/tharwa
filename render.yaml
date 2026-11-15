@@ -1,0 +1,13 @@
+# Render.com blueprint — free web service for «ثروة».
+# Render reads this file when you choose "New → Blueprint" and pick the repo.
+services:
+  - type: web
+    name: tharwa
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/board
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
