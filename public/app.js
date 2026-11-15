@@ -346,6 +346,8 @@
     $('#sideB').addEventListener('click', onSideClick);
     $('#sideB').addEventListener('change', onSideChange);
     window.addEventListener('resize', () => layoutTokens());
+    // The landscape board can change size without a window resize (e.g. emulated viewports, side panel growth).
+    if (window.ResizeObserver) new ResizeObserver(() => layoutTokens()).observe($('#board'));
     setInterval(tick, 250);
   }
 
