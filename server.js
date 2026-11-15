@@ -74,9 +74,9 @@ function newRoom(isPrivate) {
   rooms.set(room.code, room);
   return room;
 }
-// Pick this room's countries: USA, Syria, UK always + 5 random ones.
-function rollMap(room, mode) {
-  room.map = B.randomMap(mode);
+// Pick this room's countries: Syria always on top + 7 random Arab ones.
+function rollMap(room) {
+  room.map = B.randomMap();
   room.tiles = B.tilesFor(room.map);
 }
 function freeColor(room) { return COLORS.find((c) => !room.players.some((p) => p.color === c)) || COLORS[0]; }
@@ -224,7 +224,7 @@ function roomAct(room, p, type, data) {
     case 'setCountry': {
       needHost(); needLobby();
       const slot = String((data && data.slot) || ''), code = String((data && data.code) || '');
-      if (!B.SLOTS.includes(slot) || !B.COUNTRIES[code]) throw httpErr(400, 'دولة غير معروفة');
+      if (!B.SLOTS.includes(slot) || !B.ARAB.includes(code) || !B.COUNTRIES[code]) throw httpErr(400, 'دولة غير معروفة');
       room.map = B.setCountry(room.map, slot, code);
       room.tiles = B.tilesFor(room.map);
       E.log(room, `🌍 ${p.name} حط ${B.COUNTRIES[code].name} عاللوح`);
@@ -232,7 +232,7 @@ function roomAct(room, p, type, data) {
     }
     case 'shuffleMap': {
       needHost(); needLobby();
-      rollMap(room, data && data.mode === 'arab' ? 'arab' : 'mix');
+      rollMap(room); // `mode` is ignored: the board is always Arab-only
       const names = Object.keys(B.SETS).map((k) => B.COUNTRIES[room.map[k]].name);
       E.log(room, '🌍 دول جديدة عاللوح: ' + names.join('، '));
       return true;

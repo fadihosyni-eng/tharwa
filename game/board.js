@@ -1,8 +1,7 @@
 'use strict';
 // «ثروة» board: 40 tiles, 8 colour sets (price tiers), 4 ports, 2 companies.
-// Each room fills the 8 sets with world countries: USA, Syria and the UK are
-// always on the board (the three most valuable sets); the other five are drawn
-// at random from POOL and shuffled.
+// Each room fills the 8 sets with Arab countries only: Syria is always the most
+// valuable set (c8); the other seven are drawn at random from the Arab League.
 
 // Colour of each price tier (cheap -> expensive).
 const SETS = {
@@ -18,25 +17,7 @@ const SETS = {
 
 // Cities are listed cheap -> expensive. Two-city sets use the last two.
 const COUNTRIES = {
-  us: { name: 'أمريكا', cities: ['شيكاغو', 'لوس أنجلوس', 'نيويورك'] },
   sy: { name: 'سوريا', cities: ['حمص', 'حلب', 'دمشق'] },
-  gb: { name: 'بريطانيا', cities: ['ليفربول', 'مانشستر', 'لندن'] },
-  tr: { name: 'تركيا', cities: ['أنطاليا', 'أنقرة', 'إسطنبول'] },
-  de: { name: 'ألمانيا', cities: ['هامبورغ', 'ميونخ', 'برلين'] },
-  fr: { name: 'فرنسا', cities: ['ليون', 'مرسيليا', 'باريس'] },
-  it: { name: 'إيطاليا', cities: ['ميلانو', 'فينيسيا', 'روما'] },
-  es: { name: 'إسبانيا', cities: ['إشبيلية', 'برشلونة', 'مدريد'] },
-  jp: { name: 'اليابان', cities: ['أوساكا', 'كيوتو', 'طوكيو'] },
-  cn: { name: 'الصين', cities: ['شنتشن', 'بكين', 'شنغهاي'] },
-  br: { name: 'البرازيل', cities: ['سلفادور', 'ريو', 'ساو باولو'] },
-  ar: { name: 'الأرجنتين', cities: ['قرطبة', 'روساريو', 'بوينس آيرس'] },
-  ru: { name: 'روسيا', cities: ['قازان', 'بطرسبرغ', 'موسكو'] },
-  ua: { name: 'أوكرانيا', cities: ['أوديسا', 'لفيف', 'كييف'] },
-  nl: { name: 'هولندا', cities: ['لاهاي', 'روتردام', 'أمستردام'] },
-  se: { name: 'السويد', cities: ['مالمو', 'غوتنبرغ', 'ستوكهولم'] },
-  ch: { name: 'سويسرا', cities: ['بازل', 'جنيف', 'زيورخ'] },
-  gr: { name: 'اليونان', cities: ['كريت', 'سالونيك', 'أثينا'] },
-  in: { name: 'الهند', cities: ['كلكتا', 'دلهي', 'مومباي'] },
   eg: { name: 'مصر', cities: ['الأقصر', 'الإسكندرية', 'القاهرة'] },
   ae: { name: 'الإمارات', cities: ['الشارقة', 'أبوظبي', 'دبي'] },
   jo: { name: 'الأردن', cities: ['العقبة', 'إربد', 'عمّان'] },
@@ -61,9 +42,9 @@ const COUNTRIES = {
 };
 // The 22 Arab League countries.
 const ARAB = ['sy', 'eg', 'jo', 'lb', 'iq', 'sa', 'ae', 'qa', 'kw', 'bh', 'om', 'ye', 'ps', 'dz', 'ma', 'tn', 'ly', 'sd', 'so', 'mr', 'dj', 'km'];
-const FIXED = { c8: 'us', c7: 'sy', c6: 'gb' };
+const FIXED = { c8: 'sy' };
 const POOL = Object.keys(COUNTRIES).filter((k) => !Object.values(FIXED).includes(k));
-const RANDOM_SLOTS = ['c1', 'c2', 'c3', 'c4', 'c5'];
+const RANDOM_SLOTS = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'];
 const SLOTS = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8'];
 
 const r5 = (x) => (x < 20 ? Math.round(x) : Math.round(x / 5) * 5);
@@ -141,15 +122,8 @@ function shuffled(a) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-// mode 'mix': USA, Syria, UK on top + 5 random from the world.
-// mode 'arab': Syria on top + 7 random Arab countries.
-function randomMap(mode = 'mix') {
-  if (mode === 'arab') {
-    const rest = shuffled(ARAB.filter((c) => c !== 'sy'));
-    const map = { c8: 'sy' };
-    SLOTS.slice(0, 7).forEach((slot, k) => { map[slot] = rest[k]; });
-    return map;
-  }
+// Syria on top (c8) + 7 random Arab countries.
+function randomMap() {
   const pool = shuffled(POOL);
   const map = { ...FIXED };
   RANDOM_SLOTS.forEach((slot, k) => { map[slot] = pool[k]; });
@@ -158,7 +132,7 @@ function randomMap(mode = 'mix') {
 // Put a chosen country in a slot (swaps if it is already on the board).
 function setCountry(map, slot, code) {
   if (!SLOTS.includes(slot)) throw new Error('bad slot');
-  if (!COUNTRIES[code]) throw new Error('bad country');
+  if (!COUNTRIES[code] || !ARAB.includes(code)) throw new Error('bad country');
   const next = { ...map };
   const other = SLOTS.find((s) => next[s] === code);
   if (other) next[other] = next[slot];

@@ -15,7 +15,8 @@
 
   const S = {
     board: null, code: null, me: null, room: null, es: null, offset: 0,
-    disp: {}, moveSeq: -1, rollSeq: -1, cardSeq: -1, queue: [], running: false,
+    disp: {}, moveSeq: -1, rollSeq: -1, cardSeq: -1, noticeSeq: -1, queue: [], running: false,
+    chatOpen: false, chatUnread: 0, chatLastT: null,
     modal: null, trade: null, built: false, homeTimer: null, cardTimer: null,
   };
   // Tiles of the current room: city/country names come from the room's country map.
@@ -68,9 +69,9 @@
   // ================================================================ home
   function renderHome() {
     document.title = 'ثروة — لعبة المدن والعقارات';
-    const orbit = ['sy', 'us', 'gb', 'sa', 'jo', 'lb', 'eg', 'iq', 'tr', 'ps', 'ae', 'ma'];
+    const orbit = ['sy', 'sa', 'jo', 'lb', 'eg', 'iq', 'ps', 'ae', 'ma', 'qa', 'kw', 'dz'];
     const features = [
-      ['port', '40 دولة بأعلامها', 'كل الدول العربية الـ22 ودول العالم — إنت بتختار'],
+      ['port', '22 دولة عربية بأعلامها', 'من الشام للمغرب — سوريا دايماً الأغلى، والباقي إنت بتختاره'],
       ['gavel', 'مزادات وقروض', 'زاود، بيع عقارك بالمزاد، أو أقرض صاحبك بفايدة'],
       ['chest', 'بطاقات حظ وخزنة', 'بطاقات بتقلب اللعبة بلحظة'],
       ['trophy', 'آخر واحد بيربح', 'عمّر فنادق وخلّي الكل يفلس'],
@@ -84,7 +85,7 @@
           <div class="dice3 hero-dice" id="heroDice" title="ارمي!">${FX.diceHTML()}</div>
         </div>
         <div class="logo">ثروة<span>.</span></div>
-        <div class="tagline">اشترِ مدن العالم، عمّر الفنادق، وخلّي منافسينك يفلسوا</div>
+        <div class="tagline">اشترِ المدن العربية، عمّر الفنادق، وخلّي منافسينك يفلسوا</div>
         ${BY_SERVA}
         <div class="pieces-row">${ART.PIECE_KEYS.map((k, i) => `<span class="tk" style="--pc:${['#f5c04a', '#38d4c0', '#f0585e', '#a78bfa', '#5ad06b', '#f472b6', '#4f9df7', '#fb923c'][i]};--d:${i * 0.12}s">${ART.piece(k)}</span>`).join('')}</div>
       </div>
@@ -106,7 +107,7 @@
             <li>بطاقات «حظ» و«خزنة» ممكن تعطيك مصاري أو تاخد منك أو تنقلك.</li>
             <li>🤝 تبادل عقارات ومصاري، 💰 أقرض أو استلف من اللاعبين بفايدة.</li>
             <li>🏦 ارهن عقاراتك للبنك، أو 🔨 بيعها بالمزاد لأعلى سعر.</li>
-            <li>🌍 صاحب الغرفة بيختار الدول: 22 دولة عربية و18 دولة من العالم.</li>
+            <li>🌍 اللوح كله دول عربية: سوريا دايماً أغلى دولة، وصاحب الغرفة بيختار الباقي من الـ22 دولة عربية.</li>
             <li>آخر واحد بيضل بدون إفلاس هو الفائز.</li>
           </ul>
         </div>
@@ -233,6 +234,7 @@
     updateBoard(st);
     updateDice(st);
     updateCard(st);
+    updateNotice(st);
     updateCenter(st);
     updateSide(st);
     updateChat(st);
@@ -295,6 +297,8 @@
     S.built = true;
     app.innerHTML = `
     <div class="room">
+      <aside class="col col-b" id="sideB"></aside>
+      <main class="col col-board"><div class="board" id="board"></div></main>
       <aside class="col col-a">
         <div class="top-row"><a class="mini-logo" href="/">ثروة<span>.</span></a>
           <span class="row" style="gap:6px"><a class="serva-chip" href="${SERVA_URL}" target="_blank" rel="noopener" title="لعبة من Serva"><img src="/brand/serva-logo-160.webp" alt="Serva" width="34" height="34"></a>
@@ -305,14 +309,13 @@
           <div class="room-code">كود الغرفة: <b>${esc(S.code)}</b></div>
           <div id="netLinks" class="net-links"></div>
         </div>
-        <div class="panel chat">
-          <div class="lbl">الدردشة</div>
-          <div class="chat-list" id="chatList"></div>
-          <form class="chat-form" id="chatForm"><input id="chatIn" maxlength="200" placeholder="اكتب رسالة…" autocomplete="off"><button class="btn sm">إرسال</button></form>
-        </div>
       </aside>
-      <main class="col col-board"><div class="board" id="board"></div></main>
-      <aside class="col col-b" id="sideB"></aside>
+    </div>
+    <button class="chat-fab" id="chatFab" type="button" title="الدردشة" aria-label="الدردشة" aria-expanded="false">💬<span class="chat-badge" id="chatBadge" hidden>0</span></button>
+    <div class="chat-drawer" id="chatDrawer" role="dialog" aria-label="الدردشة" aria-hidden="true">
+      <div class="chat-head"><b>💬 الدردشة</b><button class="x-btn" id="chatClose" type="button" title="سكّر">✕</button></div>
+      <div class="chat-list" id="chatList"></div>
+      <form class="chat-form" id="chatForm"><input id="chatIn" maxlength="200" placeholder="اكتب رسالة…" autocomplete="off"><button class="btn sm">إرسال</button></form>
     </div>`;
     buildBoard();
     $('#sndBtn').onclick = () => { $('#sndBtn').textContent = FX.Sound.toggle() ? '🔊' : '🔇'; };
@@ -329,6 +332,8 @@
       $('#chatIn').value = '';
       act('chat', { text: v });
     };
+    $('#chatFab').onclick = () => toggleChat();
+    $('#chatClose').onclick = () => toggleChat(false);
     $('#sideB').addEventListener('click', onSideClick);
     $('#sideB').addEventListener('change', onSideChange);
     window.addEventListener('resize', () => layoutTokens());
@@ -392,11 +397,13 @@
         <div class="c-actions" id="cActions"></div>
         <div class="c-log" id="cLog"></div>
         <div id="cCard"></div>
+        <div id="cNotice"></div>
         <div id="cBanner"></div>
       </div><div class="tokens" id="tokens"></div>`;
     FX.setDice($('#dice'), [5, 6], false);
     b.addEventListener('click', (e) => {
       if (e.target.closest('.card2')) { $('#cCard').innerHTML = ''; return; }
+      if (e.target.closest('.notice')) { $('#cNotice').innerHTML = ''; return; }
       const tile = e.target.closest('.tile');
       if (tile) { openTile(Number(tile.dataset.i)); return; }
       const a = e.target.closest('[data-a]');
@@ -503,8 +510,11 @@
       const tile = board.querySelector(`.tile[data-i="${d}"]`);
       if (!tile) continue;
       const grp = groups[d], k = grp.indexOf(p), n = grp.length;
-      const size = Math.max(18, Math.min(34, Math.min(tile.offsetWidth, tile.offsetHeight) * 0.5));
       const per = n > 4 ? 3 : 2, rows = Math.ceil(n / per), cols = Math.min(n, per);
+      // Big glowing tokens: clamp(22, tile*0.6, 40), shrunk only as much as needed so a group fits its tile.
+      const tw = tile.offsetWidth, th = tile.offsetHeight;
+      const fit = Math.min(tw / (1 + 0.8 * (cols - 1)), th / (1 + 0.8 * (rows - 1)));
+      const size = Math.max(16, Math.min(Math.max(22, Math.min(40, Math.min(tw, th) * 0.6)), n > 1 ? fit : Infinity));
       const col = k % per, row = Math.floor(k / per);
       const cx = tile.offsetLeft + tile.offsetWidth / 2 + (col - (cols - 1) / 2) * size * 0.8;
       const cy = tile.offsetTop + tile.offsetHeight / 2 + (row - (rows - 1) / 2) * size * 0.8;
@@ -546,6 +556,32 @@
       clearTimeout(S.cardTimer);
       S.cardTimer = setTimeout(() => { $('#cCard').innerHTML = ''; }, 7000);
     }, wait);
+  }
+
+  // Big centred notice everyone sees (e.g. «سيرفا دفع $140 إيجار لـ بوت سامي»).
+  function updateNotice(st) {
+    const g = st.game;
+    if (!g) { S.noticeSeq = 0; return; }
+    if (S.noticeSeq < 0) { S.noticeSeq = g.noticeSeq || 0; return; }
+    if (!g.notice || g.notice.seq <= S.noticeSeq) return;
+    S.noticeSeq = g.notice.seq;
+    const n = g.notice;
+    const from = st.players.find((p) => p.id === n.from), to = st.players.find((p) => p.id === n.to);
+    if (n.kind !== 'rent' || !from || !to) return;
+    const av = (p) => `<span class="tk nav" style="--pc:${p.color}">${ART.piece(p.piece)}</span>`;
+    const html = `<div class="notice" title="اضغط لتسكير">
+        <div class="n-avs">${av(from)}<span class="n-arrow">←</span>${av(to)}</div>
+        <div class="n-main">💸 <b style="color:${from.color}">${esc(from.name)}</b> دفع <span class="n-amt">${fmt(n.amount)}</span> إيجار لـ <b style="color:${to.color}">${esc(to.name)}</b></div>
+        <div class="n-sub">🏠 ${esc(n.tile)}</div>
+      </div>`;
+    clearTimeout(S.noticeShow);
+    S.noticeShow = setTimeout(() => {
+      const box = $('#cNotice');
+      if (!box) return;
+      box.innerHTML = html;
+      clearTimeout(S.noticeTimer);
+      S.noticeTimer = setTimeout(() => { box.innerHTML = ''; }, 3500);
+    }, S.running ? 900 : 0);
   }
 
   // ---------------------------------------------------------------- center
@@ -737,27 +773,26 @@
   function countriesHTML(st) {
     const keys = Object.keys(S.board.sets).reverse();
     const host = isHost(st);
-    return `<div class="panel"><div class="lbl"><span>🌍 دول اللوح</span>${host ? '<span class="row" style="gap:4px"><button class="btn sm" data-shuffle="mix">🎲 عشوائي</button><button class="btn sm" data-shuffle="arab">🎲 عربي</button></span>' : ''}</div>
+    return `<div class="panel"><div class="lbl"><span>🌍 دول اللوح</span>${host ? '<button class="btn sm" data-shuffle>🎲 دول عشوائية</button>' : ''}</div>
       <div class="country-list">${keys.map((k, n) => {
         const code = st.map && st.map[k], c = code && S.board.countries[code];
         if (!c) return '';
         return `<${host ? 'button' : 'div'} class="country ${host ? 'pick' : ''}" ${host ? `data-slot="${k}"` : ''}><span class="sw" style="background:${SET(k).color}"></span>${flag(code, 'sm')}<b>${esc(c.name)}</b><small>${n === 0 ? 'الأغلى' : n === keys.length - 1 ? 'الأرخص' : ''}</small></${host ? 'button' : 'div'}>`;
       }).join('')}</div>
-      <div class="hint" style="text-align:start;margin-top:6px">${host ? 'اضغط على أي دولة لتختار بدالها — في 22 دولة عربية و18 دولة من العالم.' : 'صاحب الغرفة بيختار الدول.'}</div></div>`;
+      <div class="hint" style="text-align:start;margin-top:6px">سوريا دايماً أغلى دولة، والباقي 7 دول عربية عشوائية${host ? ' — اضغط على أي دولة لتختار بدالها.' : '. صاحب الغرفة بيختار الدول.'}</div></div>`;
   }
   // Host picks a country for one board slot.
   function openCountryPicker(slot) {
     S.modal = { kind: 'country', slot };
     const st = S.room, map = st.map || {}, cur = map[slot];
-    const arab = S.board.arab, world = Object.keys(S.board.countries).filter((c) => !arab.includes(c));
+    const arab = S.board.arab.filter((c) => S.board.countries[c]);
     const slotOf = (code) => Object.keys(map).find((k) => map[k] === code);
     const btns = (list) => list.map((code) => {
       const used = slotOf(code);
       return `<button class="cpick ${code === cur ? 'on' : ''}" data-code="${code}">${flag(code, 'mid0')}<span>${esc(S.board.countries[code].name)}</span>${used && used !== slot ? `<i class="used" style="background:${SET(used).color}" title="موجودة عاللوح — رح تتبادل"></i>` : ''}</button>`;
     }).join('');
     const body = `<div class="hint" style="text-align:start">اختار دولة لخانة اللون <span class="sw-inline" style="background:${SET(slot).color}"></span>. إذا الدولة موجودة بمكان تاني عاللوح، بيتبدّلوا.</div>
-      <h4 class="pick-h">الدول العربية</h4><div class="cgrid">${btns(arab)}</div>
-      <h4 class="pick-h">دول العالم</h4><div class="cgrid">${btns(world)}</div>`;
+      <h4 class="pick-h">الدول العربية</h4><div class="cgrid">${btns(arab)}</div>`;
     const root = $('#modal-root');
     root.innerHTML = modalShell('🌍 اختار دولة', body, 'wide');
     bindModal(root);
@@ -906,7 +941,7 @@
     if (cash && !cash.disabled) { act('settings', { startingCash: Number(cash.dataset.cash) }); return; }
     if (t.closest('[data-addbot]')) { act('addBot'); return; }
     const sh = t.closest('[data-shuffle]');
-    if (sh) { act('shuffleMap', { mode: sh.dataset.shuffle }); return; }
+    if (sh) { act('shuffleMap'); return; }
     const slot = t.closest('[data-slot]');
     if (slot) { openCountryPicker(slot.dataset.slot); return; }
     const loanBtn = t.closest('[data-loan]');
@@ -944,17 +979,48 @@
   }
 
   // ---------------------------------------------------------------- chat
+  // The chat lives in a drawer behind the 💬 button; new messages from others bump the badge.
   function updateChat(st) {
     const list = $('#chatList');
     if (!list) return;
-    const key = st.chat.length ? st.chat[st.chat.length - 1].t + ':' + st.chat.length : '0';
+    $('#chatIn').disabled = !S.me;
+    const n = st.chat.length, lastT = n ? st.chat[n - 1].t : 0;
+    if (S.chatLastT === null) S.chatLastT = lastT; // what is already there on arrival counts as read
+    else if (lastT > S.chatLastT) {
+      if (!S.chatOpen) S.chatUnread += st.chat.filter((m) => m.t > S.chatLastT && !(S.me && m.pid === S.me.pid)).length;
+      S.chatLastT = lastT;
+    }
+    renderChatBadge();
+    const key = n ? lastT + ':' + n : '0';
     if (list.dataset.key === key) return;
     list.dataset.key = key;
-    list.innerHTML = st.chat.length
+    list.innerHTML = n
       ? st.chat.map((m) => `<div class="chat-msg"><b style="color:${m.color}">${esc(m.name)}:</b> ${esc(m.text)}</div>`).join('')
       : '<div class="chat-empty">💬 لسا ما في رسائل</div>';
     list.scrollTop = list.scrollHeight;
-    $('#chatIn').disabled = !S.me;
+  }
+  function renderChatBadge() {
+    const b = $('#chatBadge');
+    if (!b) return;
+    b.hidden = !S.chatUnread;
+    b.textContent = S.chatUnread > 99 ? '99+' : String(S.chatUnread);
+    $('#chatFab').classList.toggle('has-new', !!S.chatUnread);
+  }
+  function toggleChat(open = !S.chatOpen) {
+    const d = $('#chatDrawer'), fab = $('#chatFab');
+    if (!d) return;
+    S.chatOpen = open;
+    d.classList.toggle('open', open);
+    d.setAttribute('aria-hidden', open ? 'false' : 'true');
+    fab.setAttribute('aria-expanded', open ? 'true' : 'false');
+    fab.classList.toggle('on', open);
+    if (open) {
+      S.chatUnread = 0;
+      renderChatBadge();
+      const list = $('#chatList');
+      list.scrollTop = list.scrollHeight;
+      if (S.me && window.innerWidth > 820) setTimeout(() => $('#chatIn').focus(), 60);
+    } else if (document.activeElement === $('#chatIn')) $('#chatIn').blur();
   }
 
   // ================================================================ modals
@@ -1108,7 +1174,11 @@
     };
   }
 
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.modal && S.modal.kind !== 'confirm') closeModal(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (S.modal && S.modal.kind !== 'confirm') { closeModal(); return; }
+    if (S.chatOpen) toggleChat(false);
+  });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.room) { layoutTokens(); updateCenter(S.room); } });
   boot();
 })();

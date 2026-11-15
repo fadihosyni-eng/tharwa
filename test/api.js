@@ -48,15 +48,20 @@ const act = (code, me, type, data) => call('/api/act', { code, pid: me.pid, toke
   assert.strictEqual((await call('/api/act', { code, pid: guest.pid, token: 'x', type: 'chat', data: { text: 'hi' } })).status, 403);
   assert.strictEqual((await act(code, guest, 'chat', { text: 'مرحبا 👋' })).status, 200);
 
-  // countries: host picks, Arab shuffle, then back to the mixed board
-  assert.strictEqual((await act(code, guest, 'setCountry', { slot: 'c1', code: 'jo' })).status, 403, 'only host picks countries');
-  assert.strictEqual((await act(code, host, 'shuffleMap', { mode: 'arab' })).status, 200);
-  let lobby = await snapshot(code, host);
+  // countries: host picks; the board is Arab-only (Syria always on top)
   const ARAB = ['sy', 'eg', 'jo', 'lb', 'iq', 'sa', 'ae', 'qa', 'kw', 'bh', 'om', 'ye', 'ps', 'dz', 'ma', 'tn', 'ly', 'sd', 'so', 'mr', 'dj', 'km'];
-  assert(Object.values(lobby.map).every((c) => ARAB.includes(c)), 'Arab shuffle gives only Arab countries');
-  assert.strictEqual((await act(code, host, 'shuffleMap', { mode: 'mix' })).status, 200);
+  assert.strictEqual((await act(code, guest, 'setCountry', { slot: 'c1', code: 'jo' })).status, 403, 'only host picks countries');
+  for (let k = 0; k < 5; k++) {
+    assert.strictEqual((await act(code, host, 'shuffleMap', { mode: k % 2 ? 'mix' : 'arab' })).status, 200);
+    const m = (await snapshot(code, host)).map;
+    assert.strictEqual(m.c8, 'sy', 'Syria is always the most expensive country');
+    assert(Object.values(m).every((c) => ARAB.includes(c)), 'shuffle gives only Arab countries (any mode)');
+    assert.strictEqual(new Set(Object.values(m)).size, 8, 'shuffle gives 8 distinct countries');
+  }
   assert.strictEqual((await act(code, host, 'setCountry', { slot: 'c1', code: 'lb' })).status, 200);
   assert.strictEqual((await act(code, host, 'setCountry', { slot: 'c1', code: 'xx' })).status, 400, 'unknown country rejected');
+  assert.strictEqual((await act(code, host, 'setCountry', { slot: 'c2', code: 'us' })).status, 400, 'non-Arab country rejected');
+  let lobby;
   lobby = await snapshot(code, host);
   assert.strictEqual(lobby.map.c1, 'lb', 'host-chosen country is on the board');
   assert.strictEqual((await act(code, guest, 'piece', { piece: lobby.players[0].piece })).status, 409, 'piece already taken');
@@ -69,7 +74,8 @@ const act = (code, me, type, data) => call('/api/act', { code, pid: me.pid, toke
   assert.strictEqual(st.status, 'playing');
   assert.deepStrictEqual(st.players.map((p) => p.money), [2000, 2000], 'everyone starts with the chosen cash');
   assert.strictEqual(st.chat[0].text, 'مرحبا 👋');
-  assert.deepStrictEqual([st.map.c8, st.map.c7, st.map.c6], ['us', 'sy', 'gb'], 'USA, Syria, UK always on the board');
+  assert.strictEqual(st.map.c8, 'sy', 'Syria always the most expensive country');
+  assert(Object.values(st.map).every((c) => ARAB.includes(c)), 'all eight countries are Arab');
   assert.strictEqual(new Set(Object.values(st.map)).size, 8, '8 different countries');
   assert(st.game.turnEndsAt > Date.now(), 'turn clock is running');
 

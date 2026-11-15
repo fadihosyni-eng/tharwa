@@ -44,6 +44,7 @@ function newGame(room) {
     chest: shuffle(B.CHEST.map((_, i) => i)),
     pendingBuy: null, auction: null, debts: [],
     card: null, cardSeq: 0,
+    notice: null, noticeSeq: 0,
     moves: [], moveSeq: 0,
     trades: [], tradeSeq: 1,
     loans: [], loanSeq: 1,
@@ -190,6 +191,8 @@ function resolve(room, p, diceSum, opt = {}) {
     if (s.noRentInJail && owner.inJail) { log(room, `${owner.name} بالسجن — ما في إيجار على ${t.name}`); return; }
     const rent = rentFor(room, idx, diceSum) * (opt.mult || 1);
     log(room, `💸 ${p.name} دفع إيجار ${fmt(rent)} لـ ${owner.name} (${t.name})`);
+    // Big centred notice for everyone (clients show it once per seq, like cards).
+    g.notice = { kind: 'rent', from: p.id, to: owner.id, amount: rent, tile: t.name, seq: ++g.noticeSeq };
     charge(room, p, rent, owner, false, 'إيجار ' + t.name);
     return;
   }
