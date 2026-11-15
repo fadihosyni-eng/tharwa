@@ -45,6 +45,18 @@ node tharwa-game/server.js
 ## 🌍 اللعبة منشورة: https://tharwa.onrender.com
 المستودع: https://github.com/fadihosyni-eng/tharwa — أي `git push` على `main` بينشر نسخة جديدة لحاله.
 
+### 🔗 الروابط المهمة
+- اللعبة: **https://tharwa.onrender.com**
+- الكود: https://github.com/fadihosyni-eng/tharwa
+- Render (لوحة الخدمة): https://dashboard.render.com/web/srv-dbt2d00ae00c739fblag — بمساحة «music-bot»
+
+### بعد ما نشتري الدومين (مخطط له)
+1. نضيف الدومين لحساب Cloudflare الخاص فيك (أو نشتريه منه مباشرة).
+2. على Render: Settings ← Custom Domains ← نضيف الدومين الجديد (ونشيل `game.serva-s.com` إذا ما عاد بدنا ياه).
+3. على Cloudflare ← DNS: سجل `CNAME` من الاسم (مثلاً `game` أو `@`) لـ `tharwa.onrender.com` بوضع **DNS only**.
+4. Render بيتحقق وبيطلّع شهادة https لحاله.
+- ملاحظة: `game.serva-s.com` مضاف على Render بس ناطر سجل DNS من حساب Cloudflare التاني (مو معنا).
+
 ## النشر أونلاين (أصحابك بيدخلوا من أي مكان بلا أي برنامج)
 اللعبة جاهزة للاستضافة على **Render** (في خطة مجانية): `package.json` + `render.yaml` موجودين، وما في مكتبات.
 
