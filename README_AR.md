@@ -42,6 +42,9 @@ node tharwa-game/server.js
   شارة «لعبة من Serva» بالصفحة الرئيسية وصفحة الدخول، دائرة اللوغو أعلى الغرفة، لوغو باهت بوسط اللوح،
   وأيقونة التبويب. كلهن رابط لـ serva-s.com. المصدر: `product-video-studio/skills/serva-promo-ad/assets/serva-logo-disc.png`.
 
+## 🌍 اللعبة منشورة: https://tharwa.onrender.com
+المستودع: https://github.com/fadihosyni-eng/tharwa — أي `git push` على `main` بينشر نسخة جديدة لحاله.
+
 ## النشر أونلاين (أصحابك بيدخلوا من أي مكان بلا أي برنامج)
 اللعبة جاهزة للاستضافة على **Render** (في خطة مجانية): `package.json` + `render.yaml` موجودين، وما في مكتبات.
 
