@@ -84,12 +84,12 @@
       g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
     },
-    noise(dur, vol = 0.1, when = 0) {
+    noise(dur, vol = 0.1, when = 0, freq = 1800, type = 'bandpass') {
       const ac = this.ac(); if (!ac) return;
       const n = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
       for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
       const s = ac.createBufferSource(), g = ac.createGain(), f = ac.createBiquadFilter();
-      f.type = 'bandpass'; f.frequency.value = 1800; s.buffer = buf; g.gain.value = vol;
+      f.type = type; f.frequency.value = freq; s.buffer = buf; g.gain.value = vol;
       s.connect(f).connect(g).connect(ac.destination); s.start(ac.currentTime + when);
     },
     play(name) {
@@ -97,10 +97,22 @@
       try {
         switch (name) {
           case 'dice': for (let k = 0; k < 6; k++) this.noise(0.05, 0.16, k * 0.09 + Math.random() * 0.03); break;
-          case 'coin': this.tone(988, 0.09, 'square', 0.05); this.tone(1319, 0.16, 'square', 0.05, 0.08); break;
-          case 'pay': this.tone(440, 0.14, 'triangle', 0.1, 0, 300); break;
-          case 'buy': [523, 659, 784].forEach((f, k) => this.tone(f, 0.22, 'triangle', 0.09, k * 0.07)); break;
-          case 'build': this.tone(330, 0.07, 'square', 0.06); this.tone(330, 0.07, 'square', 0.06, 0.1); this.tone(494, 0.12, 'square', 0.06, 0.2); break;
+          // Soft, round tones (sine/triangle) at ~0.08-0.12 so they are audible but not harsh.
+          case 'coin': this.tone(1319, 0.1, 'sine', 0.1); this.tone(1760, 0.2, 'sine', 0.09, 0.07); this.tone(2637, 0.12, 'sine', 0.03, 0.07); break;
+          case 'pay': this.tone(523, 0.12, 'triangle', 0.1, 0, 392); this.tone(392, 0.18, 'triangle', 0.08, 0.1, 294); break;
+          case 'buy': [523, 659, 784, 1047].forEach((f, k) => this.tone(f, 0.24, 'triangle', 0.09, k * 0.065)); break;
+          // Hammer: three wooden knocks (pitch-dropping thud + short low noise), the last a bit stronger.
+          case 'build': [0, 0.15, 0.3].forEach((w, k) => {
+            const v = k === 2 ? 0.12 : 0.1;
+            this.tone(170, 0.11, 'sine', v, w, 70); this.tone(340, 0.05, 'triangle', v * 0.45, w, 160);
+            this.noise(0.05, v * 0.9, w, 900, 'lowpass');
+          }); break;
+          // Money being counted: 5 quick coin clinks with a little pitch jitter + paper flick.
+          case 'cash': for (let k = 0; k < 5; k++) {
+            const w = k * 0.085, f = 1568 + ((k * 197) % 420);
+            this.tone(f, 0.09, 'sine', 0.09, w); this.tone(f * 1.5, 0.06, 'sine', 0.035, w + 0.005);
+            this.noise(0.03, 0.05, w, 3200);
+          } this.tone(2093, 0.3, 'sine', 0.07, 0.44); break;
           case 'turn': this.tone(880, 0.12, 'sine', 0.1); this.tone(1175, 0.22, 'sine', 0.09, 0.1); break;
           case 'card': this.tone(600, 0.25, 'sine', 0.06, 0, 1200); break;
           case 'jail': this.tone(220, 0.3, 'sawtooth', 0.06, 0, 110); this.tone(196, 0.35, 'sawtooth', 0.05, 0.2, 98); break;

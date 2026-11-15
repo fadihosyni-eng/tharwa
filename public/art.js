@@ -96,6 +96,9 @@
   const HOUSE = svg('<path d="M1 5.2 L5 1.2 L9 5.2 V9.2 H1 Z" fill="#3ecf8e" stroke="#0b3d24" stroke-width=".9" stroke-linejoin="round"/><rect x="4" y="6" width="2" height="3.2" fill="#0b3d24" opacity=".55"/>', '0 0 10 10', 'house');
   const HOTEL = svg('<rect x="1" y="1.5" width="16" height="8.2" rx="1.2" fill="#f0585e" stroke="#5c0f12" stroke-width=".9"/><g fill="#ffe1e2"><rect x="3" y="3.4" width="2" height="1.8"/><rect x="6.3" y="3.4" width="2" height="1.8"/><rect x="9.7" y="3.4" width="2" height="1.8"/><rect x="13" y="3.4" width="2" height="1.8"/></g><rect x="7.6" y="6.4" width="2.8" height="3.3" fill="#5c0f12"/>', '0 0 18 11', 'hotel');
 
+  // Small banknote for the rent «cash flying» animation.
+  const BILL = svg('<rect x="1" y="3" width="30" height="16" rx="2.5" fill="#3ecf8e" stroke="#0b5d36" stroke-width="1.4"/><rect x="4" y="6" width="24" height="10" rx="1.5" fill="none" stroke="#c9ffe2" stroke-width=".9" opacity=".8"/><circle cx="16" cy="11" r="4.2" fill="#0b5d36" opacity=".85"/><text x="16" y="13.6" text-anchor="middle" font-size="7" font-weight="900" fill="#c9ffe2" font-family="Arial">$</text>', '0 0 32 22', 'bill');
+
   // Wireframe globe used as a watermark behind the board centre.
   const GLOBE = svg(`<g fill="none" stroke="currentColor" stroke-width="1.2">
       <circle cx="100" cy="100" r="92"/>
@@ -107,6 +110,6 @@
     icon: (name) => svg(ICONS[name] || ICONS.coin),
     piece: (key) => svg((PIECES[key] || PIECES.star).art, '0 0 24 24', 'piece-svg'),
     pieceLabel: (key) => (PIECES[key] || PIECES.star).label,
-    PIECE_KEYS, HOUSE, HOTEL, GLOBE,
+    PIECE_KEYS, HOUSE, HOTEL, GLOBE, BILL,
   };
 })();

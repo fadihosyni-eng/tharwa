@@ -1,7 +1,8 @@
 'use strict';
 // «ثروة» board: 40 tiles, 8 colour sets (price tiers), 4 ports, 2 companies.
-// Each room fills the 8 sets with Arab countries only: Syria is always the most
-// valuable set (c8); the other seven are drawn at random from the Arab League.
+// Each room fills the 8 sets with Arab countries only: Syria, Jordan and Iraq are
+// always on the board (the three most valuable sets, in that order); the other five
+// are drawn at random from the remaining 19 Arab League countries.
 
 // Colour of each price tier (cheap -> expensive).
 const SETS = {
@@ -42,9 +43,9 @@ const COUNTRIES = {
 };
 // The 22 Arab League countries.
 const ARAB = ['sy', 'eg', 'jo', 'lb', 'iq', 'sa', 'ae', 'qa', 'kw', 'bh', 'om', 'ye', 'ps', 'dz', 'ma', 'tn', 'ly', 'sd', 'so', 'mr', 'dj', 'km'];
-const FIXED = { c8: 'sy' };
+const FIXED = { c8: 'sy', c7: 'jo', c6: 'iq' };
 const POOL = Object.keys(COUNTRIES).filter((k) => !Object.values(FIXED).includes(k));
-const RANDOM_SLOTS = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'];
+const RANDOM_SLOTS = ['c1', 'c2', 'c3', 'c4', 'c5'];
 const SLOTS = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8'];
 
 const r5 = (x) => (x < 20 ? Math.round(x) : Math.round(x / 5) * 5);
@@ -122,7 +123,7 @@ function shuffled(a) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-// Syria on top (c8) + 7 random Arab countries.
+// Syria, Jordan, Iraq on top (c8, c7, c6) + 5 random Arab countries.
 function randomMap() {
   const pool = shuffled(POOL);
   const map = { ...FIXED };

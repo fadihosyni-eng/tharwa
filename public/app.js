@@ -72,7 +72,7 @@
     document.title = 'ثروة — لعبة المدن والعقارات';
     const orbit = ['sy', 'sa', 'jo', 'lb', 'eg', 'iq', 'ps', 'ae', 'ma', 'qa', 'kw', 'dz'];
     const features = [
-      ['port', '22 دولة عربية بأعلامها', 'من الشام للمغرب — سوريا دايماً الأغلى، والباقي إنت بتختاره'],
+      ['port', '22 دولة عربية بأعلامها', 'سوريا والأردن والعراق دايماً عاللوح، والباقي 5 دول عربية بتختارها'],
       ['gavel', 'مزادات وقروض', 'زاود، بيع عقارك بالمزاد، أو أقرض صاحبك بفايدة'],
       ['chest', 'بطاقات حظ وخزنة', 'بطاقات بتقلب اللعبة بلحظة'],
       ['trophy', 'آخر واحد بيربح', 'عمّر فنادق وخلّي الكل يفلس'],
@@ -108,7 +108,7 @@
             <li>بطاقات «حظ» و«خزنة» ممكن تعطيك مصاري أو تاخد منك أو تنقلك.</li>
             <li>🤝 تبادل عقارات ومصاري، 💰 أقرض أو استلف من اللاعبين بفايدة.</li>
             <li>🏦 ارهن عقاراتك للبنك، أو 🔨 بيعها بالمزاد لأعلى سعر.</li>
-            <li>🌍 اللوح كله دول عربية: سوريا دايماً أغلى دولة، وصاحب الغرفة بيختار الباقي من الـ22 دولة عربية.</li>
+            <li>🌍 اللوح كله دول عربية: سوريا والأردن والعراق دايماً موجودين، والباقي 5 دول بيختارهن صاحب الغرفة من الـ22 دولة عربية.</li>
             <li>آخر واحد بيضل بدون إفلاس هو الفائز.</li>
           </ul>
         </div>
@@ -236,11 +236,13 @@
     updateDice(st);
     updateCard(st);
     updateNotice(st);
+    updateBuildMode(st);
     updateCenter(st);
     updateSide(st);
     updateChat(st);
     if (S.modal && S.modal.kind === 'tile') renderModal();
     if (S.modal && S.modal.kind === 'trade' && !meP(st)) closeModal();
+    if (S.modal && S.modal.kind === 'sellmany' && st.game && st.game.auction) closeModal();
     effects(prev, st);
   }
 
@@ -286,9 +288,13 @@
     for (const [k, pr] of Object.entries(g.props)) {
       const o = pg.props[k];
       if (!o || o.owner !== pr.owner) { flashTile(k); FX.Sound.play('buy'); }
-      else if (pr.houses > o.houses) { flashTile(k); FX.Sound.play('build'); }
+      else if (pr.houses > o.houses) {
+        flashTile(k); popBuilding(k);
+        if (!(S.lastBuild && S.lastBuild.idx === Number(k) && Date.now() - S.lastBuild.t < 2500)) FX.Sound.play('build');
+      }
     }
     if (g.auction && pg.auction && g.auction.bid !== pg.auction.bid) FX.Sound.play('bid');
+    if (me) tradeEffects(prev, st, me);
     if (st.status === 'playing' && me && g.order[g.turn] === me && pg.order[pg.turn] !== me) { banner('دورك! 🎲'); FX.Sound.play('turn'); }
     if (st.status === 'ended' && prev.status !== 'ended') { FX.confetti(); FX.Sound.play('win'); }
   }
@@ -298,18 +304,20 @@
     S.built = true;
     app.innerHTML = `
     <div class="room">
-      <aside class="col col-b" id="sideB"></aside>
-      <main class="col col-board"><div class="board" id="board"></div></main>
-      <aside class="col col-a">
-        <div class="top-row"><a class="mini-logo" href="/">ثروة<span>.</span></a>
-          <span class="row" style="gap:6px"><a class="serva-chip" href="${SERVA_URL}" target="_blank" rel="noopener" title="لعبة من Serva"><img src="/brand/serva-logo-160.webp" alt="Serva" width="34" height="34"></a>
-          <button class="icon-btn" id="sndBtn" title="الصوت">${FX.Sound.on ? '🔊' : '🔇'}</button></span></div>
+      <aside class="col col-b" id="sideCol">
+        <div id="sideB" class="side-inner"></div>
         <div class="panel share">
           <div class="lbl">شارك الغرفة مع أصحابك</div>
           <div class="share-row"><input readonly id="shareUrl" value="${esc(location.origin + '/room/' + S.code)}"><button class="btn sm" id="copyBtn">نسخ</button></div>
           <div class="room-code">كود الغرفة: <b>${esc(S.code)}</b></div>
           <div id="netLinks" class="net-links"></div>
         </div>
+      </aside>
+      <main class="col col-board"><div class="board" id="board"></div></main>
+      <aside class="col col-a">
+        <div class="top-row"><a class="mini-logo" href="/" title="الصفحة الرئيسية">ثروة<span>.</span></a>
+          <a class="serva-chip" href="${SERVA_URL}" target="_blank" rel="noopener" title="لعبة من Serva"><img src="/brand/serva-logo-160.webp" alt="Serva" width="34" height="34"></a>
+          <button class="icon-btn" id="sndBtn" title="الصوت">${FX.Sound.on ? '🔊' : '🔇'}</button></div>
       </aside>
     </div>
     <button class="chat-fab" id="chatFab" type="button" title="الدردشة" aria-label="الدردشة" aria-expanded="false">💬<span class="chat-badge" id="chatBadge" hidden>0</span></button>
@@ -404,8 +412,19 @@
     FX.setDice($('#dice'), [5, 6], false);
     b.addEventListener('click', (e) => {
       if (e.target.closest('.card2')) { $('#cCard').innerHTML = ''; return; }
-      if (e.target.closest('.notice')) { $('#cNotice').innerHTML = ''; return; }
+      if (e.target.closest('.n-close')) { $('#cNotice').innerHTML = ''; return; }
       const tile = e.target.closest('.tile');
+      if (tile && S.buildMode) {
+        // Build mode: a glowing city builds at once; any other tile does nothing.
+        if (tile.classList.contains('buildable')) {
+          const idx = Number(tile.dataset.i);
+          S.lastBuild = { idx, t: Date.now() };
+          FX.Sound.play('build');
+          tile.classList.remove('buildable');
+          act('build', { idx });
+        }
+        return;
+      }
       if (tile) { openTile(Number(tile.dataset.i)); return; }
       const a = e.target.closest('[data-a]');
       if (a) onCenterAction(a);
@@ -424,6 +443,7 @@
       if (t.type === 'city') {
         const h = pr ? pr.houses : 0, bld = el.querySelector('.bld');
         if (bld.dataset.h !== String(h)) { bld.dataset.h = h; bld.innerHTML = h === 5 ? ART.HOTEL : ART.HOUSE.repeat(h); }
+        el.classList.toggle('bld-many', h >= 3 && h < 5);
       }
       const bown = el.querySelector('.bown');
       if (bown) {
@@ -570,7 +590,7 @@
     const from = st.players.find((p) => p.id === n.from), to = st.players.find((p) => p.id === n.to);
     if (n.kind !== 'rent' || !from || !to) return;
     const av = (p) => `<span class="tk nav" style="--pc:${p.color}">${ART.piece(p.piece)}</span>`;
-    const html = `<div class="notice" title="اضغط لتسكير">
+    const html = `<div class="notice"><button class="n-close" type="button" title="سكّر">✕</button>
         <div class="n-avs">${av(from)}<span class="n-arrow">←</span>${av(to)}</div>
         <div class="n-main">💸 <b style="color:${from.color}">${esc(from.name)}</b> دفع <span class="n-amt">${fmt(n.amount)}</span> إيجار لـ <b style="color:${to.color}">${esc(to.name)}</b></div>
         <div class="n-sub">🏠 ${esc(n.tile)}</div>
@@ -581,8 +601,104 @@
       if (!box) return;
       box.innerHTML = html;
       clearTimeout(S.noticeTimer);
-      S.noticeTimer = setTimeout(() => { box.innerHTML = ''; }, 3500);
+      S.noticeTimer = setTimeout(() => { box.innerHTML = ''; }, 4000);
+      FX.Sound.play('cash');
+      flyCash(n.from, n.to);
     }, S.running ? 900 : 0);
+  }
+  // Rent: 7 notes/coins fly on a curve from the payer's token to the owner's token
+  // (or between their rows in the players list), then the owner's token glows.
+  function flyCash(fromId, toId) {
+    if (document.hidden) return;
+    const anchor = (pid) => document.getElementById('tok-' + pid) || document.querySelector(`[data-prow="${pid}"] .tk.av`);
+    const a = anchor(fromId), b = anchor(toId);
+    if (!a || !b) return;
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    const x0 = ra.left + ra.width / 2, y0 = ra.top + ra.height / 2, x1 = rb.left + rb.width / 2, y1 = rb.top + rb.height / 2;
+    const dist = Math.hypot(x1 - x0, y1 - y0);
+    // control point: lift the curve above the straight line
+    const cx = (x0 + x1) / 2 + (y1 - y0) * 0.18, cy = Math.min(y0, y1) - Math.max(60, dist * 0.35);
+    const N = 7, DUR = 760, STAGGER = 115;
+    for (let k = 0; k < N; k++) {
+      const el = document.createElement('div');
+      el.className = 'cash-fly ' + (k % 2 ? 'coin' : 'bill');
+      el.innerHTML = k % 2 ? ART.icon('coin') : ART.BILL;
+      document.body.appendChild(el);
+      const jitter = (k - (N - 1) / 2) * 7;
+      const frames = [];
+      for (let s = 0; s <= 12; s++) {
+        const t = s / 12, u = 1 - t;
+        const x = u * u * x0 + 2 * u * t * (cx + jitter) + t * t * x1;
+        const y = u * u * y0 + 2 * u * t * (cy - Math.abs(jitter)) + t * t * y1;
+        frames.push({ transform: `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${(k % 2 ? 1 : -1) * t * 300}deg) scale(${0.7 + 0.5 * Math.sin(t * Math.PI)})`, opacity: t > 0.92 ? 0 : 1 });
+      }
+      const anim = el.animate(frames, { duration: DUR, delay: k * STAGGER, easing: 'cubic-bezier(.35,.1,.35,1)', fill: 'both' });
+      anim.onfinish = () => el.remove();
+      setTimeout(() => el.remove(), DUR + k * STAGGER + 500);
+    }
+    setTimeout(() => {
+      const tk = b.classList.contains('tk') ? b : b.querySelector('.tk');
+      if (!tk) return;
+      tk.classList.remove('cash-glow'); void tk.offsetWidth; tk.classList.add('cash-glow');
+      setTimeout(() => tk.classList.remove('cash-glow'), 900);
+    }, DUR + (N - 1) * STAGGER - 120);
+  }
+  // A new house/hotel pops in on its tile (everyone sees it).
+  function popBuilding(i) {
+    const bld = document.querySelector(`#board .tile[data-i="${i}"] .bld`);
+    const last = bld && bld.lastElementChild;
+    if (!last) return;
+    last.classList.remove('pop'); void last.getBoundingClientRect(); last.classList.add('pop');
+  }
+
+  // ---------------------------------------------------------------- build mode
+  // Mirrors engine.cannotBuild(): which of my cities can get a house/hotel right now.
+  function buildableTiles(st) {
+    const g = st.game, me = meP(st);
+    if (!g || !me || me.bankrupt) return [];
+    const out = [];
+    for (const [k, pr] of Object.entries(g.props)) {
+      const i = Number(k), t = T(i);
+      if (t.type !== 'city' || pr.owner !== me.id || pr.houses >= 5) continue;
+      const set = S.board.setTiles[t.set];
+      if (!set.every((j) => g.props[j] && g.props[j].owner === me.id && !g.props[j].mortgaged)) continue;
+      if (st.settings.evenBuild && pr.houses > Math.min(...set.map((j) => g.props[j].houses))) continue;
+      if (me.money < t.houseCost) continue;
+      out.push(i);
+    }
+    return out;
+  }
+  // Build mode can be used on my own turn, before rolling or when the turn is done.
+  function buildTime(st) {
+    const g = st.game, me = meP(st);
+    return !!(g && me && !me.bankrupt && st.status === 'playing' && !g.auction && g.order[g.turn] === me.id && (g.phase === 'roll' || g.phase === 'done'));
+  }
+  function setBuildMode(on) {
+    S.buildMode = on;
+    if (S.room) { updateBuildMode(S.room); updateCenter(S.room); }
+  }
+  function updateBuildMode(st) {
+    const board = $('#board');
+    if (!board) return;
+    let list = [];
+    if (S.buildMode) {
+      if (!buildTime(st)) S.buildMode = false;
+      else {
+        list = buildableTiles(st);
+        if (!list.length) { S.buildMode = false; toast('ما في شي تقدر تعمّره هلق', 'ok'); }
+      }
+    }
+    board.classList.toggle('build-on', !!S.buildMode);
+    $$('#board .tile').forEach((el) => {
+      const i = Number(el.dataset.i), on = S.buildMode && list.includes(i);
+      el.classList.toggle('buildable', on);
+      let badge = el.querySelector('.bbadge');
+      if (!on) { if (badge) badge.remove(); return; }
+      const t = T(i), pr = st.game.props[i];
+      const txt = (pr.houses === 4 ? '🏨 ' : '🏠 ') + fmt(t.houseCost);
+      if (!badge) { badge = document.createElement('div'); badge.className = 'bbadge'; el.appendChild(badge); }
+      if (badge.textContent !== txt) badge.textContent = txt;
+    });
   }
 
   // ---------------------------------------------------------------- center
@@ -642,6 +758,7 @@
           if (me.inJail && !g.rolled) {
             h = `<div class="hint">🔒 أنت بالسجن (محاولة ${me.jailTurns + 1} من 3) — جيب دبل لتطلع ببلاش</div><div class="row">${btn('roll', '🎲 ارمي النرد', 'gold')}${btn('payJail', 'ادفع ' + fmt(S.board.jailFine) + ' واطلع', '', me.money < S.board.jailFine)}${me.jailCards ? btn('jailCard', '🎫 استخدم بطاقة الخروج') : ''}</div>`;
           } else h = btn('roll', g.rolled ? '🎲 دبل! ارمي مرة تانية' : '🎲 ارمي النرد', 'gold big');
+          h += buildBtn(st);
           break;
         case 'buy': {
           const t = T(g.pendingBuy);
@@ -655,13 +772,18 @@
           h = `<div class="debt">⚠️ عليك دين <b>${fmt(tot)}</b><br><small>بيع بيوت أو ارهن عقارات (اضغط على عقارك باللوح أو من «أملاكي») — الدين بينسدّ لحاله أول ما يصير معك مصاري</small></div><div class="row">${btn('bankrupt', '💀 أعلن الإفلاس', 'danger')}</div>`;
           break;
         }
-        case 'done': h = btn('end', 'إنهاء الدور ✔', 'gold big'); break;
+        case 'done': h = btn('end', 'إنهاء الدور ✔', 'gold big') + buildBtn(st); break;
         default: break;
       }
     } else if (cur.isBot || g.autopilot) h = `<div class="hint">${esc(cur.name)} عم يفكّر…</div>`;
     else h = `<div class="hint">بانتظار ${esc(cur.name)}…</div>`;
     actions.innerHTML = h;
     $('#center').classList.toggle('compact', h.includes('class="deed"'));
+  }
+  function buildBtn(st) {
+    if (S.buildMode) return `${btn('buildMode', '✔ خلصت', 'build-btn on')}<div class="build-hint">🏗️ اضغط على مدينة مضوية لتعمّر — Esc للخروج</div>`;
+    const n = buildableTiles(st).length;
+    return btn('buildMode', '🏗️ عمّر', 'build-btn', !n, n ? '' : 'title="لازم تملك كل مدن دولة ويكون معك حق البيت"');
   }
   function auctionHTML(st, me) {
     const a = st.game.auction, t = T(a.idx), b = a.bidder && st.players.find((p) => p.id === a.bidder);
@@ -681,6 +803,7 @@
       ${a.min || (pr && pr.mortgaged) ? `<div class="hint">${a.min ? `أقل سعر ${fmt(a.min)}` : ''}${a.min && pr && pr.mortgaged ? ' · ' : ''}${pr && pr.mortgaged ? 'مرهونة' : ''}</div>` : ''}
       <div class="a-bid">${a.bid ? fmt(a.bid) : '—'}</div>
       <div class="a-who">${b ? `<span class="pdot" style="background:${b.color}"></span> ${esc(b.name)}` : 'لسا ما حدا زاود'}</div>
+      ${a.lots > 1 ? `<div class="a-lots"><b>لوت ${a.lot} من ${a.lots}</b>${(st.game.auctionQueue || []).map((l) => `<span class="lot-chip">${esc(T(l.idx).name)}</span>`).join('')}</div>` : ''}
       <div class="a-timer"><div class="a-bar" id="aucBar"></div></div><div class="hint" id="aucTimer"></div>
       ${foot}
     </div></div>`;
@@ -707,6 +830,7 @@
     const a = el.dataset.a;
     if (a === 'info') { openTile(Number(el.dataset.i)); return; }
     if (a === 'bid') { act('bid', { amount: Number(el.dataset.v) }); return; }
+    if (a === 'buildMode') { setBuildMode(!S.buildMode); return; }
     if (a === 'bankrupt') { if (await confirmBox('أكيد بدك تعلن الإفلاس؟ رح تطلع من اللعبة.')) act('bankrupt'); return; }
     el.disabled = true;
     act(a).then(() => { el.disabled = false; });
@@ -789,9 +913,9 @@
       <div class="country-list">${keys.map((k, n) => {
         const code = st.map && st.map[k], c = code && S.board.countries[code];
         if (!c) return '';
-        return `<${host ? 'button' : 'div'} class="country ${host ? 'pick' : ''}" ${host ? `data-slot="${k}"` : ''}><span class="sw" style="background:${SET(k).color}"></span>${flag(code, 'sm')}<b>${esc(c.name)}</b><small>${n === 0 ? 'الأغلى' : n === keys.length - 1 ? 'الأرخص' : ''}</small></${host ? 'button' : 'div'}>`;
+        return `<${host ? 'button' : 'div'} class="country ${host ? 'pick' : ''}" ${host ? `data-slot="${k}"` : ''}><span class="sw" style="background:${SET(k).color}"></span>${flag(code, 'sm')}<b>${esc(c.name)}</b><small>${S.board.fixed && S.board.fixed[k] === code ? (n === 0 ? 'ثابتة · الأغلى' : 'ثابتة') : n === keys.length - 1 ? 'الأرخص' : ''}</small></${host ? 'button' : 'div'}>`;
       }).join('')}</div>
-      <div class="hint" style="text-align:start;margin-top:6px">سوريا دايماً أغلى دولة، والباقي 7 دول عربية عشوائية${host ? ' — اضغط على أي دولة لتختار بدالها.' : '. صاحب الغرفة بيختار الدول.'}</div></div>`;
+      <div class="hint" style="text-align:start;margin-top:6px">سوريا والأردن والعراق دايماً موجودين، والباقي 5 دول عربية عشوائية${host ? ' — اضغط على أي دولة لتختار بدالها.' : '. صاحب الغرفة بيختار الدول.'}</div></div>`;
   }
   // Host picks a country for one board slot.
   function openCountryPicker(slot) {
@@ -931,7 +1055,8 @@
       if (me) h += loansHTML(st, me);
       if (me) {
         const mine = ownedBy(st, me.id);
-        h += `<div class="panel"><div class="lbl">أملاكي (${mine.length})</div><div class="props-list">${mine.length ? mine.map((i) => {
+        const canSell = mine.length && st.status === 'playing' && !g.auction && g.order[g.turn] === me.id && ['roll', 'done', 'debt'].includes(g.phase) && !me.bankrupt;
+        h += `<div class="panel"><div class="lbl"><span>أملاكي (${mine.length})</span>${mine.length ? `<button class="btn sm" data-sellmany ${canSell ? '' : 'disabled title="بدورك بس، وما يكون في مزاد"'}>🔨 بيع بالمزاد</button>` : ''}</div><div class="props-list">${mine.length ? mine.map((i) => {
           const pr = g.props[i];
           const meta = pr.mortgaged ? 'مرهونة' : pr.houses === 5 ? '🏨' : pr.houses ? '🏠×' + pr.houses : '';
           return `<div class="prop-item" data-prop="${i}">${propLabel(i)}<span class="meta">${meta}</span></div>`;
@@ -974,6 +1099,7 @@
     if (acc) { act('tradeAccept', { id: Number(acc.dataset.tacc) }); return; }
     const dec = t.closest('[data-tdec]');
     if (dec) { act('tradeDecline', { id: Number(dec.dataset.tdec) }); return; }
+    if (t.closest('[data-sellmany]')) { openSellMany(); return; }
     const prop = t.closest('[data-prop]');
     if (prop) { openTile(Number(prop.dataset.prop)); return; }
     if (t.closest('[data-leave]')) {
@@ -1136,52 +1262,208 @@
     });
   }
 
-  // ---------------------------------------------------------------- trade modal
-  function openTrade(toId) {
-    S.trade = { to: toId, give: new Set(), get: new Set(), giveMoney: 0, getMoney: 0 };
-    S.modal = { kind: 'trade' };
-    renderTrade();
-  }
+  // ---------------------------------------------------------------- deals: shared mini deed cards
   function hasBuildings(st, i) {
     const t = T(i), g = st.game;
     return t.type === 'city' && S.board.setTiles[t.set].some((j) => g.props[j] && g.props[j].houses > 0);
   }
+  const propValue = (st, i) => (st.game.props[i] && st.game.props[i].mortgaged ? T(i).price / 2 : T(i).price);
+  function miniDeed(st, i, attrs = '', on = false, disabled = false) {
+    const t = T(i), pr = st.game.props[i];
+    const col = t.type === 'city' ? SET(t.set).color : '#4b5d73';
+    const art = t.type === 'city' ? flag(t.country, 'sm') : `<span class="mini-icon">${ART.icon(iconName(t))}</span>`;
+    const tags = (pr && pr.mortgaged ? '<i class="md-tag">مرهونة</i>' : '') + (disabled ? '<i class="md-tag warn">فيها أبنية</i>' : '');
+    return `<button type="button" class="mdeed ${on ? 'on' : ''}" style="--sc:${col}" ${attrs} ${disabled ? 'disabled' : ''}>
+      <span class="md-band"></span><span class="md-art">${art}</span><b>${esc(t.name)}</b><small>${t.type === 'city' ? esc(t.countryName) + ' · ' : ''}${fmt(t.price)}</small>${tags}</button>`;
+  }
+  const avatarOf = (p) => `<span class="tk av" style="--pc:${p.color}">${ART.piece(p.piece)}</span>`;
+
+  // ---------------------------------------------------------------- trade modal (offer / counter-offer)
+  function openTrade(toId, prefill) {
+    S.trade = prefill || { to: toId, give: new Set(), get: new Set(), giveMoney: 0, getMoney: 0 };
+    S.modal = { kind: 'trade' };
+    renderTrade();
+  }
+  function tradeBalance(st, give, get, giveMoney, getMoney) {
+    const v = (set) => [...set].reduce((s2, i) => s2 + propValue(st, i), 0);
+    return (v(give) + giveMoney) - (v(get) + getMoney); // > 0: good for the other side
+  }
+  function balanceText(diff, total) {
+    if (Math.abs(diff) <= Math.max(10, total * 0.05)) return '<span class="bal even">⚖️ متوازنة</span>';
+    return diff > 0 ? `<span class="bal them">الصفقة لصالحه بـ ${fmt(diff)}</span>` : `<span class="bal me">الصفقة لصالحك بـ ${fmt(-diff)}</span>`;
+  }
   function renderTrade() {
     const st = S.room, me = meP(st), them = st.players.find((p) => p.id === S.trade.to);
-    if (!me || !them) { closeModal(); return; }
-    const chips = (pid, set) => {
+    if (!me || !them || st.status !== 'playing') { closeModal(); return; }
+    const T2 = S.trade;
+    // drop selections that are no longer valid
+    for (const i of [...T2.give]) if (!st.game.props[i] || st.game.props[i].owner !== me.id) T2.give.delete(i);
+    for (const i of [...T2.get]) if (!st.game.props[i] || st.game.props[i].owner !== them.id) T2.get.delete(i);
+    const cards = (pid, set, side) => {
       const list = ownedBy(st, pid);
       if (!list.length) return `<div class="hint">${pid === me.id ? 'ما عندك عقارات' : 'ما عنده عقارات'}</div>`;
-      return list.map((i) => `<button class="tchip ${set.has(i) ? 'on' : ''}" data-tp="${pid === me.id ? 'give' : 'get'}" data-i="${i}" ${hasBuildings(st, i) ? 'disabled title="فيها أبنية"' : ''}>${propLabel(i)}${st.game.props[i].mortgaged ? ' <small>(مرهونة)</small>' : ''}</button>`).join('');
+      return list.map((i) => miniDeed(st, i, `data-tp="${side}" data-i="${i}"`, set.has(i), hasBuildings(st, i))).join('');
     };
-    const body = `<div class="trade-grid">
-        <div class="trade-col"><h4>أنت بتعطي <small class="hint">(معك ${fmt(me.money)})</small></h4><div class="tchips">${chips(me.id, S.trade.give)}</div>
-          <input type="number" min="0" max="${me.money}" step="10" id="tGiveMoney" value="${S.trade.giveMoney || ''}" placeholder="مصاري بتعطيها ($)"></div>
-        <div class="trade-col"><h4>بتاخد من ${esc(them.name)} <small class="hint">(معه ${fmt(them.money)})</small></h4><div class="tchips">${chips(them.id, S.trade.get)}</div>
-          <input type="number" min="0" max="${them.money}" step="10" id="tGetMoney" value="${S.trade.getMoney || ''}" placeholder="مصاري بتاخدها ($)"></div>
+    const chips = (side, max) => [50, 100, 500].map((v) => `<button type="button" class="chip" data-add="${side}" data-v="${v}">+${fmt(v)}</button>`).join('') +
+      `<button type="button" class="chip" data-add="${side}" data-v="all">${side === 'give' ? 'كل اللي معي' : 'كل اللي معه'}</button><button type="button" class="chip" data-add="${side}" data-v="0">صفر</button>`;
+    const names = (set, money) => [...[...set].map((i) => esc(T(i).name)), money ? fmt(money) : ''].filter(Boolean).join('، ') || 'ولا شي';
+    const diff = tradeBalance(st, T2.give, T2.get, T2.giveMoney, T2.getMoney);
+    const total = tradeBalance(st, T2.give, new Set(), T2.giveMoney, 0) + tradeBalance(st, T2.get, new Set(), T2.getMoney, 0);
+    const body = `
+      <div class="deal-top">
+        <div class="deal-who">${avatarOf(me)}<div><b>أنت</b><small>معك ${fmt(me.money)}</small></div></div>
+        <div class="deal-x">⇄</div>
+        <div class="deal-who">${avatarOf(them)}<div><b>${esc(them.name)}</b><small>معه ${fmt(them.money)}</small></div></div>
       </div>
+      <div class="trade-grid">
+        <div class="trade-col"><h4>بتعطي</h4><div class="mdeeds">${cards(me.id, T2.give, 'give')}</div>
+          <label class="money-in">💵 مصاري بتعطيها <input type="number" min="0" max="${me.money}" step="10" id="tGiveMoney" value="${T2.giveMoney || ''}" placeholder="$0" dir="ltr"></label>
+          <div class="chips-row">${chips('give')}</div></div>
+        <div class="trade-col"><h4>بتاخد من ${esc(them.name)}</h4><div class="mdeeds">${cards(them.id, T2.get, 'get')}</div>
+          <label class="money-in">💵 مصاري بتاخدها <input type="number" min="0" max="${them.money}" step="10" id="tGetMoney" value="${T2.getMoney || ''}" placeholder="$0" dir="ltr"></label>
+          <div class="chips-row">${chips('get')}</div></div>
+      </div>
+      <div class="deal-sum"><span>بتعطي: <b>${names(T2.give, T2.giveMoney)}</b></span><span class="deal-x sm">⇄</span><span>بتاخد: <b>${names(T2.get, T2.getMoney)}</b></span>${balanceText(diff, total)}</div>
+      <div class="deal-err" id="tErr"></div>
       <div class="hint">العقارات اللي بدولتها أبنية لازم تنباع أبنيتها قبل التبادل.</div>
       <div class="row"><button class="btn gold" id="tSend">ابعت العرض 🤝</button><button class="btn ghost" data-close2>إلغاء</button></div>`;
     const root = $('#modal-root');
-    root.innerHTML = modalShell('🤝 صفقة مع ' + esc(them.name), body, 'wide');
+    root.innerHTML = modalShell(T2.counterOf ? '↩️ عرض مضاد لـ ' + esc(them.name) : '🤝 صفقة مع ' + esc(them.name), body, 'wide deal');
     bindModal(root);
     root.querySelector('[data-close2]').onclick = closeModal;
     $$('[data-tp]', root).forEach((b) => {
       b.onclick = () => {
-        const set = S.trade[b.dataset.tp], i = Number(b.dataset.i);
+        const set = T2[b.dataset.tp], i = Number(b.dataset.i);
         if (set.has(i)) set.delete(i); else set.add(i);
         renderTrade();
       };
     });
-    $('#tGiveMoney').oninput = (e) => { S.trade.giveMoney = Math.max(0, Math.floor(Number(e.target.value) || 0)); };
-    $('#tGetMoney').oninput = (e) => { S.trade.getMoney = Math.max(0, Math.floor(Number(e.target.value) || 0)); };
+    $$('[data-add]', root).forEach((b) => {
+      b.onclick = () => {
+        const side = b.dataset.add, key = side === 'give' ? 'giveMoney' : 'getMoney', max = side === 'give' ? me.money : them.money;
+        const v = b.dataset.v;
+        T2[key] = v === 'all' ? max : v === '0' ? 0 : Math.min(max, (T2[key] || 0) + Number(v));
+        renderTrade();
+      };
+    });
+    const money = (id, key, max) => {
+      $(id).onchange = (e) => { T2[key] = Math.max(0, Math.min(max, Math.floor(Number(e.target.value) || 0))); renderTrade(); };
+    };
+    money('#tGiveMoney', 'giveMoney', me.money);
+    money('#tGetMoney', 'getMoney', them.money);
     $('#tSend').onclick = async () => {
-      const tr = S.trade;
-      const data = { to: tr.to, give: { props: [...tr.give], money: tr.giveMoney }, get: { props: [...tr.get], money: tr.getMoney } };
+      T2.giveMoney = Math.max(0, Math.floor(Number($('#tGiveMoney').value) || 0));
+      T2.getMoney = Math.max(0, Math.floor(Number($('#tGetMoney').value) || 0));
+      const errEl = $('#tErr');
+      const bad = !T2.give.size && !T2.get.size ? 'لازم تختار عقار واحد على الأقل (منك أو منه)'
+        : T2.giveMoney > me.money ? `ما معك ${fmt(T2.giveMoney)}`
+          : T2.getMoney > them.money ? `${them.name} ما معه ${fmt(T2.getMoney)}` : '';
+      if (bad) { errEl.textContent = '⚠️ ' + bad; return; }
+      const data = { to: T2.to, give: { props: [...T2.give], money: T2.giveMoney }, get: { props: [...T2.get], money: T2.getMoney } };
       try {
         await api('/api/act', { code: S.code, pid: S.me.pid, token: S.me.token, type: 'tradePropose', data });
+        if (T2.counterOf) act('tradeDecline', { id: T2.counterOf });
         closeModal();
-        toast('انبعت العرض ✔', 'ok');
+        toast(T2.counterOf ? 'انبعت العرض المضاد ✔' : 'انبعت العرض ✔', 'ok');
+      } catch (e) { errEl.textContent = '⚠️ ' + e.message; }
+    };
+  }
+  // Incoming offer: same visual format, with accept / decline / counter.
+  function openOffer(id) {
+    const st = S.room, me = meP(st), tr = st && st.game && st.game.trades.find((t) => t.id === id);
+    if (!me || !tr || tr.to !== me.id) { closeModal(); return; }
+    const from = st.players.find((p) => p.id === tr.from);
+    S.modal = { kind: 'offer', id };
+    const side = (props, money) => `${props.length ? props.map((i) => miniDeed(st, i, 'tabindex="-1"', true)).join('') : ''}${money ? `<div class="md-money">💵 ${fmt(money)}</div>` : ''}${!props.length && !money ? '<div class="hint">ولا شي</div>' : ''}`;
+    const diff = tradeBalance(st, new Set(tr.get.props), new Set(tr.give.props), tr.get.money, tr.give.money);
+    const total = tradeBalance(st, new Set(tr.give.props), new Set(), tr.give.money, 0) + tradeBalance(st, new Set(tr.get.props), new Set(), tr.get.money, 0);
+    const body = `
+      <div class="deal-top">
+        <div class="deal-who">${avatarOf(from)}<div><b>${esc(from.name)}</b><small>معه ${fmt(from.money)}</small></div></div>
+        <div class="deal-x">⇄</div>
+        <div class="deal-who">${avatarOf(me)}<div><b>أنت</b><small>معك ${fmt(me.money)}</small></div></div>
+      </div>
+      <div class="trade-grid">
+        <div class="trade-col"><h4>بيعطيك</h4><div class="mdeeds ro">${side(tr.give.props, tr.give.money)}</div></div>
+        <div class="trade-col"><h4>بدو منك</h4><div class="mdeeds ro">${side(tr.get.props, tr.get.money)}</div></div>
+      </div>
+      <div class="deal-sum">${balanceText(diff, total)}</div>
+      <div class="row"><button class="btn gold" data-o="acc">✅ قبول</button><button class="btn danger" data-o="dec">❌ رفض</button><button class="btn" data-o="ctr">↩️ عرض مضاد</button></div>`;
+    const root = $('#modal-root');
+    root.innerHTML = modalShell(`🤝 عرض من ${esc(from.name)}`, body, 'wide deal');
+    bindModal(root);
+    root.querySelector('[data-o="acc"]').onclick = () => { act('tradeAccept', { id }); closeModal(); };
+    root.querySelector('[data-o="dec"]').onclick = () => { act('tradeDecline', { id }); closeModal(); };
+    root.querySelector('[data-o="ctr"]').onclick = () => {
+      openTrade(tr.from, { to: tr.from, give: new Set(tr.get.props), get: new Set(tr.give.props), giveMoney: tr.get.money, getMoney: tr.give.money, counterOf: id });
+    };
+  }
+  function offerBanner(tr, from) {
+    const box = $('#offerBanner') || Object.assign(document.createElement('div'), { id: 'offerBanner' });
+    if (!box.isConnected) document.body.appendChild(box);
+    box.className = 'offer-banner';
+    box.innerHTML = `<span>🤝 عرض جديد من <b>${esc(from ? from.name : '')}</b></span><button class="btn sm gold" type="button">افتحه</button><button class="x-btn" type="button">✕</button>`;
+    box.querySelector('.btn').onclick = () => { box.remove(); openOffer(tr.id); };
+    box.querySelector('.x-btn').onclick = () => box.remove();
+    clearTimeout(S.offerBannerT);
+    S.offerBannerT = setTimeout(() => box.remove(), 12000);
+  }
+  function tradeEffects(prev, st, meId) {
+    const pt = prev.game.trades || [], nt = st.game.trades || [];
+    const name = (id) => { const p = st.players.find((x) => x.id === id); return p ? p.name : ''; };
+    // new offer to me -> pop it up
+    for (const tr of nt) {
+      if (tr.to !== meId || pt.some((x) => x.id === tr.id)) continue;
+      FX.Sound.play('turn');
+      if (!S.modal) openOffer(tr.id); else offerBanner(tr, st.players.find((p) => p.id === tr.from));
+    }
+    // my offers that disappeared -> accepted or declined?
+    const newLog = st.log.filter((l) => !prev.log.some((o) => o.t === l.t && o.text === l.text)).map((l) => l.text);
+    for (const tr of pt) {
+      if (tr.from !== meId || nt.some((x) => x.id === tr.id)) continue;
+      const other = name(tr.to);
+      if (newLog.some((t) => t.includes(`✅ ${other} قبل صفقة`))) { toast(`✅ ${other} قبل عرضك`, 'ok'); FX.Sound.play('buy'); }
+      else if (newLog.some((t) => t.includes(`❌ ${other} رفض صفقة`))) { toast(`❌ ${other} رفض عرضك`); FX.Sound.play('pay'); }
+    }
+    // offer to me withdrawn while its modal is open
+    if (S.modal && S.modal.kind === 'offer' && !nt.some((x) => x.id === S.modal.id)) closeModal();
+  }
+
+  // ---------------------------------------------------------------- sell several properties by auction
+  function openSellMany() {
+    const st = S.room, me = meP(st);
+    if (!me) return;
+    S.modal = { kind: 'sellmany' };
+    S.sell = S.sell || { sel: new Set(), min: 0 };
+    renderSellMany();
+  }
+  function renderSellMany() {
+    const st = S.room, me = meP(st), L = S.sell;
+    if (!me || !st.game) { closeModal(); return; }
+    const mine = ownedBy(st, me.id);
+    for (const i of [...L.sel]) if (!mine.includes(i) || hasBuildings(st, i)) L.sel.delete(i);
+    const body = `<div class="hint" style="text-align:start">اختار العقارات (لـ 8) — رح ينعرضوا واحد ورا التاني، وكل لوت بياخد مزاده لحاله.</div>
+      <div class="mdeeds">${mine.map((i) => miniDeed(st, i, `data-sl="${i}"`, L.sel.has(i), hasBuildings(st, i))).join('')}</div>
+      <label class="money-in">أقل سعر لكل لوت (اختياري) <input type="number" min="0" step="10" id="sellMin" value="${L.min || ''}" placeholder="$0" dir="ltr"></label>
+      <div class="deal-sum"><span>${L.sel.size ? `رح ينعرضوا <b>${L.sel.size}</b> ${L.sel.size === 1 ? 'عقار' : 'عقارات'}: ${[...L.sel].map((i) => esc(T(i).name)).join(' ← ')}` : 'لسا ما اخترت شي'}</span></div>
+      <div class="row"><button class="btn gold" id="sellGo" ${L.sel.size ? '' : 'disabled'}>🔨 ابدأ المزاد</button><button class="btn ghost" data-close2>إلغاء</button></div>`;
+    const root = $('#modal-root');
+    root.innerHTML = modalShell('🔨 بيع بالمزاد', body, 'wide deal');
+    bindModal(root);
+    root.querySelector('[data-close2]').onclick = closeModal;
+    $$('[data-sl]', root).forEach((b) => {
+      b.onclick = () => {
+        const i = Number(b.dataset.sl);
+        if (L.sel.has(i)) L.sel.delete(i); else if (L.sel.size < 8) L.sel.add(i); else toast('أكتر شي 8 عقارات');
+        renderSellMany();
+      };
+    });
+    $('#sellMin').onchange = (e) => { L.min = Math.max(0, Math.floor(Number(e.target.value) || 0)); };
+    $('#sellGo').onclick = async () => {
+      L.min = Math.max(0, Math.floor(Number($('#sellMin').value) || 0));
+      try {
+        await api('/api/act', { code: S.code, pid: S.me.pid, token: S.me.token, type: 'sellAuction', data: { idxs: [...L.sel], min: L.min } });
+        S.sell = null; closeModal();
       } catch (e) { toast(e.message); }
     };
   }
@@ -1189,6 +1471,7 @@
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (S.modal && S.modal.kind !== 'confirm') { closeModal(); return; }
+    if (S.buildMode) { setBuildMode(false); return; }
     if (S.chatOpen) toggleChat(false);
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.room) { layoutTokens(); updateCenter(S.room); } });

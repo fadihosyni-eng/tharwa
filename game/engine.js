@@ -42,7 +42,7 @@ function newGame(room) {
     props: {}, pot: 0,
     chance: shuffle(B.CHANCE.map((_, i) => i)),
     chest: shuffle(B.CHEST.map((_, i) => i)),
-    pendingBuy: null, auction: null, debts: [],
+    pendingBuy: null, auction: null, auctionQueue: [], debts: [],
     card: null, cardSeq: 0,
     notice: null, noticeSeq: 0,
     moves: [], moveSeq: 0,
@@ -80,6 +80,7 @@ function startTurn(room) {
 
 function nextTurn(room) {
   const g = room.game, n = g.order.length;
+  g.auctionQueue = [];
   for (let k = 1; k <= n; k++) {
     const j = (g.turn + k) % n;
     const p = P(room, g.order[j]);
@@ -318,17 +319,44 @@ function bid(room, p, amount) {
   log(room, `🔨 ${p.name} زاود ${fmt(amount)}`);
 }
 
-// A player puts one of their own properties up for auction (money goes to them).
+// A player puts one or more of their own properties up for auction (money goes to them).
+// `idxs` (1..8) are auctioned one after another; a single `idx` still works.
 function sellAuction(room, p, data) {
-  const g = room.game, idx = Number(data && data.idx), t = TT(room, idx), pr = g.props[idx];
+  const g = room.game;
   if (current(room) !== p) throw err('بتقدر تعرض عقارك بالمزاد بدورك بس');
   if (!['roll', 'done', 'debt'].includes(g.phase)) throw err('مو وقتها هلق');
-  if (!t || !pr || pr.owner !== p.id) throw err('هالعقار مو إلك');
-  if (t.type === 'city' && setHouses(room, t.set).some((h) => h > 0)) throw err(`بيع الأبنية بـ ${t.countryName} أول`);
   if (active(room).length < 2) throw err('ما في حدا يشتري');
+  const raw = Array.isArray(data && data.idxs) ? data.idxs : [data && data.idx];
+  const idxs = [...new Set(raw.map(Number))];
+  if (!idxs.length || idxs.length > 8 || idxs.some((i) => !Number.isInteger(i))) throw err('اختار من عقار لـ 8 عقارات');
+  for (const idx of idxs) {
+    const t = TT(room, idx), pr = g.props[idx];
+    if (!t || !pr || pr.owner !== p.id) throw err('هالعقار مو إلك');
+    if (t.type === 'city' && setHouses(room, t.set).some((h) => h > 0)) throw err(`بيع الأبنية بـ ${t.countryName} أول`);
+  }
   const min = Math.max(0, Math.min(100000, Math.floor(Number(data && data.min) || 0)));
-  g.auction = { idx, bid: 0, bidder: null, endsAt: Date.now() + AUCTION_MS, seller: p.id, min };
-  log(room, `🔨 ${p.name} عرض ${t.name} للبيع بالمزاد${min ? ` (أقل سعر ${fmt(min)})` : ''}${pr.mortgaged ? ' — مرهونة' : ''}`);
+  g.auctionQueue = idxs.slice(1).map((idx) => ({ idx, min, seller: p.id }));
+  startSellerLot(room, p, idxs[0], min, 1, idxs.length);
+}
+function startSellerLot(room, p, idx, min, lot, lots) {
+  const g = room.game, t = TT(room, idx), pr = g.props[idx];
+  g.auction = { idx, bid: 0, bidder: null, endsAt: Date.now() + AUCTION_MS, seller: p.id, min, lot, lots };
+  if (lot === 1) log(room, `🔨 ${p.name} عرض ${t.name} للبيع بالمزاد${min ? ` (أقل سعر ${fmt(min)})` : ''}${pr.mortgaged ? ' — مرهونة' : ''}${lots > 1 ? ` — ${lots} لوتات ورا بعض` : ''}`);
+  else log(room, `🔨 اللوت التالي: ${t.name} (${lot} من ${lots})${pr.mortgaged ? ' — مرهونة' : ''}`);
+}
+// After a seller lot ends: start the next queued lot that is still valid.
+function nextQueuedLot(room, prev) {
+  const g = room.game, q = g.auctionQueue || [];
+  let lot = prev.lot || 1;
+  while (q.length) {
+    const next = q.shift();
+    lot++;
+    const seller = P(room, next.seller), pr = g.props[next.idx], t = TT(room, next.idx);
+    if (!seller || seller.bankrupt || current(room) !== seller || active(room).length < 2) { g.auctionQueue = []; return; }
+    if (!pr || pr.owner !== seller.id || (t.type === 'city' && setHouses(room, t.set).some((h) => h > 0))) continue;
+    startSellerLot(room, seller, next.idx, next.min, lot, prev.lots || lot);
+    return;
+  }
 }
 
 function endAuction(room) {
@@ -344,6 +372,7 @@ function endAuction(room) {
     } else {
       log(room, `ما حدا اشترى ${t.name} — بقيت مع صاحبها`);
     }
+    if (g.auctionQueue && g.auctionQueue.length) nextQueuedLot(room, a);
   } else if (w && !w.bankrupt && w.money >= a.bid && !g.props[a.idx]) {
     w.money -= a.bid;
     g.props[a.idx] = { owner: w.id, houses: 0, mortgaged: false };
@@ -559,6 +588,7 @@ function bankrupt(room, p) {
   g.trades = g.trades.filter((t) => t.from !== p.id && t.to !== p.id);
   g.loans = g.loans.filter((l) => l.lender !== p.id && l.borrower !== p.id);
   if (g.auction && g.auction.seller === p.id) g.auction = null;
+  if (g.auctionQueue && g.auctionQueue.some((l) => l.seller === p.id)) g.auctionQueue = [];
   if (g.auction && g.auction.bidder === p.id) { g.auction.bidder = null; g.auction.bid = 0; }
   log(room, heir ? `💀 ${p.name} أفلس — أملاكه راحت لـ ${heir.name}` : `💀 ${p.name} أفلس — أملاكه رجعت للبنك`);
 

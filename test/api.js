@@ -48,13 +48,13 @@ const act = (code, me, type, data) => call('/api/act', { code, pid: me.pid, toke
   assert.strictEqual((await call('/api/act', { code, pid: guest.pid, token: 'x', type: 'chat', data: { text: 'hi' } })).status, 403);
   assert.strictEqual((await act(code, guest, 'chat', { text: 'مرحبا 👋' })).status, 200);
 
-  // countries: host picks; the board is Arab-only (Syria always on top)
+  // countries: host picks; the board is Arab-only (Syria, Jordan, Iraq always on top)
   const ARAB = ['sy', 'eg', 'jo', 'lb', 'iq', 'sa', 'ae', 'qa', 'kw', 'bh', 'om', 'ye', 'ps', 'dz', 'ma', 'tn', 'ly', 'sd', 'so', 'mr', 'dj', 'km'];
   assert.strictEqual((await act(code, guest, 'setCountry', { slot: 'c1', code: 'jo' })).status, 403, 'only host picks countries');
   for (let k = 0; k < 5; k++) {
     assert.strictEqual((await act(code, host, 'shuffleMap', { mode: k % 2 ? 'mix' : 'arab' })).status, 200);
     const m = (await snapshot(code, host)).map;
-    assert.strictEqual(m.c8, 'sy', 'Syria is always the most expensive country');
+    assert.deepStrictEqual([m.c8, m.c7, m.c6], ['sy', 'jo', 'iq'], 'Syria, Jordan, Iraq always the top three');
     assert(Object.values(m).every((c) => ARAB.includes(c)), 'shuffle gives only Arab countries (any mode)');
     assert.strictEqual(new Set(Object.values(m)).size, 8, 'shuffle gives 8 distinct countries');
   }
@@ -74,7 +74,8 @@ const act = (code, me, type, data) => call('/api/act', { code, pid: me.pid, toke
   assert.strictEqual(st.status, 'playing');
   assert.deepStrictEqual(st.players.map((p) => p.money), [2000, 2000], 'everyone starts with the chosen cash');
   assert.strictEqual(st.chat[0].text, 'مرحبا 👋');
-  assert.strictEqual(st.map.c8, 'sy', 'Syria always the most expensive country');
+  assert.deepStrictEqual([st.map.c8, st.map.c7, st.map.c6], ['sy', 'jo', 'iq'], 'Syria, Jordan, Iraq always the top three');
+  assert.strictEqual(new Set(Object.values(st.map)).size, 8, 'eight distinct countries');
   assert(Object.values(st.map).every((c) => ARAB.includes(c)), 'all eight countries are Arab');
   assert.strictEqual(new Set(Object.values(st.map)).size, 8, '8 different countries');
   assert(st.game.turnEndsAt > Date.now(), 'turn clock is running');
@@ -114,6 +115,33 @@ const act = (code, me, type, data) => call('/api/act', { code, pid: me.pid, toke
     st = await snapshot(code, host);
   }
   assert.notStrictEqual(st.game.order[st.game.turn], cur.pid, 'turn passed to the other player');
+
+  // auction queue: the current player sells 2 properties back to back (engine-level, deterministic)
+  {
+    const E = require('../game/engine'), B = require('../game/board');
+    const room = { code: 'q', status: 'lobby', log: [], chat: [], map: B.randomMap(),
+      settings: { maxPlayers: 3, startingCash: 1500, doubleRent: true, vacationCash: true, auction: true, noRentInJail: false, evenBuild: true, mortgage: true, randomOrder: false, turnTimer: 0 },
+      players: [{ id: 'a', name: 'أ' }, { id: 'b', name: 'ب' }] };
+    room.tiles = B.tilesFor(room.map);
+    E.newGame(room);
+    const g = room.game, seller = E.current(room), buyer = room.players.find((x) => x !== seller);
+    g.props[5] = { owner: seller.id, houses: 0, mortgaged: false };
+    g.props[15] = { owner: seller.id, houses: 0, mortgaged: false };
+    E.act(room, seller.id, 'sellAuction', { idxs: [5, 15], min: 20 });
+    assert.strictEqual(g.auction.idx, 5, 'first lot is up');
+    assert.deepStrictEqual([g.auction.lot, g.auction.lots, g.auctionQueue.length], [1, 2, 1]);
+    E.act(room, buyer.id, 'bid', { amount: 50 });
+    E.endAuction(room);
+    assert.strictEqual(g.props[5].owner, buyer.id, 'lot 1 sold to the bidder');
+    assert.strictEqual(g.auction && g.auction.idx, 15, 'lot 2 starts right after');
+    assert.strictEqual(g.auction.lot, 2);
+    E.act(room, buyer.id, 'bid', { amount: 60 });
+    E.endAuction(room);
+    assert.strictEqual(g.props[15].owner, buyer.id, 'lot 2 sold');
+    assert.strictEqual(g.auction, null); assert.strictEqual(g.auctionQueue.length, 0);
+    assert(room.log.some((l) => l.text.includes('اللوت التالي')), 'next-lot log line');
+    console.log('auction queue OK');
+  }
 
   // leaving mid-game = bankrupt -> the other player wins
   assert.strictEqual((await act(code, other, 'leave')).status, 200);

@@ -74,7 +74,7 @@ function newRoom(isPrivate) {
   rooms.set(room.code, room);
   return room;
 }
-// Pick this room's countries: Syria always on top + 7 random Arab ones.
+// Pick this room's countries: Syria, Jordan, Iraq always on top + 5 random Arab ones.
 function rollMap(room) {
   room.map = B.randomMap();
   room.tiles = B.tilesFor(room.map);
@@ -233,8 +233,8 @@ function roomAct(room, p, type, data) {
     case 'shuffleMap': {
       needHost(); needLobby();
       rollMap(room); // `mode` is ignored: the board is always Arab-only
-      const names = Object.keys(B.SETS).map((k) => B.COUNTRIES[room.map[k]].name);
-      E.log(room, '🌍 دول جديدة عاللوح: ' + names.join('، '));
+      const names = Object.keys(B.SETS).filter((k) => !B.FIXED[k]).map((k) => B.COUNTRIES[room.map[k]].name);
+      E.log(room, '🌍 دول جديدة عاللوح: ' + names.join('، ') + ' — مع سوريا والأردن والعراق');
       return true;
     }
     case 'start':
