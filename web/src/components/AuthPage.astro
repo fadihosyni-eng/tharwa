@@ -56,6 +56,8 @@ const perks = [
   .g-who b { display: block; }
   .g-who small { color: var(--muted); }
   .g-who .g-logo { width: 40px; height: 40px; }
+  .g-have { margin-top: 16px; padding: 14px; border-radius: 14px; border: 1px dashed var(--line2); background: rgba(7, 16, 42, .6); display: grid; gap: 8px; }
+  .g-have span { color: var(--muted); font-size: 14px; line-height: 1.7; }
   .auth-foot { text-align: center; color: var(--muted); font-size: 14px; margin: 14px 0 0; }
   @media (max-width: 860px) {
     .auth { grid-template-columns: 1fr; max-width: 480px; }
@@ -180,7 +182,12 @@ const perks = [
         <label class="field"><span>اسمك الظاهر</span><input name="displayName" maxlength="24" value="${esc(pend.name || '')}"></label>
         <div class="form-err" id="gErr" role="alert"></div>
         <button class="btn btn-gold big block" id="gGo">إنشاء الحساب</button>
-      </form>`;
+      </form>
+      <div class="g-have">
+        <b>عندك حساب بثروة من قبل؟</b>
+        <span>ما تعمل حساب تاني: ادخل بحسابك القديم، وبعدين من الإعدادات اكبس «ربط حساب Google».</span>
+        <a class="btn block" href="/login?next=%2Fsettings">دخول بحسابي واربط Google</a>
+      </div>`;
     const f = $('#gForm') as HTMLFormElement, er = $('#gErr'), go = $('#gGo') as HTMLButtonElement;
     const u = f.elements.namedItem('username') as HTMLInputElement, dn = f.elements.namedItem('displayName') as HTMLInputElement;
     u.addEventListener('input', () => {
