@@ -2,11 +2,11 @@
 import Base from '../layouts/Base.astro';
 import { ui } from '../lib/art-build';
 ---
-<Base title="المتجر" active="store" description="متجر ثروة: خرايط جديدة للّوح بتشتريها بالنقاط اللي بتربحها من الألعاب.">
+<Base title="المتجر" active="store" description="متجر Serva Games: خرايط جديدة للوح لعبة ثروة بتشتريها بالنقاط اللي بتربحها من الألعاب.">
   <div class="sec-head">
     <div>
-      <h1 class="page-title"><Fragment set:html={ui('store')} />المتجر — خرايط اللوح</h1>
-      <p class="muted">كل خريطة بتغيّر شكل اللوح وأسماء المدن. صاحب الغرفة بيختار الخريطة من اللوبي، والكل بيلعب عليها.</p>
+      <h1 class="page-title"><Fragment set:html={ui('store')} />المتجر — خرايط ثروة</h1>
+      <p class="muted">خرايط للوح <a href="/games/tharwa">لعبة ثروة</a> بتشتريها بنقاطك من كل الألعاب. كل خريطة بتغيّر شكل اللوح وأسماء المدن. صاحب الغرفة بيختار الخريطة من اللوبي، والكل بيلعب عليها.</p>
     </div>
     <div id="myPts"></div>
   </div>

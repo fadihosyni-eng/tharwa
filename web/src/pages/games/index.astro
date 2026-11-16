@@ -1,0 +1,112 @@
+---
+import Base from '../../layouts/Base.astro';
+import { ui } from '../../lib/art-build';
+import { icon } from '../../components/icons';
+
+const CHIPS = [
+  { key: 'all', label: 'الكل', ico: icon('library') },
+  { key: 'duo', label: 'لتنين', ico: ui('users') },
+  { key: 'party', label: 'جماعية', ico: ui('party') },
+  { key: 'bots', label: 'ضد الكمبيوتر', ico: ui('robot') },
+];
+---
+<Base title="مكتبة الألعاب" active="games" description="مكتبة ألعاب Serva Games: ألعاب جماعية أونلاين بتنلعب من المتصفح بلا تنزيل — مع صحابك أو ضد الكمبيوتر.">
+  <section class="lib-hero">
+    <h1 class="page-title"><Fragment set:html={icon('library')} />مكتبة الألعاب</h1>
+    <p class="muted">كل الألعاب أونلاين ومن المتصفح: اعمل غرفة لصحابك، ادخل غرفة مفتوحة، أو تحدّى الكمبيوتر.</p>
+  </section>
+
+  <div class="lib-tools">
+    <div class="chips" role="group" aria-label="فلترة الألعاب">
+      {CHIPS.map((c, i) => (
+        <button type="button" class="chip" data-f={c.key} aria-pressed={i === 0 ? 'true' : 'false'}><Fragment set:html={c.ico} />{c.label}</button>
+      ))}
+    </div>
+    <label class="search">
+      <span class="visually-hidden">دوّر على لعبة</span>
+      <Fragment set:html={icon('search')} />
+      <input class="input" id="q" type="search" placeholder="دوّر على لعبة…" autocomplete="off" enterkeyhint="search" />
+    </label>
+  </div>
+
+  <div class="game-cards lib-grid" id="libGrid" aria-live="polite">
+    {[0, 1, 2, 3].map(() => <div class="gcard skel" aria-hidden="true"></div>)}
+  </div>
+  <div id="libEmpty" hidden class="panel state state-empty">
+    <Fragment set:html={ui('sparkle')} /><span>ما لقينا لعبة بهالبحث.</span>
+    <button type="button" class="btn sm" id="clearQ">امسح الفلتر</button>
+  </div>
+</Base>
+
+<style is:global>
+  .lib-hero { padding-top: 10px; }
+  .lib-hero p { margin: 8px 0 0; font-size: 16.5px; max-width: 640px; }
+  /* big horizontal cards, two per row */
+  .lib-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .lib-grid .gcard { flex-direction: row; min-height: 200px; }
+  .lib-grid .gcard.skel { min-height: 220px; }
+  .lib-grid .gcard-art { flex: 0 0 46%; aspect-ratio: auto; min-height: 100%; }
+  .lib-grid .gcard-art::after { inset: 0 auto 0 0; width: 35%; height: auto; background: linear-gradient(270deg, transparent, rgba(10, 21, 48, .85)); }
+  .lib-grid .gcard-body { margin-top: 0; padding: 20px 20px 18px; gap: 10px; }
+  .lib-grid .gcard-top { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .lib-grid .gcard-top h3 { font-size: 25px; }
+  .lib-grid .gcard-foot { flex-wrap: wrap; }
+  @media (max-width: 1020px) {
+    .lib-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .lib-grid .gcard { flex-direction: column; min-height: 0; }
+    .lib-grid .gcard-art { flex: 0 0 auto; aspect-ratio: 8 / 5; }
+    .lib-grid .gcard-art::after { inset: auto 0 0; width: auto; height: 40%; background: linear-gradient(180deg, transparent, rgba(10, 21, 48, .9)); }
+    .lib-grid .gcard-body { margin-top: -14px; padding: 4px 16px 16px; }
+    .lib-grid .gcard-top { flex-direction: row; align-items: center; }
+  }
+  #libEmpty { flex-wrap: wrap; }
+  @media (max-width: 760px) {
+    .lib-hero p { font-size: 15px; }
+  }
+</style>
+
+<script>
+  import { $, $$, ui, session, loadSession } from '../../lib/client';
+  import { liveGames, isDuo, isParty, norm, type LiveGame } from '../../components/games/catalog';
+  import { gameCardHTML } from '../../components/games/cards';
+
+  let games: LiveGame[] = [];
+  let filter = 'all';
+  const q = $('#q') as HTMLInputElement;
+
+  // ?f=duo|party|bots and ?q=… are kept in the URL so a filtered library can be shared
+  const params = new URLSearchParams(location.search);
+  if (['all', 'duo', 'party', 'bots'].includes(params.get('f') || '')) filter = params.get('f')!;
+  q.value = params.get('q') || '';
+
+  const matches = (g: LiveGame) => {
+    if (filter === 'duo' && !isDuo(g)) return false;
+    if (filter === 'party' && !isParty(g)) return false;
+    if (filter === 'bots' && !g.bots) return false;
+    const t = norm(q.value);
+    if (!t) return true;
+    return norm([g.name, g.slug, g.description, ...(g.tags || []), ...(g.aliases || [])].join(' ')).includes(t);
+  };
+
+  function draw() {
+    const grid = $('#libGrid')!, empty = $('#libEmpty')!;
+    $$('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.f === filter)));
+    if (!session.ok) { grid.innerHTML = `<div class="panel state state-error" style="grid-column:1/-1">${ui('warn')}<span>ما قدرنا نوصل للسيرفر — جرّب تحدّث الصفحة.</span></div>`; empty.hidden = true; return; }
+    if (!games.length) { grid.innerHTML = `<div class="panel state state-empty" style="grid-column:1/-1">${ui('sparkle')}<span>ما في ألعاب مفعّلة هلق.</span></div>`; empty.hidden = true; return; }
+    const list = games.filter(matches);
+    grid.innerHTML = list.map((g, i) => gameCardHTML(g, i)).join('');
+    empty.hidden = list.length > 0;
+    const u = new URL(location.href);
+    filter === 'all' ? u.searchParams.delete('f') : u.searchParams.set('f', filter);
+    q.value.trim() ? u.searchParams.set('q', q.value.trim()) : u.searchParams.delete('q');
+    history.replaceState(null, '', u.pathname + u.search);
+  }
+
+  $$('.chip').forEach((c) => c.addEventListener('click', () => { filter = c.dataset.f || 'all'; draw(); }));
+  q.addEventListener('input', draw);
+  $('#clearQ')!.addEventListener('click', () => { filter = 'all'; q.value = ''; draw(); q.focus(); });
+
+  loadSession().then(() => { games = liveGames(session.site.games); draw(); });
+</script>

@@ -1,13 +1,17 @@
 ---
 import Base from '../layouts/Base.astro';
 import { ui } from '../lib/art-build';
+import { icon } from '../components/icons';
 ---
 <Base title="مو موجود" noindex canonical={false}>
   <div class="panel nf404">
     <div class="code">404</div>
     <h1>الصفحة مو موجودة</h1>
     <p>يمكن الرابط غلط أو انمسح.</p>
-    <a class="btn btn-gold" href="/"><Fragment set:html={ui('house')} />ارجع للصفحة الرئيسية</a>
+    <div class="nf-cta">
+      <a class="btn btn-gold" href="/"><Fragment set:html={ui('house')} />الصفحة الرئيسية</a>
+      <a class="btn" href="/games"><Fragment set:html={icon('library')} />مكتبة الألعاب</a>
+    </div>
   </div>
 </Base>
 <style>
@@ -15,4 +19,5 @@ import { ui } from '../lib/art-build';
   .code { font-size: 96px; font-weight: 900; color: var(--cyan2); line-height: 1; text-shadow: 0 0 30px rgba(0, 180, 255, .5); }
   h1 { margin: 12px 0 6px; font-size: 26px; }
   p { color: var(--muted); margin: 0 0 22px; }
+  .nf-cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 </style>

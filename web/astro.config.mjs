@@ -15,6 +15,9 @@ const LEGACY = ['/api', '/room', '/admin', '/style.css', '/app.js', '/account.js
 const rewriteProfile = (req, _res, next) => {
   const [path, query] = String(req.url || '').split('?');
   if (/^\/u\/[^/]+\/?$/.test(path)) req.url = '/u' + (query ? '?' + query : '');
+  // /play/<slug>/<code> (a small-game room) is the static page /play/<slug>, which reads the code from the URL.
+  const pm = path.match(/^\/play\/([a-z0-9]+)\/[a-z0-9]{5}\/?$/i);
+  if (pm) req.url = '/play/' + pm[1] + (query ? '?' + query : '');
   next();
 };
 const profileRewrite = {
@@ -40,6 +43,10 @@ export default defineConfig({
     },
     // `npm run preview` (the built site) talks to the same backend. Astro's preview ignores user Vite
     // plugins, so /u/<name> → u.html is done with a proxy bypass there.
-    preview: { proxy: { '^/u/[^/]+/?$': { target: BACKEND, bypass: () => '/u.html' }, ...proxy } },
+    preview: { proxy: {
+      '^/u/[^/]+/?$': { target: BACKEND, bypass: () => '/u.html' },
+      '^/play/[a-z0-9]+/[a-z0-9]{5}/?$': { target: BACKEND, bypass: (req) => '/play/' + String(req.url).split('/')[2] + '.html' },
+      ...proxy,
+    } },
   },
 });
