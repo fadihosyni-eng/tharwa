@@ -18,7 +18,8 @@ import indexHtml from './public/index.html'; // bundled as text: server.js serve
 const SERVER_PATH = /^\/(?:api\/|admin\/?$)/;
 // Static pages that need a rewrite (the URL keeps its path): the game room uses the old client
 // (web/site/game.html), and every profile uses the one Astro page u.html, which reads the name from the URL.
-const REWRITES = [[/^\/room\/[^/]+\/?$/, '/game'], [/^\/u\/[^/]+\/?$/, '/u']];
+// A small-game room /play/<slug>/<code> is the static page /play/<slug> (play/<slug>.html), which reads the code from the URL.
+const REWRITES = [[/^\/room\/[^/]+\/?$/, '/game'], [/^\/u\/[^/]+\/?$/, '/u'], [/^\/play\/([a-z0-9]+)\/[a-z0-9]{5}\/?$/i, '/play/$1']];
 
 export class Tharwa extends DurableObject {
   // Loads and starts server.js once. Not done at global scope: Workers forbid timers, random
@@ -79,7 +80,7 @@ export default {
       }
     }
     for (const [re, to] of REWRITES) {
-      if (re.test(url.pathname)) return env.ASSETS.fetch(new Request(new URL(to + url.search, url), request));
+      if (re.test(url.pathname)) return env.ASSETS.fetch(new Request(new URL(url.pathname.replace(re, to) + url.search, url), request));
     }
     if (!SERVER_PATH.test(url.pathname)) return env.ASSETS.fetch(request);
     // Tell the Node server how the visitor reached us (cookies get `Secure` on https).

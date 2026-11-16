@@ -649,10 +649,14 @@
     S.noticeSeq = g.notice.seq;
     const n = g.notice;
     const from = st.players.find((p) => p.id === n.from), to = st.players.find((p) => p.id === n.to);
-    if (n.kind !== 'rent' || !from || !to) return;
+    if ((n.kind !== 'rent' && n.kind !== 'norent') || !from || !to) return;
     const av = (p) => `<span class="tk rp-av" style="--pc:${p.color}" title="${esc(p.name)}">${ART.piece(p.piece)}</span>`;
-    // Slim pill: payer -> amount -> owner, tile name underneath (fades by itself).
-    const html = `<div class="rent-pill" role="status">${av(from)}<span class="rp-arrow">${ART.ui('arrow')}</span>
+    // «لا إيجار للمسجون»: the owner is in jail, so the visitor pays nothing.
+    const html = n.kind === 'norent' ? `<div class="rent-pill" role="status">${av(from)}<span class="rp-arrow">${ART.ui('lock')}</span>
+        <div class="rp-mid"><b class="rp-amt">بلا إيجار</b><small><span style="color:${to.color}">${esc(to.name)}</span> صاحب ${esc(n.tile)} بالسجن — ما في إيجار</small></div>
+        <span class="rp-arrow">${ART.ui('lock')}</span>${av(to)}</div>`
+      // Slim pill: payer -> amount -> owner, tile name underneath (fades by itself).
+      : `<div class="rent-pill" role="status">${av(from)}<span class="rp-arrow">${ART.ui('arrow')}</span>
         <div class="rp-mid"><b class="rp-amt">${fmt(n.amount)}</b><small><span style="color:${from.color}">${esc(from.name)}</span> دفع إيجار ${esc(n.tile)} لـ <span style="color:${to.color}">${esc(to.name)}</span></small></div>
         <span class="rp-arrow">${ART.ui('arrow')}</span>${av(to)}</div>`;
     clearTimeout(S.noticeShow);
@@ -662,6 +666,7 @@
       box.innerHTML = html;
       clearTimeout(S.noticeTimer);
       S.noticeTimer = setTimeout(() => { box.innerHTML = ''; }, 3200);
+      if (n.kind === 'norent') { FX.Sound.play('jail'); return; }
       FX.Sound.play('cash');
       flyCash(n.from, n.to);
     }, S.running ? 900 : 0);
@@ -929,7 +934,7 @@
     if (a === 'info') { openTile(Number(el.dataset.i)); return; }
     if (a === 'bid') { act('bid', { amount: Number(el.dataset.v) }); return; }
     if (a === 'buildMode') { setBuildMode(!S.buildMode); return; }
-    if (a === 'bankrupt') { if (await confirmBox('أكيد بدك تعلن الإفلاس؟ رح تطلع من اللعبة.')) act('bankrupt'); return; }
+    if (a === 'bankrupt') { if (await confirmBox('أكيد بدك تعلن الإفلاس؟ أملاكك بتروح، بس بتضل بالغرفة تتفرّج وفيك تلعب الجولة الجاية.')) act('bankrupt'); return; }
     el.disabled = true;
     act(a).then(() => { el.disabled = false; });
   }
@@ -971,7 +976,8 @@
     const avatar = `<span class="tk av" style="--pc:${p.color}">${ART.piece(p.piece)}</span>`;
     const nm = p.username ? `<a href="/u/${esc(p.username)}" target="_blank" class="plink" title="@${esc(p.username)}">${esc(p.name)}</a>` : esc(p.name);
     const pts = p.points != null ? `<small class="ptag" title="نقاط الحساب">⭐ ${p.points}</small>` : '';
-    const name = `<span class="pname">${nm}${S.me && p.id === S.me.pid ? ' <small class="hint">(أنت)</small>' : ''}</span>${pts}<span class="icons">${icons}</span>`;
+    const watching = p.bankrupt && !p.left && st.status !== 'lobby' ? ' <small class="hint">مفلس · بيتفرّج</small>' : '';
+    const name = `<span class="pname">${nm}${S.me && p.id === S.me.pid ? ' <small class="hint">(أنت)</small>' : ''}${watching}</span>${pts}<span class="icons">${icons}</span>`;
     if (st.status === 'lobby') {
       const kick = isHost(st) && p.id !== st.hostId ? `<button class="x-btn" data-kick="${p.id}" title="طلّعه">✕</button>` : '';
       return `<div class="prow" data-prow="${p.id}">${avatar}${name}${kick}</div>`;
@@ -1191,8 +1197,10 @@
         <li>المبلغ الابتدائي: ${fmt(s.startingCash)}</li>
         ${TOGGLES.filter(([k]) => k !== 'isPrivate').map(([k, title]) => `<li>${title}: ${s[k] ? '✅' : '❌'}</li>`).join('')}
         <li>وقت الدور: ${s.turnTimer ? s.turnTimer + ' ثانية' : 'بدون'}</li></ul></details></div>`;
-      if (me && !me.bankrupt && st.status === 'playing') h += '<button class="btn ghost sm" data-leave>انسحاب من اللعبة</button>';
-      if (S.me && (st.status === 'ended' || (me && me.bankrupt))) h += '<a class="btn ghost sm" href="/">الصفحة الرئيسية</a>';
+      // Giving up = bankruptcy: the player stays in the room as a spectator (board, chat, the end, the next game).
+      if (me && !me.bankrupt && st.status === 'playing') h += '<button class="btn ghost sm" data-giveup>انسحاب (أعلن الإفلاس وكمّل تفرّج)</button>';
+      if (me && me.bankrupt && st.status === 'playing') h += '<div class="panel hint" style="text-align:center">💀 أفلست — عم تتفرّج عاللعبة. إذا صاحب الغرفة بلّش جولة جديدة بتلعب معهم.</div>';
+      if (S.me && (st.status === 'ended' || (me && me.bankrupt))) h += '<button class="btn ghost sm" data-leave>اطلع من الغرفة</button>';
     }
     el.innerHTML = h;
   }
@@ -1228,9 +1236,14 @@
     if (t.closest('[data-sellmany]')) { openSellMany(); return; }
     const prop = t.closest('[data-prop]');
     if (prop) { openTile(Number(prop.dataset.prop)); return; }
+    if (t.closest('[data-giveup]')) {
+      if (await confirmBox('إذا انسحبت بتعتبر مفلس وأملاكك بترجع للبنك، بس بتضل بالغرفة تتفرّج. أكيد؟')) act('bankrupt');
+      return;
+    }
     if (t.closest('[data-leave]')) {
-      const playing = S.room.status === 'playing';
-      if (!(await confirmBox(playing ? 'إذا انسحبت رح تعتبر مفلس وأملاكك بترجع للبنك. أكيد؟' : 'أكيد بدك تطلع من الغرفة؟'))) return;
+      const me = meP();
+      const playing = S.room.status === 'playing' && me && !me.bankrupt;
+      if (!(await confirmBox(playing ? 'إذا طلعت رح تعتبر مفلس وأملاكك بترجع للبنك. أكيد؟' : 'أكيد بدك تطلع من الغرفة؟'))) return;
       await act('leave');
       store.del(credsKey(S.code));
       location.href = '/';

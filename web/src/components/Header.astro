@@ -1,25 +1,31 @@
 ---
 import { ui } from '../lib/art-build';
+import { icon } from './icons';
+// Official Serva logo file (never redrawn) from the game's public/brand folder.
+import servaLogo from '../../../public/brand/serva-logo-160.webp?url';
 
 interface Props { active?: 'home' | 'games' | 'store' | 'leaders' | '' }
 const { active = '' } = Astro.props;
 const NAV = [
-  { key: 'home', href: '/', icon: 'house', label: 'الرئيسية' },
-  { key: 'games', href: '/#games', icon: 'gamepad', label: 'الألعاب' },
-  { key: 'store', href: '/store', icon: 'store', label: 'المتجر' },
-  { key: 'leaders', href: '/leaders', icon: 'trophy', label: 'المتصدرين' },
+  { key: 'home', href: '/', ico: ui('house'), label: 'الرئيسية', short: 'الرئيسية' },
+  { key: 'games', href: '/games', ico: icon('library'), label: 'مكتبة الألعاب', short: 'الألعاب' },
+  { key: 'store', href: '/store', ico: ui('store'), label: 'المتجر', short: 'المتجر' },
+  { key: 'leaders', href: '/leaders', ico: ui('trophy'), label: 'المتصدرين', short: 'المتصدرين' },
 ];
 ---
 <header class="site-header">
   <div class="wrap hdr">
-    <a class="brand" href="/" aria-label="ثروة — الصفحة الرئيسية">
-      <span class="brand-word">ثروة<i>.</i></span>
-      <small class="brand-sub">ألعاب أونلاين</small>
+    <a class="brand" href="/" aria-label="Serva Games — الصفحة الرئيسية">
+      <img class="brand-logo" src={servaLogo} alt="" width="38" height="38" decoding="async" />
+      <span class="brand-text">
+        <span class="brand-word" dir="ltr">Serva <b>Games</b></span>
+        <small class="brand-sub">منصة ألعاب أونلاين</small>
+      </span>
     </a>
     <nav class="main-nav" aria-label="القائمة الرئيسية">
       {NAV.map((n) => (
         <a href={n.href} class:list={[{ on: active === n.key }]} aria-current={active === n.key ? 'page' : undefined}>
-          <Fragment set:html={ui(n.icon)} /><span>{n.label}</span>
+          <Fragment set:html={n.ico} /><span class="nl-long">{n.label}</span><span class="nl-short">{n.short}</span>
         </a>
       ))}
     </nav>

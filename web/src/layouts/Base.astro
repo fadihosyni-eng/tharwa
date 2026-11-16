@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import '../styles/games.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import favicon from '../../../public/brand/favicon.png?url';
@@ -15,14 +16,14 @@ interface Props {
 }
 const {
   title,
-  description = 'ثروة — منصة ألعاب أونلاين من Serva: العب «ثروة» لعبة المدن والعقارات العربية مع أصحابك، اجمع نقاط وتصدّر القائمة.',
+  description = 'Serva Games — منصة ألعاب أونلاين من Serva: مكتبة ألعاب جماعية بتنلعب من المتصفح بلا تنزيل، مع صحابك أو ضد الكمبيوتر. اجمع نقاط وتصدّر القائمة.',
   active = '',
   noindex = false,
   canonical = true,
   bodyClass = '',
 } = Astro.props;
-const fullTitle = title ? `${title} — ثروة` : 'ثروة — ألعاب أونلاين من Serva';
-const site = Astro.site ?? new URL('https://tharwa.onrender.com');
+const fullTitle = title ? `${title} — Serva Games` : 'Serva Games — منصة ألعاب أونلاين';
+const site = Astro.site ?? new URL('https://serva-g.com');
 const pageUrl = new URL(Astro.url.pathname.replace(/\.html$/, '').replace(/\/index$/, '/'), site).href;
 const ogUrl = new URL(ogImage, site).href;
 ---
@@ -40,7 +41,7 @@ const ogUrl = new URL(ogImage, site).href;
     <link rel="icon" type="image/png" href={favicon} />
     <link rel="apple-touch-icon" href={ogImage} />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="ثروة" />
+    <meta property="og:site_name" content="Serva Games" />
     <meta property="og:locale" content="ar_AR" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />

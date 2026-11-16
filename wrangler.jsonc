@@ -12,13 +12,13 @@
   "define": { "__dirname": "\"/bundle\"" },
 
   // Site files: web/site = old client (public/, index.html renamed game.html) + the new Astro pages on top.
-  // Built by the "build" command below on every deploy. /room/* and /u/* are rewritten in worker.js.
+  // Built by the "build" command below on every deploy. /room/*, /u/* and /play/<slug>/<code> are rewritten in worker.js.
   "build": { "command": "npm --prefix web run build && npm --prefix web run assemble" },
   "assets": {
     "directory": "./web/site",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/*", "/room/*", "/u/*", "/admin", "/admin/"]
+    "run_worker_first": ["/api/*", "/room/*", "/u/*", "/play/*", "/admin", "/admin/"]
   },
 
   // One Durable Object («main») runs the whole game server. SQLite-backed class = allowed on the Free plan.

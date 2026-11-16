@@ -2,7 +2,7 @@
 // Public profile. One static file (u.html) serves every /u/<username>: the name is read from location.pathname.
 import Base from '../layouts/Base.astro';
 ---
-<Base title="بروفايل لاعب" description="بروفايل لاعب على ثروة: النقاط، الألعاب، الفوز وآخر الألعاب." canonical={false}>
+<Base title="بروفايل لاعب" description="بروفايل لاعب على Serva Games: النقاط، الألعاب، الفوز وآخر الألعاب." canonical={false}>
   <div id="profile" class="profile">
     <div class="panel prof-card"><span class="ava skel" style="--s:104px"></span><div class="prof-id"><div class="skel" style="height:28px;width:220px"></div><div class="skel" style="height:16px;width:120px;margin-top:10px"></div></div></div>
   </div>
@@ -55,7 +55,7 @@ import Base from '../layouts/Base.astro';
   };
   const box = $('#profile')!;
   const notFound = (msg: string) => {
-    document.title = 'مو موجود — ثروة';
+    document.title = 'مو موجود — Serva Games';
     box.innerHTML = `<div class="panel nf"><div class="nf-code">404</div><h1>${esc(msg)}</h1><p>يمكن الرابط غلط أو انمسح الحساب.</p><a class="btn btn-gold" href="/leaders">${ui('trophy')}شوف المتصدرين</a></div>`;
   };
 
@@ -72,7 +72,7 @@ import Base from '../layouts/Base.astro';
     }
     await loadSession();
     const u = d.user, mine = !!session.me && session.me.username === u.username;
-    document.title = `${u.displayName} (@${u.username}) — ثروة`;
+    document.title = `${u.displayName} (@${u.username}) — Serva Games`;
     const rate = u.games ? Math.round((u.wins / u.games) * 100) : 0;
     const games = d.recent.length
       ? d.recent.map((g) => `<div class="game-row ${g.won ? 'won' : ''}"><span class="g-res">${ui(g.won ? 'trophy' : 'dice')}${g.won ? 'ربح' : 'لعب'}</span>

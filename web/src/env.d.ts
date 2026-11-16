@@ -13,7 +13,7 @@ interface TharwaArt {
   UI_KEYS: string[];
 }
 interface TharwaFx {
-  diceHTML(): string;
+  diceHTML(values?: number[]): string;
   setDice(root: Element, values: number[], animate: boolean): void;
   Sound: { on: boolean; toggle(): boolean; play(name: string): void };
 }

@@ -1,0 +1,301 @@
+---
+// /games/<slug> — one static page per known game: art banner, how to play, the play panel and open rooms.
+// Whether the game is actually playable comes from the live registry (/api/site) in the browser.
+import Base from '../../layouts/Base.astro';
+import { ART, ui, flag } from '../../lib/art-build';
+import { icon } from '../../components/icons';
+import { CATALOG, playersLabel, type GameInfo } from '../../components/games/catalog';
+
+export function getStaticPaths() {
+  return CATALOG.map((g) => ({ params: { slug: g.slug }, props: { game: g } }));
+}
+const { game } = Astro.props as { game: GameInfo };
+const tharwa = game.slug === 'tharwa';
+
+// ثروة keeps its full feature list and rules (they used to live on the home page).
+const features = [
+  ['port', '22 دولة عربية بأعلامها', 'سوريا والأردن والعراق دايماً عاللوح، والباقي 5 دول عربية بتختارها'],
+  ['gavel', 'مزادات وقروض', 'زاود، بيع عقارك بالمزاد، أو أقرض صاحبك بفايدة'],
+  ['chest', 'بطاقات حظ وخزنة', 'بطاقات بتقلب اللعبة بلحظة'],
+  ['trophy', 'آخر واحد بيربح', 'عمّر فنادق وخلّي الكل يفلس'],
+];
+const rules = [
+  ['cash', 'كل لاعب بيبلّش بمبلغ بيحدده صاحب الغرفة (من $500 لـ $3000).'],
+  ['dice', 'ارمي النردين وامشِ — الدبل بيعطيك دور كمان.'],
+  ['house', 'اشترِ المدن والموانئ والشركات، واللي بيوقف عندك بيدفعلك إيجار.'],
+  ['hotel', 'جمّع كل مدن الدولة لتعمّر بيوت وفنادق ويصير الإيجار نار.'],
+  ['cards', 'بطاقات «حظ» و«خزنة» ممكن تعطيك مصاري أو تاخد منك أو تنقلك.'],
+  ['handshake', 'تبادل عقارات ومصاري، أو أقرض واستلف من اللاعبين بفايدة.'],
+  ['bank', 'ارهن عقاراتك للبنك، أو بيعها بالمزاد لأعلى سعر.'],
+  ['globe', 'اللوح كله دول عربية: سوريا والأردن والعراق دايماً موجودين، والباقي 5 دول بيختارهن صاحب الغرفة من الـ22 دولة عربية.'],
+  ['crown', 'آخر واحد بيضل بدون إفلاس هو الفائز.'],
+];
+const quickHint = tharwa ? 'بيدخلك على أول غرفة مفتوحة، أو بيعملك غرفة جديدة.' : 'بيلاقيلك خصم بغرفة مفتوحة، أو بيعملك وحدة.';
+const botHint = tharwa ? 'غرفة إلك مع بوتين — بتبلّش من اللوبي.' : 'العب هلق ضد الكمبيوتر، بلا انتظار.';
+---
+<Base title={game.name} active="games" description={`${game.name} على Serva Games — ${game.description} العب أونلاين مع صحابك أو ضد الكمبيوتر، بلا تنزيل.`}>
+  <nav class="crumbs" aria-label="مسار الصفحة">
+    <a href="/games">مكتبة الألعاب</a><Fragment set:html={icon('chevron')} /><span aria-current="page">{game.name}</span>
+  </nav>
+
+  <section class="gd-hero" style={`--ac:${game.accent}`} aria-labelledby="gdTitle">
+    <div class="gd-art"><img src={game.art} alt={`رسمة لعبة ${game.name}`} width="480" height="300" decoding="async" fetchpriority="high" /></div>
+    <div class="gd-info">
+      {tharwa && <div class="gd-flags" aria-hidden="true">{['sy', 'jo', 'iq', 'lb', 'eg', 'sa'].map((c) => <span class="flag"><Fragment set:html={flag(c)} /></span>)}</div>}
+      <h1 id="gdTitle">{tharwa ? <span class="wordmark">ثروة<i>.</i></span> : game.name}</h1>
+      <p class="gd-pitch">{game.pitch}</p>
+      <ul class="gd-meta">
+        <li><Fragment set:html={ui('users')} /><span id="gdPlayers">{playersLabel(game.minPlayers, game.maxPlayers)}</span></li>
+        <li><Fragment set:html={ui('timer')} />{game.duration}</li>
+        {game.bots && <li><Fragment set:html={ui('robot')} />ضد الكمبيوتر</li>}
+        <li><Fragment set:html={ui('handshake')} />مع الأصحاب</li>
+        <li class="gd-live" id="gdLive" hidden><span class="live-dot"></span><span></span></li>
+      </ul>
+      <div class="gd-cta">
+        <button type="button" class="btn btn-gold big" id="heroPlay"><Fragment set:html={ui('play')} />العب الآن</button>
+        {tharwa && <a class="btn big btn-ghost" href="/store"><Fragment set:html={ui('map')} />خرايط اللوح</a>}
+      </div>
+    </div>
+  </section>
+
+  <div class="gd-grid">
+    <aside class="gd-side" id="play" data-slug={game.slug} data-bots={game.bots ? '1' : ''}>
+      <div class="panel play-card" id="playCard">
+        <div class="panel-head"><h2><Fragment set:html={ui('gamepad')} />العب {game.name}</h2></div>
+        <div class="field">
+          <span>اسمك باللعبة</span>
+          <div id="nickBox"><input id="nick" class="input" maxlength="16" placeholder="اسمك باللعبة…" autocomplete="nickname" /></div>
+        </div>
+        <button class="btn btn-gold mode-btn big" id="quickBtn" type="button" data-mode="quick">
+          <span class="mb-ico"><Fragment set:html={ui('play')} /></span><span class="mb-text">العب الآن<small>{quickHint}</small></span>
+        </button>
+        {game.bots && (
+          <button class="btn mode-btn" id="botBtn" type="button" data-mode="bot">
+            <span class="mb-ico"><Fragment set:html={ui('robot')} /></span><span class="mb-text">ضد الكمبيوتر<small>{botHint}</small></span>
+          </button>
+        )}
+        <button class="btn mode-btn" id="createBtn" type="button" data-mode="private">
+          <span class="mb-ico"><Fragment set:html={ui('lock')} /></span><span class="mb-text">غرفة خاصة مع أصحابك<small>بتاخد كود وبتبعته لصحابك ليدخلوا.</small></span>
+        </button>
+        <div class="or-sep"><span>عندك كود؟</span></div>
+        <form class="join-code" id="joinForm">
+          <input id="codeIn" class="input ltr" maxlength="8" placeholder="abc12" aria-label="كود الغرفة" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <button class="btn btn-cyan" type="submit">انضم</button>
+        </form>
+      </div>
+
+      <div class="panel rooms-card" id="roomsCard">
+        <div class="panel-head"><h3><Fragment set:html={ui('users')} />غرف {game.name} المفتوحة</h3><span class="live-dot" title="بتتحدّث لحالها"></span></div>
+        <div id="roomList" class="room-list"><div class="state state-loading"><span class="spinner"></span><span>عم دوّر…</span></div></div>
+      </div>
+    </aside>
+
+    <div class="gd-main">
+      <section class="panel howto-panel" aria-labelledby="howTitle">
+        <h2 id="howTitle" class="howto-title"><Fragment set:html={ui('scroll')} />كيف بتنلعب؟</h2>
+        <ol class="howto">
+          {game.howto.map(([ic, t], i) => <li><span class="hi"><Fragment set:html={ui(ic)} /></span><span><b class="hn">{i + 1}.</b> {t}</span></li>)}
+        </ol>
+        {tharwa && (
+          <details class="rules">
+            <summary><Fragment set:html={ui('cards')} />كل قواعد ثروة<Fragment set:html={icon('chevron', 'sum-ch')} /></summary>
+            <ol class="howto two">
+              {rules.map(([ic, t]) => <li><span class="hi"><Fragment set:html={ui(ic)} /></span><span>{t}</span></li>)}
+            </ol>
+          </details>
+        )}
+      </section>
+
+      {tharwa && (
+        <section class="features" aria-label="مميزات ثروة">
+          {features.map(([ic, t, d]) => (
+            <div class="feature"><span class="f-icon"><Fragment set:html={ART.icon(ic)} /></span><b>{t}</b><small>{d}</small></div>
+          ))}
+        </section>
+      )}
+
+      <a class="back-lib" href="/games"><Fragment set:html={icon('back')} />ارجع لمكتبة الألعاب</a>
+    </div>
+  </div>
+</Base>
+
+<style is:global>
+  .crumbs { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--muted); margin-bottom: 14px; }
+  .crumbs a { color: var(--muted); }
+  .crumbs a:hover { color: var(--text); }
+  .crumbs .ui-ico { width: 15px; height: 15px; }
+  .crumbs span { color: var(--text); }
+
+  .gd-hero { --ac: var(--cyan2); position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 34px; align-items: center; padding: 26px; border-radius: 26px; overflow: hidden;
+    background: radial-gradient(700px 320px at 85% 0%, color-mix(in srgb, var(--ac) 18%, transparent), transparent 70%), linear-gradient(180deg, rgba(14, 28, 61, .65), rgba(10, 21, 48, .9));
+    border: 1px solid color-mix(in srgb, var(--ac) 30%, var(--line)); }
+  .gd-art { border-radius: 20px; overflow: hidden; aspect-ratio: 8 / 5; box-shadow: 0 26px 60px rgba(0, 0, 0, .5), 0 0 40px color-mix(in srgb, var(--ac) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ac) 40%, transparent); animation: cardIn .5s cubic-bezier(.2, .8, .2, 1) both; }
+  .gd-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gd-flags { display: flex; gap: 6px; margin-bottom: 12px; }
+  .gd-flags .flag { --fs: 24px; }
+  .gd-info h1 { font-size: clamp(34px, 4.6vw, 54px); font-weight: 900; letter-spacing: -.5px; }
+  .gd-info .wordmark { font-size: clamp(44px, 6vw, 72px); }
+  .gd-pitch { color: #c3d3e6; font-size: 17px; line-height: 1.85; margin: 12px 0 18px; max-width: 560px; }
+  .gd-meta { list-style: none; margin: 0 0 22px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .gd-meta li { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; background: rgba(3, 8, 22, .5); border: 1px solid var(--line2); font-weight: 800; font-size: 13.5px; color: #c9d6e3; }
+  .gd-meta .ui-ico { color: var(--ac); width: 17px; height: 17px; }
+  .gd-meta .gd-live { border-color: rgba(40, 211, 145, .45); color: #c8f7e4; }
+  .gd-cta { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .gd-grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 20px; margin-top: 22px; align-items: start; }
+  .gd-side { order: 2; display: flex; flex-direction: column; gap: 18px; position: sticky; top: calc(var(--hdr) + 16px); }
+  .gd-main { order: 1; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+
+  .howto-title { font-size: 21px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .howto-title .ui-ico { color: var(--gold); }
+  .howto { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .howto.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; margin-top: 14px; }
+  .howto li { display: flex; gap: 12px; align-items: flex-start; color: #c9d6e3; line-height: 1.75; font-size: 15.5px; }
+  .howto .hn { color: var(--gold); }
+  .hi { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 180, 255, .1); border: 1px solid rgba(47, 226, 255, .25); color: var(--cyan2); }
+  .hi .ui-ico { width: 19px; height: 19px; }
+  .rules { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .rules summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; font-weight: 900; color: var(--cyan2); }
+  .rules summary::-webkit-details-marker { display: none; }
+  .rules .sum-ch { margin-inline-start: auto; transition: transform .2s; transform: rotate(-90deg); }
+  .rules[open] .sum-ch { transform: rotate(90deg); }
+
+  .features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .feature { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 18px 12px; border-radius: var(--radius);
+    background: radial-gradient(260px 120px at 50% 0%, rgba(0, 180, 255, .12), transparent), var(--panel); border: 1px solid var(--line); transition: transform .2s, border-color .2s; }
+  .feature:hover { transform: translateY(-3px); border-color: rgba(0, 180, 255, .5); }
+  .f-icon { width: 50px; height: 50px; }
+  .f-icon svg { width: 100%; height: 100%; }
+  .feature small { color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .back-lib { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--muted); align-self: flex-start; }
+  .back-lib:hover { color: var(--text); }
+
+  @media (max-width: 1020px) {
+    .gd-grid { grid-template-columns: 1fr; }
+    .gd-side { order: 0; position: static; }
+    .gd-main { order: 1; }
+    .features { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 860px) {
+    .gd-hero { grid-template-columns: 1fr; gap: 18px; padding: 14px 14px 20px; text-align: center; }
+    .gd-flags, .gd-meta, .gd-cta { justify-content: center; }
+    .gd-pitch { margin-inline: auto; font-size: 16px; }
+    .howto.two { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .gd-cta .btn { flex: 1 1 100%; }
+    .gd-meta { margin-bottom: 18px; }
+    .gd-meta li { font-size: 12.5px; padding: 5px 10px; }
+    .gd-grid { margin-top: 16px; gap: 16px; }
+  }
+</style>
+
+<script>
+  import { $, esc, ui, toast, avatarHTML, loadSession, session, mountAds } from '../../lib/client';
+  import { liveGames, playersLabel } from '../../components/games/catalog';
+  import { start, join, openRooms, roomItemHTML, playError, validCode, store, savedName, rememberName, isTharwa, type Mode } from '../../components/games/play';
+
+  const side = $('#play')!;
+  const slug = side.dataset.slug || '';
+  const nickInput = () => $('#nick') as HTMLInputElement | null;
+  ($('#nick') as HTMLInputElement).value = store.get('tharwa_name') || '';
+  const nickname = () => (session.me && session.me.displayName) || nickInput()?.value.trim() || '';
+  let available = true;
+
+  function needName(): string | null {
+    const name = nickname();
+    if (!name) { toast('اكتب اسمك أول'); nickInput()?.focus(); return null; }
+    rememberName(name);
+    return name;
+  }
+
+  async function go(mode: Mode, btn: HTMLButtonElement) {
+    if (!available) return;
+    const name = needName();
+    if (!name) return;
+    btn.disabled = true; btn.classList.add('loading');
+    try { location.href = await start(slug, mode, name); }
+    catch (e) { toast(playError(e, slug)); btn.disabled = false; btn.classList.remove('loading'); }
+  }
+  for (const id of ['#quickBtn', '#botBtn', '#createBtn']) {
+    const b = $(id) as HTMLButtonElement | null;
+    b?.addEventListener('click', () => go((b.dataset.mode || 'quick') as Mode, b));
+  }
+  // the hero button plays straight away when we already know the name, otherwise it points at the name field
+  $('#heroPlay')!.addEventListener('click', () => {
+    if (nickname()) { go('quick', $('#heroPlay') as HTMLButtonElement); return; }
+    side.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => nickInput()?.focus({ preventScroll: true }), 400);
+  });
+
+  const codeIn = $('#codeIn') as HTMLInputElement;
+  codeIn.addEventListener('input', () => { codeIn.value = codeIn.value.toLowerCase().replace(/[^a-z0-9]/g, ''); });
+  $('#joinForm')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!available) return;
+    const c = codeIn.value.trim().toLowerCase();
+    if (!validCode(slug, c)) { toast(isTharwa(slug) ? 'الكود لازم يكون 5 حروف' : 'اكتب كود الغرفة صح'); codeIn.focus(); return; }
+    if (isTharwa(slug)) { const n = nickname(); if (n) rememberName(n); location.href = await join(slug, c, n); return; }
+    const name = needName();
+    if (!name) return;
+    const btn = $('#joinForm button') as HTMLButtonElement;
+    btn.disabled = true;
+    try { location.href = await join(slug, c, name); }
+    catch (err) { toast(playError(err, slug, true)); btn.disabled = false; }
+  });
+
+  $('#roomList')!.addEventListener('click', async (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>('[data-room]');
+    if (!b) return;
+    const code = b.dataset.room || '';
+    if (isTharwa(slug)) { const n = nickname() || savedName(); if (n) rememberName(n); location.href = '/room/' + code; return; }
+    const name = needName();
+    if (!name) return;
+    b.disabled = true;
+    try { location.href = await join(slug, code, name); }
+    catch (err) { toast(playError(err, slug, true)); b.disabled = false; }
+  });
+
+  // ---- open rooms of this game (every 5 s while the tab is visible)
+  let failed = 0, lastRefresh = 0;
+  async function refreshRooms() {
+    if (document.hidden || !available) return;
+    if (Date.now() - lastRefresh < 2000) return; // visibilitychange + timer can fire together
+    lastRefresh = Date.now();
+    const box = $('#roomList')!;
+    try {
+      const list = await openRooms(slug);
+      failed = 0;
+      if (list === null) { box.innerHTML = `<div class="room-empty">${ui('hourglass')}قائمة الغرف لهاللعبة لسا مو جاهزة.</div>`; return; }
+      box.innerHTML = list.length
+        ? list.slice(0, 12).map((r) => roomItemHTML(r)).join('')
+        : `<div class="room-empty">${ui('dice')}ما في غرف مفتوحة هلق — اضغط «العب الآن» لتعمل وحدة.</div>`;
+    } catch {
+      if (++failed >= 2) box.innerHTML = `<div class="state state-error">${ui('warn')}<span>ما قدرنا نجيب الغرف — عم نجرّب كمان…</span></div>`;
+    }
+  }
+
+  loadSession().then(() => {
+    mountAds();
+    const me = session.me;
+    if (me) $('#nickBox')!.innerHTML = `<div class="nick-acc" title="من حسابك — بتغيّره من الإعدادات">${avatarHTML(me.avatar, 34, me.color)}<b>${esc(me.displayName)}</b><small>من حسابك</small></div>`;
+    const g = liveGames(session.site.games).find((x) => x.slug === slug);
+    if (!g) {
+      // not in the registry (or switched off): never offer to play it
+      available = false;
+      ($('#heroPlay') as HTMLButtonElement).disabled = true;
+      $('#playCard')!.innerHTML = session.ok
+        ? `<div class="play-off">${ui('hourglass')}هاللعبة مو متاحة هلق.<br><a href="/games">شوف باقي الألعاب</a></div>`
+        : `<div class="play-off">${ui('warn')}ما قدرنا نوصل للسيرفر — جرّب تحدّث الصفحة.</div>`;
+      $('#roomsCard')!.hidden = true;
+      return;
+    }
+    $('#gdPlayers')!.textContent = playersLabel(g.minPlayers, g.maxPlayers);
+    if (!g.bots) $('#botBtn')?.remove();
+    if (g.live > 0) { const l = $('#gdLive')!; l.hidden = false; l.lastElementChild!.textContent = `${g.live} عم يلعبوا هلق`; }
+    refreshRooms();
+    setInterval(refreshRooms, 5000);
+    document.addEventListener('visibilitychange', refreshRooms);
+  });
+</script>

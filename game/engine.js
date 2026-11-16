@@ -189,7 +189,12 @@ function resolve(room, p, diceSum, opt = {}) {
     if (pr.owner === p.id) return;
     if (pr.mortgaged) { log(room, `${t.name} مرهونة — ما في إيجار`); return; }
     const owner = P(room, pr.owner);
-    if (s.noRentInJail && owner.inJail) { log(room, `${owner.name} بالسجن — ما في إيجار على ${t.name}`); return; }
+    if (s.noRentInJail && owner.inJail) {
+      log(room, `🔒 ${owner.name} بالسجن — ما في إيجار على ${t.name}`);
+      // shown to everyone like a rent notice, so it is clear why nothing was paid
+      g.notice = { kind: 'norent', from: p.id, to: owner.id, amount: 0, tile: t.name, seq: ++g.noticeSeq };
+      return;
+    }
     const rent = rentFor(room, idx, diceSum) * (opt.mult || 1);
     log(room, `💸 ${p.name} دفع إيجار ${fmt(rent)} لـ ${owner.name} (${t.name})`);
     // Big centred notice for everyone (clients show it once per seq, like cards).

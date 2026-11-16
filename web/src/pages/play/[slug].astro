@@ -1,0 +1,121 @@
+---
+// /play/<slug>          → quick start: play vs computer, quick online match, private room, join by code, open rooms.
+// /play/<slug>/<code>   → the room itself. One static file per game (play/<slug>.html); worker.js (and the dev server)
+//                         rewrite /play/<slug>/<code> to it, and the client reads the code from the URL.
+import Base from '../../layouts/Base.astro';
+import { MINI_GAMES, type MiniGame } from '../../games/meta';
+import { ui } from '../../lib/art-build';
+import '../../games/games.css';
+
+export function getStaticPaths() {
+  return MINI_GAMES.map((g) => ({ params: { slug: g.slug }, props: { game: g } }));
+}
+const { game } = Astro.props as { game: MiniGame };
+---
+<Base title={game.name} description={`${game.name} أونلاين — ${game.tagline} العب ضد الكمبيوتر أو مع أصحابك من المتصفح.`} active="games" bodyClass="mg-body">
+  <div id="mgApp" class="mg-app" data-slug={game.slug} data-name={game.name} data-icon={game.icon}>
+    <!-- landing (no room code in the URL) -->
+    <section class="mg-landing" id="mgLanding" hidden>
+      <div class="panel mg-hero">
+        <div class="mg-hero-ico" aria-hidden="true"><Fragment set:html={ui(game.icon)} /></div>
+        <div class="mg-hero-txt">
+          <h1>{game.name}</h1>
+          <p class="muted">{game.tagline}</p>
+          <p class="mg-meta"><Fragment set:html={ui('users')} />{game.minPlayers === game.maxPlayers ? `${game.minPlayers} لاعبين` : `${game.minPlayers}–${game.maxPlayers} لاعبين`}<span class="mg-dot"></span><Fragment set:html={ui('robot')} />فيك تلعب ضد الكمبيوتر</p>
+        </div>
+      </div>
+
+      <div class="mg-start-grid">
+        <div class="panel mg-start">
+          <div class="mg-who" id="mgWho">
+            <label class="mg-label" for="mgName">اسمك باللعبة</label>
+            <input id="mgName" class="mg-input" maxlength="16" autocomplete="nickname" placeholder="اكتب اسمك" />
+          </div>
+          {game.maxPlayers > game.minPlayers && (
+            <div class="mg-opt">
+              <span class="mg-label">عدد اللاعبين</span>
+              <div class="mg-seg" id="mgSeatsPick" role="radiogroup" aria-label="عدد اللاعبين">
+                {[2, 3, 4].map((n) => <button type="button" role="radio" data-v={n} aria-checked={n === 4 ? 'true' : 'false'}>{n}</button>)}
+              </div>
+            </div>
+          )}
+          {game.slug === 'xo' && (
+            <div class="mg-opt">
+              <span class="mg-label">المباراة</span>
+              <div class="mg-seg" id="mgBestOf" role="radiogroup" aria-label="عدد الجولات">
+                {[[1, 'جولة وحدة'], [3, 'أفضل من 3'], [5, 'أفضل من 5']].map(([v, l]) => <button type="button" role="radio" data-v={v} aria-checked={v === 1 ? 'true' : 'false'}>{l}</button>)}
+              </div>
+            </div>
+          )}
+          <div class="mg-actions">
+            <button type="button" class="btn btn-gold big" data-mode="bot"><Fragment set:html={ui('robot')} />العب ضد الكمبيوتر</button>
+            <button type="button" class="btn btn-cyan big" data-mode="quick"><Fragment set:html={ui('bolt')} />العب أونلاين</button>
+            <button type="button" class="btn big" data-mode="private"><Fragment set:html={ui('lock')} />غرفة خاصة مع أصحابي</button>
+          </div>
+          <form class="mg-join" id="mgJoin">
+            <label class="mg-label" for="mgCode">عندك كود غرفة؟</label>
+            <div class="mg-join-row">
+              <input id="mgCode" class="mg-input ltr" maxlength="5" autocomplete="off" placeholder="abcde" />
+              <button class="btn" type="submit"><Fragment set:html={ui('arrow')} />ادخل</button>
+            </div>
+          </form>
+          <p class="form-err" id="mgErr" role="alert"></p>
+        </div>
+
+        <div class="panel mg-rooms">
+          <h2><Fragment set:html={ui('online')} />غرف مفتوحة</h2>
+          <div id="mgRoomList" class="mg-room-list"></div>
+        </div>
+      </div>
+
+      <div class="panel mg-rules">
+        <h2><Fragment set:html={ui('scroll')} />كيف بتنلعب؟</h2>
+        <ol>{game.rules.map((r) => <li>{r}</li>)}</ol>
+      </div>
+    </section>
+
+    <!-- room (/play/<slug>/<code>) -->
+    <section class="mg-room" id="mgRoom" hidden>
+      <div class="mg-top">
+        <div class="mg-title">
+          <span class="mg-title-ico" aria-hidden="true"><Fragment set:html={ui(game.icon)} /></span>
+          <div><h1>{game.name}</h1><small class="muted">غرفة <b class="ltr" id="mgCodeLbl"></b></small></div>
+        </div>
+        <div class="mg-top-btns">
+          <button type="button" class="btn sm" id="mgInvite"><Fragment set:html={ui('users')} /><span>انسخ رابط الدعوة</span></button>
+          <button type="button" class="icon-btn mg-icon" id="mgSound" aria-label="الصوت"></button>
+          <button type="button" class="icon-btn mg-icon" id="mgLeave" aria-label="اطلع من الغرفة"><Fragment set:html={ui('logout')} /></button>
+        </div>
+      </div>
+
+      <div class="mg-layout">
+        <div class="mg-main">
+          <div class="mg-status" id="mgStatus" aria-live="polite"></div>
+          <div class="mg-board-wrap">
+            <div class="mg-board" id="mgBoard"></div>
+            <div class="mg-overlay" id="mgOverlay" hidden></div>
+          </div>
+          <div class="mg-under" id="mgUnder"></div>
+        </div>
+        <aside class="mg-side">
+          <div class="panel mg-players-box">
+            <h2><Fragment set:html={ui('users')} />اللاعبين <small class="muted" id="mgCount"></small></h2>
+            <ul class="mg-players" id="mgPlayers"></ul>
+          </div>
+          <div class="panel mg-chat">
+            <h2><Fragment set:html={ui('chat')} />الدردشة</h2>
+            <div class="mg-chat-log" id="mgChatLog"></div>
+            <form class="mg-chat-form" id="mgChatForm">
+              <input id="mgChatIn" class="mg-input" maxlength="200" placeholder="اكتب رسالة" autocomplete="off" />
+              <button class="btn sm" type="submit" aria-label="ابعت"><Fragment set:html={ui('arrow')} /></button>
+            </form>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+</Base>
+
+<script>
+  import '../../games/room';
+</script>

@@ -13,6 +13,7 @@ const Bot = require('./game/bot');
 const Maps = require('./game/maps');
 const { createStore } = require('./data/store');
 const A = require('./lib/accounts');
+const MG = require('./lib/minigames'); // إكس أو، أربعة بخط، لودو (/api/g/*)
 
 const PORT = Number(process.env.PORT) || 8700;
 const PUB = path.join(__dirname, 'public');
@@ -488,6 +489,7 @@ const server = http.createServer(async (req, res) => {
       if (host !== req.headers.host) throw httpErr(403, 'طلب من موقع تاني — مرفوض');
     }
     if (await A.handle(req, res, u)) return;
+    if (u.pathname.startsWith('/api/g/')) { await MG.handle(req, res, u); return; }
     if (req.method === 'GET' && u.pathname === '/api/events') return sse(req, res, u);
     if (req.method === 'GET' && u.pathname === '/api/board') return json(res, 200, B.publicBoard());
     if (req.method === 'GET' && u.pathname === '/api/rooms') return json(res, 200, listRooms());
@@ -557,11 +559,13 @@ function start(opts = {}) {
   if (opts.indexHtml != null) { const buf = Buffer.from(opts.indexHtml); readIndex = (cb) => cb(null, buf); }
   if (started) return started;
   store = createStore();
+  MG.init({ httpErr, json, readBody, rateLimit });
   started = A.init({
     store, rooms,
-    helpers: { httpErr, json, readBody, rateLimit, closeRoom, broadcast, log: E.log, cash: B.CASH_OPTIONS, timers: TIMER_OPTIONS },
+    helpers: { httpErr, json, readBody, rateLimit, closeRoom, broadcast, log: E.log, cash: B.CASH_OPTIONS, timers: TIMER_OPTIONS, liveCount: MG.liveCount },
   }).then(() => new Promise((resolve) => {
     setInterval(tick, 1000);
+    MG.start();
     server.listen(PORT, () => { console.log(`ثروة شغالة على http://localhost:${PORT} (تخزين: ${store.kind})`); resolve(PORT); });
   }), (e) => { started = null; throw e; }); // a failed start (e.g. database down) is retried on the next call
   return started;

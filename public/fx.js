@@ -3,27 +3,55 @@
 (() => {
   const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
   const pips = (v) => Array.from({ length: 9 }, (_, k) => `<span class="${PIPS[v].includes(k) ? 'on' : ''}"></span>`).join('');
-  // Face placement: 1 front, 6 back, 2 right, 5 left, 3 top, 4 bottom.
-  const ROT = { 1: [0, 0], 6: [0, 180], 2: [0, -90], 5: [0, 90], 3: [-90, 0], 4: [90, 0] };
+  const val = (v) => (PIPS[v] ? Number(v) : 1);
 
-  function diceHTML() {
-    const one = `<div class="die3d"><div class="tilt"><div class="cube">${[1, 6, 2, 5, 3, 4].map((v) => `<div class="face f${v}">${pips(v)}</div>`).join('')}</div></div></div>`;
-    return one + one;
+  // A die only ever shows the number that was actually rolled. Only the front face (the one that
+  // ends up facing the player) carries pips — the other five faces are blank — so the tumble
+  // (whole turns on X/Y/Z, bounce, blur) can never flash another number, not even a second copy
+  // of the same face, and it always lands square on that front face (no re-roll at the end).
+  const BLANK = '<span></span>'.repeat(9);
+  const faces = (v) => ['f1', 'f6', 'f2', 'f5', 'f3', 'f4'].map((p, k) => (k
+    ? `<div class="face ${p} blank" data-v="0">${BLANK}</div>`
+    : `<div class="face ${p} lead${v === 1 ? ' v1 one' : ''}" data-v="${v}">${pips(v)}</div>`)).join('');
+  function diceHTML(values = [5, 6]) {
+    return values.map((v) => `<div class="die3d"><div class="tilt"><div class="cube">${faces(val(v))}</div></div></div>`).join('');
   }
+  function paint(cube, v) {
+    const all = [...cube.querySelectorAll('.face')];
+    const lead = cube.querySelector('.face.f1, .face.front') || all[0];
+    all.forEach((f) => {
+      const want = f === lead ? v : 0;
+      if (f.dataset.v === String(want)) return;
+      f.innerHTML = want ? pips(want) : BLANK;
+      f.dataset.v = String(want);
+      f.classList.toggle('lead', f === lead);
+      f.classList.toggle('blank', !want);
+      f.classList.toggle('v1', want === 1);
+      f.classList.toggle('one', want === 1); // Ludo's die marks the red «1» with .one
+    });
+  }
+  const calm = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
   let spins = 0;
   function setDice(root, values, animate) {
+    if (!root) return;
+    if (animate && calm()) animate = false;
     if (animate) spins++;
     const cubes = root.querySelectorAll('.cube');
-    values.forEach((v, k) => {
+    values.forEach((raw, k) => {
       const c = cubes[k];
       if (!c) return;
-      const [x, y] = ROT[v] || ROT[1];
-      const extra = spins * 720 + k * 360;
-      c.style.transition = animate ? 'transform 0.95s cubic-bezier(.2,.9,.25,1)' : 'none';
-      c.style.transform = `rotateX(${x + extra}deg) rotateY(${y + extra}deg)`;
+      const v = val(raw);
+      paint(c, v); // the new value is on every face before the cube starts moving
+      // whole turns only, so the resting pose is always the same flat front face
+      const dir = k % 2 ? -1 : 1;
+      const x = spins * 720, y = dir * spins * 360, z = dir * spins * 360;
+      c.style.transition = animate ? `transform ${0.95 - k * 0.05}s cubic-bezier(.18,.85,.28,1)` : 'none';
+      c.style.transform = `rotateX(${x}deg) rotateY(${y}deg) rotateZ(${z}deg)`;
     });
     if (animate) {
-      root.classList.remove('bounce'); void root.offsetWidth; root.classList.add('bounce');
+      root.classList.remove('bounce', 'rolling'); void root.offsetWidth; root.classList.add('bounce', 'rolling');
+      clearTimeout(root._rollT);
+      root._rollT = setTimeout(() => root.classList.remove('rolling'), 1000);
     }
   }
 
