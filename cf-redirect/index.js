@@ -1,4 +1,4 @@
-// serva-g.com and www.serva-g.com → the game's main address (keeps path and query).
+// game.serva-g.com and www.serva-g.com → the main address serva-g.com (keeps path and query).
 export default {
   fetch(request, env) {
     const url = new URL(request.url);

@@ -1,4 +1,4 @@
-// Tiny Worker: sends serva-g.com and www.serva-g.com to https://game.serva-g.com (same path).
+// Tiny Worker: sends game.serva-g.com and www.serva-g.com to https://serva-g.com (same path).
 // Deploy: npx wrangler deploy -c cf-redirect/wrangler.jsonc
 {
   "name": "serva-g-redirect",
@@ -6,8 +6,8 @@
   "compatibility_date": "2026-11-01",
   "workers_dev": false,
   "routes": [
-    { "pattern": "serva-g.com", "custom_domain": true },
+    { "pattern": "game.serva-g.com", "custom_domain": true },
     { "pattern": "www.serva-g.com", "custom_domain": true }
   ],
-  "vars": { "TARGET": "https://game.serva-g.com" }
+  "vars": { "TARGET": "https://serva-g.com" }
 }

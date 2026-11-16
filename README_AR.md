@@ -42,9 +42,9 @@ node tharwa-game/server.js
   شارة «لعبة من Serva» بالصفحة الرئيسية وصفحة الدخول، دائرة اللوغو أعلى الغرفة، لوغو باهت بوسط اللوح،
   وأيقونة التبويب. كلهن رابط لـ serva-s.com. المصدر: `product-video-studio/skills/serva-promo-ad/assets/serva-logo-disc.png`.
 
-## 🌍 الموقع الأساسي: https://game.serva-g.com (Cloudflare)
+## 🌍 الموقع الأساسي: https://serva-g.com (Cloudflare)
 
-كل التطوير والرفع صار على Cloudflare. `serva-g.com` و`www.serva-g.com` بيحوّلوا لـ game.serva-g.com.
+كل التطوير والرفع صار على Cloudflare. `game.serva-g.com` و`www.serva-g.com` بيحوّلوا لـ serva-g.com.
 
 - **الحساب:** Cloudflare تبع saleh83277، والدومين serva-g.com فيه.
 - **الرفع:** `npm run cf:deploy` (بيبني صفحات Astro من `web/` وبيرفع كل شي). التجربة المحلية: `npx wrangler dev --port 8704` (ذاكرة بس، من `.dev.vars`).
@@ -145,7 +145,7 @@ node tharwa-game/server.js
 3. **APIs & Services ← Credentials ← Create Credentials ← OAuth client ID**:
    - Application type: **Web application** · Name: ثروة.
    - **Authorized redirect URIs** ← Add URI:
-     - `https://game.serva-g.com/api/auth/google/callback` (الموقع الأساسي)
+     - `https://serva-g.com/api/auth/google/callback` (الموقع الأساسي)
      - (اختياري، للنسخة القديمة) `https://tharwa.onrender.com/api/auth/google/callback`
    - اضغط Create وانسخ **Client ID** و **Client secret**.
 4. بـ Cloudflare: Workers & Pages ← **tharwa** ← Settings ← Variables and Secrets ← Add:

@@ -24,7 +24,7 @@ const profileRewrite = {
 const proxy = Object.fromEntries(LEGACY.map((p) => [p, { target: BACKEND, ws: false }]));
 
 export default defineConfig({
-  site: process.env.SITE_URL || 'https://game.serva-g.com',
+  site: process.env.SITE_URL || 'https://serva-g.com',
   output: 'static',
   trailingSlash: 'ignore',
   // login.html, settings.html, u.html … (served at /login, /settings, /u/* without a trailing slash)
