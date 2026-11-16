@@ -145,14 +145,14 @@ node tharwa-game/server.js
 3. **APIs & Services ← Credentials ← Create Credentials ← OAuth client ID**:
    - Application type: **Web application** · Name: ثروة.
    - **Authorized redirect URIs** ← Add URI:
-     - `https://tharwa.onrender.com/api/auth/google/callback`
-     - (لما نشتري الدومين) `https://الدومين-تبعنا/api/auth/google/callback`
+     - `https://game.serva-g.com/api/auth/google/callback` (الموقع الأساسي)
+     - (اختياري، للنسخة القديمة) `https://tharwa.onrender.com/api/auth/google/callback`
    - اضغط Create وانسخ **Client ID** و **Client secret**.
-4. بـ Render: خدمة **tharwa** ← **Environment**:
-   - `GOOGLE_CLIENT_ID` = الـ Client ID
-   - `GOOGLE_CLIENT_SECRET` = الـ Client secret (**سرّي**)
-   - (اختياري) `PUBLIC_URL` = `https://tharwa.onrender.com`
-5. احفظ ← Render بيعيد النشر، وبيطلع زر «المتابعة بحساب Google» بصفحة الدخول والتسجيل.
+4. بـ Cloudflare: Workers & Pages ← **tharwa** ← Settings ← Variables and Secrets ← Add:
+   - `GOOGLE_CLIENT_ID` = الـ Client ID (نوع Secret أو Text)
+   - `GOOGLE_CLIENT_SECRET` = الـ Client secret (نوع **Secret**)
+5. اضغط Deploy ← بيطلع زر «المتابعة بحساب Google» بصفحة الدخول والتسجيل.
+- ملاحظة: Google Cloud بيطلب تفعيل التحقق بخطوتين (2-Step Verification) على حساب Google قبل ما يفتح.
 - كيف بيشتغل: إذا حساب Google مربوط ← بيدخل. إذا في حساب بنفس الإيميل المؤكَّد ← بينربط وبيدخل. إذا جديد ← بيختار اسم مستخدم بس (الإيميل والاسم والصورة من Google).
 - الحسابات الموقوفة ما بتقدر تدخل بـ Google كمان.
 
