@@ -26,5 +26,10 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Tharwa"] }],
 
+  // Live address: game.serva-g.com. serva-g.com and www are sent here by cf-redirect/ (a separate tiny Worker).
+  "workers_dev": false,
+  "routes": [{ "pattern": "game.serva-g.com", "custom_domain": true }],
+  "vars": { "PUBLIC_URL": "https://game.serva-g.com" },
+
   "observability": { "enabled": true, "logs": { "enabled": true } }
 }

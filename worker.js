@@ -29,9 +29,11 @@ export class Tharwa extends DurableObject {
         for (const [k, v] of Object.entries(this.env)) if (typeof v === 'string') process.env[k] = v;
         // A closed tab is noticed only after a few failed writes here, so ping live streams more often.
         if (!process.env.SSE_PING_MS) process.env.SSE_PING_MS = '5000';
+        // No silent memory fallback in production: on an empty store the first sign-up becomes admin.
+        // Local dev sets STORE=memory explicitly in .dev.vars.
         if (!process.env.DATABASE_URL && !process.env.STORE) {
-          console.warn('[tharwa] DATABASE_URL is not set — accounts are kept in memory only and are lost on restart');
-          process.env.STORE = 'memory';
+          console.error('[tharwa] DATABASE_URL is not set — refusing to start (set the secret, or STORE=memory for local dev)');
+          throw new Error('DATABASE_URL missing');
         }
         const mod = await import('./server.js');
         const { start } = mod.start ? mod : mod.default;
@@ -56,6 +58,14 @@ export class Tharwa extends DurableObject {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // One canonical address (PUBLIC_URL): other hostnames of this Worker (e.g. serva-g.com, www) redirect to it,
+    // so login cookies and the Google callback always live on the same host.
+    if (env.PUBLIC_URL) {
+      const canon = new URL(env.PUBLIC_URL);
+      if (url.host !== canon.host && !url.hostname.endsWith('.workers.dev') && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+        return Response.redirect(canon.origin + url.pathname + url.search, 301);
+      }
+    }
     if (!SERVER_PATH.test(url.pathname)) return env.ASSETS.fetch(request);
     // Tell the Node server how the visitor reached us (cookies get `Secure` on https).
     // Any value the visitor sent is replaced, so it cannot be faked.
