@@ -32,6 +32,13 @@ export class Tharwa extends DurableObject {
         for (const [k, v] of Object.entries(this.env)) if (typeof v === 'string') process.env[k] = v;
         // A closed tab is noticed only after a few failed writes here, so ping live streams more often.
         if (!process.env.SSE_PING_MS) process.env.SSE_PING_MS = '5000';
+        // Supabase signs its TLS with its own CA, which a Worker socket can't trust, so the direct
+        // connection is cut during the handshake. Hyperdrive (binding HYPERDRIVE) does TLS to Supabase
+        // for us; the Worker talks to Hyperdrive inside Cloudflare without TLS.
+        if (this.env.HYPERDRIVE && this.env.HYPERDRIVE.connectionString) {
+          process.env.DATABASE_URL = this.env.HYPERDRIVE.connectionString;
+          process.env.PGSSL = 'disable';
+        }
         // No silent memory fallback in production: on an empty store the first sign-up becomes admin.
         // Local dev sets STORE=memory explicitly in .dev.vars.
         if (!process.env.DATABASE_URL && !process.env.STORE) {
@@ -52,7 +59,9 @@ export class Tharwa extends DurableObject {
       port = await this.boot();
     } catch (e) {
       console.error('[tharwa] server could not start:', e && e.message);
-      return Response.json({ error: 'السيرفر عم يقلّع — جرّب بعد شوي' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+      // A short, password-free reason helps diagnose a broken DATABASE_URL from outside.
+      const why = String((e && (e.code || e.message)) || 'unknown').replace(/\w+:\/\/[^\s]*/g, '<url>').slice(0, 160);
+      return Response.json({ error: 'السيرفر عم يقلّع — جرّب بعد شوي', why }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
     }
     return handleAsNodeRequest(port, request);
   }
@@ -78,7 +87,7 @@ export default {
     const headers = new Headers(request.headers);
     headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
     headers.set('x-forwarded-host', url.host);
-    const stub = env.THARWA.get(env.THARWA.idFromName('main'));
+    const stub = env.THARWA.get(env.THARWA.idFromName('main-2'));
     return stub.fetch(new Request(request, { headers }));
   },
 };
