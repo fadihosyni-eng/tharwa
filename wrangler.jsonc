@@ -32,5 +32,10 @@
   "routes": [{ "pattern": "game.serva-g.com", "custom_domain": true }],
   "vars": { "PUBLIC_URL": "https://game.serva-g.com" },
 
+  // Supabase through Hyperdrive «tharwa-db» (caching off). A Worker can't verify Supabase's own TLS CA,
+  // so a direct pg connection is cut during the handshake; worker.js uses env.HYPERDRIVE when present.
+  // localConnectionString only keeps `wrangler dev` happy — local dev runs with STORE=memory and never uses it.
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "7144adb82d5d413cb2199890f6d13b10", "localConnectionString": "postgres://dev:dev@localhost:5432/dev" }],
+
   "observability": { "enabled": true, "logs": { "enabled": true } }
 }
