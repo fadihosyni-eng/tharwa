@@ -115,6 +115,22 @@ function jsonStore(file) {
 }
 
 // ---------------------------------------------------------------- Postgres backend
+// Accept a connection string pasted by hand: trim spaces/quotes, drop the
+// «[ ]» left from «[YOUR-PASSWORD]», and percent-encode the password so
+// characters like @ # / ? % in it do not break the URL. Never logs secrets.
+function normalizeDbUrl(raw) {
+  let s = String(raw).trim().replace(/^['"]|['"]$/g, '');
+  const m = s.match(/^(postgres(?:ql)?:\/\/)([^:@/]+):(.*)@([^@]+)$/);
+  if (!m) return s;
+  let [, scheme, user, pass, rest] = m;
+  pass = pass.trim();
+  if (/^\[.*\]$/.test(pass)) pass = pass.slice(1, -1);
+  try { pass = decodeURIComponent(pass); } catch (e) { /* raw text with a lone % */ }
+  const url = `${scheme}${user}:${encodeURIComponent(pass)}@${rest.trim()}`;
+  try { new URL(url); } catch (e) { console.error('[store] DATABASE_URL still invalid after cleanup (check host/port/database part)'); }
+  return url;
+}
+
 function pgStore(url) {
   const { Pool } = require('pg'); // only needed in production
   const pool = new Pool({ connectionString: url, ssl: process.env.PGSSL === 'disable' ? false : { rejectUnauthorized: false }, max: 5 });
@@ -235,7 +251,7 @@ function pgStore(url) {
 }
 
 function createStore() {
-  if (process.env.DATABASE_URL) return pgStore(process.env.DATABASE_URL);
+  if (process.env.DATABASE_URL) return pgStore(normalizeDbUrl(process.env.DATABASE_URL));
   return jsonStore(process.env.DATA_FILE || path.join(__dirname, 'local.json'));
 }
 
