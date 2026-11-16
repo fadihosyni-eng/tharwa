@@ -41,5 +41,8 @@
   // localConnectionString only keeps `wrangler dev` happy — local dev runs with STORE=memory and never uses it.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "7144adb82d5d413cb2199890f6d13b10", "localConnectionString": "postgres://dev:dev@localhost:5432/dev" }],
 
+  // Version id → a fresh game-server Durable Object per deploy (see worker.js).
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+
   "observability": { "enabled": true, "logs": { "enabled": true } }
 }

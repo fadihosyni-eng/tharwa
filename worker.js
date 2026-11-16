@@ -87,7 +87,10 @@ export default {
     const headers = new Headers(request.headers);
     headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
     headers.set('x-forwarded-host', url.host);
-    const stub = env.THARWA.get(env.THARWA.idFromName('main-2'));
+    // One game server per deployed version: a Durable Object that is already running is not always restarted
+    // by a deploy, and would keep old code and old settings. Rooms reset on deploy either way.
+    const ver = (env.CF_VERSION_METADATA && env.CF_VERSION_METADATA.id) || 'dev';
+    const stub = env.THARWA.get(env.THARWA.idFromName('main-' + ver));
     return stub.fetch(new Request(request, { headers }));
   },
 };
