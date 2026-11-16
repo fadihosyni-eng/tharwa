@@ -32,7 +32,7 @@ function teamResult(s) {
   ranking.sort((a, b) => s.gone[s.seats.indexOf(a)] - s.gone[s.seats.indexOf(b)]);
   return {
     winner: still.length ? s.seats[still[0]] : null, draw: !still.length, ranking, rounds: s.round,
-    winners: win, team: true, scores: s.scores.slice(),
+    winners: still.map((x) => s.seats[x]), team: true, scores: s.scores.slice(), // a partner who left never wins
   };
 }
 // The parts of the view every card game shares. `me` = viewer's seat (-1 = spectator).

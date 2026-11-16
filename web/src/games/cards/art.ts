@@ -91,8 +91,9 @@ function faceBody(card: string) {
     <text x="125" y="300" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="12" letter-spacing="4" fill="url(#chrome)" opacity=".85">SERVA</text>`;
 }
 const FRAME = `<rect x="1" y="1" width="248" height="348" rx="20" fill="url(#bg)"/>
-<rect x="9" y="9" width="232" height="332" rx="15" fill="none" stroke="#1d7dff" stroke-opacity=".45" stroke-width="6"/>
-<rect x="9" y="9" width="232" height="332" rx="15" fill="none" stroke="#7fe6ff" stroke-width="1.6"/>`;
+<rect x="9" y="9" width="232" height="332" rx="15" fill="none" stroke="#1d7dff" stroke-opacity=".35" stroke-width="12"/>
+<rect x="9" y="9" width="232" height="332" rx="15" fill="none" stroke="#2f9bff" stroke-opacity=".75" stroke-width="5"/>
+<rect x="9" y="9" width="232" height="332" rx="15" fill="none" stroke="#a8f0ff" stroke-width="1.8"/>`;
 
 export function faceSVG(card: string) {
   const su = card[1];

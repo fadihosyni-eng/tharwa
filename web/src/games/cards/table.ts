@@ -66,6 +66,7 @@ export function createCardGame(slug: string, el: HTMLElement, under: HTMLElement
   let panelKey = '';
   let sheetOpen = false;
   let dblPick = new Set<string>();
+  let overSheet = false;   // the score sheet opens by itself once at the end of a game
   let animating = false;   // replaying queued events: the table shows an older state, so no input
 
   const meSeat = () => (st && st.me >= 0 ? st.me : -1);
@@ -235,7 +236,8 @@ export function createCardGame(slug: string, el: HTMLElement, under: HTMLElement
       const contract = st.contract ? `<div class="ct-hud-row"><span class="ct-hud-ico">${ui(CONTRACT_ICO[st.contract])}</span><b>${CONTRACT_AR[st.contract]}</b></div>` : '';
       const dbl = Object.keys(st.doubled || {});
       const dblRow = dbl.length ? `<div class="ct-hud-row small"><span>دبل</span>${dbl.map((c) => `<span class="ct-mini">${cardImg(c)}</span>`).join('')}</div>` : '';
-      hud.innerHTML = `<div class="ct-hud-score trix"><span>مملكة <b>${esc(nameOf(st.owner >= 0 ? st.owner : 0))}</b></span><small>اللعبة ${Math.min(st.round, 20)} من 20</small></div>${contract}${dblRow}`;
+      hud.innerHTML = st.over ? '<div class="ct-hud-score trix"><span>خلصت الممالك الأربعة</span></div>'
+        : `<div class="ct-hud-score trix"><span>مملكة <b>${esc(nameOf(st.owner))}</b></span><small>اللعبة ${Math.min(st.round, 20)} من 20</small></div>${contract}${dblRow}`;
     }
   }
 
@@ -529,6 +531,8 @@ export function createCardGame(slug: string, el: HTMLElement, under: HTMLElement
     paintPanel();
     paintWait();
     lastBtn.disabled = !st.lastTrick;
+    if (st.over && !overSheet) { overSheet = true; sheetOpen = true; sheet.hidden = false; }
+    if (!st.over) overSheet = false;
     if (sheetOpen) sheet.innerHTML = `<h2>${ui('scroll')}ورقة الحساب</h2>${sheetHTML()}`;
   }
   // turn ring + seconds on the player to move

@@ -36,11 +36,11 @@
 .ct-seat[data-pos="right"] { right: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; }
 .ct-seat[data-pos="bottom"] { bottom: 10px; inset-inline-start: 12px; }
 .ct-plate {
-  display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 6px; border-radius: 99px; max-width: 220px;
+  display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 6px; border-radius: 99px; max-width: 320px;
   background: rgba(5, 12, 32, .82); border: 1px solid rgba(47, 226, 255, .22); box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
 }
 .ct-seat[data-pos="left"] .ct-plate, .ct-seat[data-pos="right"] .ct-plate { flex-direction: column; border-radius: 18px; padding: 8px 6px; gap: 4px; max-width: 108px; text-align: center; }
-.ct-who { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.ct-who { display: flex; flex-direction: column; line-height: 1.15; min-width: 48px; }
 .ct-who b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
 .ct-who small { font-size: 11px; color: var(--muted); }
 .ct-seat.team-a .ct-plate { box-shadow: inset 0 -2px 0 rgba(47, 226, 255, .65), 0 6px 18px rgba(0, 0, 0, .35); }
