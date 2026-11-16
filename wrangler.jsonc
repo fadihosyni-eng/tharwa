@@ -11,13 +11,14 @@
   // file paths that are never read on Cloudflare (static files come from "assets").
   "define": { "__dirname": "\"/bundle\"" },
 
-  // Static files from ./public. Unknown page paths (/room/abc12, /login, /settings …) get index.html.
-  // These paths go to the Worker (→ the game server) instead; keep in sync with SERVER_PATH in worker.js.
+  // Site files: web/site = old client (public/, index.html renamed game.html) + the new Astro pages on top.
+  // Built by the "build" command below on every deploy. /room/* and /u/* are rewritten in worker.js.
+  "build": { "command": "npm --prefix web run build && npm --prefix web run assemble" },
   "assets": {
-    "directory": "./public",
+    "directory": "./web/site",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/u/*", "/admin", "/admin/"]
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*", "/room/*", "/u/*", "/admin", "/admin/"]
   },
 
   // One Durable Object («main») runs the whole game server. SQLite-backed class = allowed on the Free plan.

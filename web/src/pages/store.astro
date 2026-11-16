@@ -1,0 +1,102 @@
+---
+import Base from '../layouts/Base.astro';
+import { ui } from '../lib/art-build';
+---
+<Base title="المتجر" active="store" description="متجر ثروة: خرايط جديدة للّوح بتشتريها بالنقاط اللي بتربحها من الألعاب.">
+  <div class="sec-head">
+    <div>
+      <h1 class="page-title"><Fragment set:html={ui('store')} />المتجر — خرايط اللوح</h1>
+      <p class="muted">كل خريطة بتغيّر شكل اللوح وأسماء المدن. صاحب الغرفة بيختار الخريطة من اللوبي، والكل بيلعب عليها.</p>
+    </div>
+    <div id="myPts"></div>
+  </div>
+  <div class="store-grid" id="storeGrid">
+    <div class="map-card skel" style="height:340px"></div><div class="map-card skel" style="height:340px"></div><div class="map-card skel" style="height:340px"></div>
+  </div>
+</Base>
+
+<style is:global>
+  .my-pts { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 14px; background: rgba(255, 197, 61, .1); border: 1px solid rgba(255, 197, 61, .4); color: var(--gold); font-weight: 900; font-size: 16px; }
+  .store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
+  .map-card { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line2); transition: transform .18s, border-color .18s, box-shadow .18s; }
+  .map-card:not(.skel):hover { transform: translateY(-3px); border-color: rgba(0, 180, 255, .5); box-shadow: 0 16px 36px rgba(0, 180, 255, .14); }
+  .map-card.owned { border-color: rgba(40, 211, 145, .45); }
+  .map-card h3 { font-size: 19px; font-weight: 900; display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  .map-card p { margin: 0; color: var(--muted); line-height: 1.7; font-size: 14px; flex: 1; }
+  .map-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
+  .map-meta .muted { font-size: 13px; }
+  .price { display: inline-flex; align-items: center; gap: 4px; color: var(--gold); font-weight: 900; direction: ltr; }
+  /* mini board preview (same layout as the game board: 40 tiles around the edge) */
+  .mini-board { position: relative; display: grid; grid-template-columns: 1.4fr repeat(9, 1fr) 1.4fr; grid-template-rows: 1.4fr repeat(9, 1fr) 1.4fr; gap: 2px; padding: 3px;
+    aspect-ratio: 1.22 / 1; border-radius: 14px; overflow: hidden; background: var(--mb-board, #071330); box-shadow: inset 0 0 0 1px var(--mb-line, rgba(47, 226, 255, .3)); direction: ltr; }
+  .mini-board i { border-radius: 2px; background: var(--mb-tile, #0b1834); }
+  .mini-board i.c { box-shadow: inset 0 3px 0 var(--sc); }
+  .mini-board .mb-center { grid-row: 2 / 11; grid-column: 2 / 11; border-radius: 8px; background: var(--mb-center, #0c1520); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .mini-board .mb-center::before { content: ''; position: absolute; inset: 0; background: var(--mb-bg) center / cover no-repeat; opacity: .7; }
+  .mini-board .mb-center b { position: relative; font-size: 22px; font-weight: 900; color: var(--mb-accent, var(--gold)); text-shadow: 0 2px 10px rgba(0, 0, 0, .7); padding: 0 8px; text-align: center; }
+  @media (max-width: 760px) { .store-grid { grid-template-columns: 1fr; } }
+</style>
+
+<script>
+  import { $, $$, esc, fmtN, ui, api, toast, confirmBox, loadSession, session, setMe, stateHTML } from '../lib/client';
+  type MapT = {
+    id: string; name: string; description: string; price: number; owned: boolean; enabled: boolean; bg?: string | null;
+    theme?: { sets?: string[]; boardBg?: string; tile?: string; line?: string; centerBg?: string; accent?: string } | null;
+    sets?: { name: string }[] | null;
+  };
+  type Board = { tiles: { type: string; set?: string }[]; sets: Record<string, { color: string }> };
+
+  const GRID = (i: number) => (i <= 10 ? [11, 11 - i] : i < 20 ? [11 - (i - 10), 1] : i <= 30 ? [1, 1 + (i - 20)] : [1 + (i - 30), 11]);
+  const SLOTS = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8'];
+  // Only the game's own background files may be used as a CSS url().
+  const safeBg = (u?: string | null) => (u && /^\/bg\/[\w.-]+$/.test(u) ? u : '');
+  // Theme values are colours/gradients from game/maps.js; anything that could break out of the style attribute is dropped.
+  const safeColor = (c?: string) => (c && !/[;"'<>{}\\]/.test(c) ? c : '');
+
+  function miniBoard(m: MapT, board: Board) {
+    const th = m.theme || {};
+    const color = (k?: string) => safeColor(th.sets ? th.sets[SLOTS.indexOf(k || '')] : board.sets[k || '']?.color);
+    const cells = board.tiles.map((t, i) => {
+      const [r, c] = GRID(i);
+      return `<i class="${t.type === 'city' ? 'c' : ''}" style="grid-row:${r};grid-column:${c};${t.type === 'city' ? `--sc:${color(t.set)}` : ''}"></i>`;
+    }).join('');
+    const bg = safeBg(m.bg);
+    const vars = [th.boardBg && `--mb-board:${safeColor(th.boardBg)}`, th.tile && `--mb-tile:${safeColor(th.tile)}`, th.line && `--mb-line:${safeColor(th.line)}`,
+      th.centerBg && `--mb-center:${safeColor(th.centerBg)}`, th.accent && `--mb-accent:${safeColor(th.accent)}`, bg && `--mb-bg:url('${bg}')`].filter(Boolean).join(';');
+    return `<div class="mini-board" style="${vars}" role="img" aria-label="معاينة لوح ${esc(m.name)}">${cells}<div class="mb-center"><b>${esc(m.name)}</b></div></div>`;
+  }
+
+  async function draw() {
+    const grid = $('#storeGrid')!, ptsBox = $('#myPts')!;
+    let maps: MapT[], points: number | null, board: Board;
+    try {
+      const [d, b] = await Promise.all([api<{ maps: MapT[]; points: number | null }>('/api/maps'), api<Board>('/api/board'), loadSession()]);
+      maps = d.maps; points = d.points; board = b;
+    } catch { grid.innerHTML = stateHTML('error', 'ما قدرنا نجيب المتجر — جرّب تحدّث الصفحة.'); return; }
+    const me = session.me;
+    ptsBox.innerHTML = me && points !== null ? `<span class="my-pts">${ui('star')} معك ${fmtN(points)} نقطة</span>` : '';
+    if (!maps.length) { grid.innerHTML = stateHTML('empty', 'ما في خرايط بالمتجر هلق.'); return; }
+    grid.innerHTML = maps.map((m) => {
+      const action = m.owned ? `<span class="badge green">${ui('check')} مملوكة</span>`
+        : !me ? `<a class="btn sm" href="/login?next=/store">${ui('user')}سجّل دخول لتشتري</a>`
+          : `<button type="button" class="btn btn-gold sm" data-buy="${esc(m.id)}" ${points! < m.price ? 'disabled title="ما معك نقاط كافية"' : ''}>اشترِ بـ ${fmtN(m.price)} ${ui('star')}</button>`;
+      const tag = m.price ? `<span class="price">${fmtN(m.price)} ${ui('star')}</span>` : '<span class="badge green">مجانية</span>';
+      const zone = m.sets && m.sets.length ? esc(m.sets[m.sets.length - 1].name) + ' أغلى منطقة' : '22 دولة عربية';
+      return `<article class="map-card ${m.owned ? 'owned' : ''}">${miniBoard(m, board)}
+        <h3>${esc(m.name)} ${tag}</h3><p>${esc(m.description)}</p>
+        <div class="map-meta"><span class="muted">${zone}</span>${action}</div></article>`;
+    }).join('');
+    $$<HTMLButtonElement>('[data-buy]').forEach((b) => b.addEventListener('click', async () => {
+      const m = maps.find((x) => x.id === b.dataset.buy)!;
+      if (!(await confirmBox(`تشتري «${m.name}» بـ ${fmtN(m.price)} نقطة؟`, 'اشتري', false))) return;
+      b.disabled = true; b.classList.add('loading');
+      try {
+        const r = await api<{ points: number }>('/api/maps/buy', { id: m.id });
+        if (session.me) setMe({ ...session.me, points: r.points });
+        toast('صارت الخريطة إلك — اختارها من لوبي الغرفة', 'ok');
+        draw();
+      } catch (e) { toast((e as Error).message); b.disabled = false; b.classList.remove('loading'); }
+    }));
+  }
+  draw();
+</script>

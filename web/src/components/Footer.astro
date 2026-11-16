@@ -1,0 +1,20 @@
+---
+// Official Serva logo file (never redrawn) from the game's public/brand folder.
+import servaLogo from '../../../public/brand/serva-logo-160.webp?url';
+const year = new Date().getFullYear();
+---
+<footer class="site-footer">
+  <div class="wrap ftr">
+    <a class="by-serva" href="https://serva-s.com" target="_blank" rel="noopener" title="serva-s.com">
+      <img src={servaLogo} alt="Serva" width="40" height="40" loading="lazy" decoding="async" />
+      <span>لعبة من <b>Serva</b></span>
+    </a>
+    <nav class="ftr-links" aria-label="روابط">
+      <a href="/">الرئيسية</a>
+      <a href="/#games">الألعاب</a>
+      <a href="/store">المتجر</a>
+      <a href="/leaders">المتصدرين</a>
+    </nav>
+    <small class="ftr-copy">© {year} Serva — كل الحقوق محفوظة</small>
+  </div>
+</footer>

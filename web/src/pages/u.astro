@@ -1,0 +1,103 @@
+---
+// Public profile. One static file (u.html) serves every /u/<username>: the name is read from location.pathname.
+import Base from '../layouts/Base.astro';
+---
+<Base title="بروفايل لاعب" description="بروفايل لاعب على ثروة: النقاط، الألعاب، الفوز وآخر الألعاب." canonical={false}>
+  <div id="profile" class="profile">
+    <div class="panel prof-card"><span class="ava skel" style="--s:104px"></span><div class="prof-id"><div class="skel" style="height:28px;width:220px"></div><div class="skel" style="height:16px;width:120px;margin-top:10px"></div></div></div>
+  </div>
+</Base>
+
+<style is:global>
+  .profile { display: grid; gap: 16px; }
+  .prof-card { position: relative; overflow: hidden; display: flex; align-items: center; gap: 22px; flex-wrap: wrap; padding: 26px;
+    background: radial-gradient(500px 200px at 85% 0%, rgba(0, 180, 255, .2), transparent 70%), linear-gradient(180deg, rgba(14, 28, 61, .6), rgba(10, 21, 48, .9)); }
+  .prof-card > .ava { box-shadow: 0 0 0 3px var(--cyan), 0 0 30px rgba(0, 180, 255, .45); }
+  .prof-id { flex: 1; min-width: 200px; }
+  .prof-id h1 { font-size: 28px; font-weight: 900; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .handle { color: var(--cyan2); font-weight: 800; }
+  .bio { margin: 10px 0 6px; line-height: 1.75; white-space: pre-wrap; color: #d3e0ee; }
+  .joined { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .stat .ui-ico { width: 22px; height: 22px; color: var(--cyan2); }
+  .stat b { font-size: 26px; font-weight: 900; line-height: 1.2; }
+  .stat span { color: var(--muted); font-size: 13.5px; }
+  .stat.gold .ui-ico, .stat.gold b { color: var(--gold); }
+  .recent h2 { font-size: 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .recent h2 .ui-ico { color: var(--cyan2); }
+  .game-row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 11px 12px; border-radius: 12px; background: rgba(14, 28, 61, .55); }
+  .game-row + .game-row { margin-top: 6px; }
+  .game-row.won { box-shadow: inset -3px 0 0 var(--gold); }
+  .game-row small { color: var(--muted); text-align: end; }
+  .g-res { display: inline-flex; align-items: center; gap: 6px; font-weight: 900; }
+  .game-row.won .g-res { color: var(--gold); }
+  .nf { text-align: center; padding: 48px 20px; }
+  .nf-code { font-size: 84px; font-weight: 900; color: var(--cyan2); line-height: 1; text-shadow: 0 0 30px rgba(0, 180, 255, .5); }
+  .nf h1 { margin: 10px 0 6px; font-size: 24px; }
+  .nf p { color: var(--muted); margin: 0 0 18px; }
+  @media (max-width: 760px) {
+    .prof-card { padding: 18px; gap: 12px; flex-direction: column; text-align: center; }
+    .prof-id { width: 100%; min-width: 0; }
+    .prof-id h1 { justify-content: center; font-size: 24px; }
+    .prof-id .handle { text-align: center; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .game-row { grid-template-columns: 1fr; gap: 2px; }
+    .game-row small { text-align: start; }
+  }
+</style>
+
+<script>
+  import { $, esc, fmtN, ui, api, avatarHTML, loadSession, session, dateAr, timeAgo, ApiError, stateHTML } from '../lib/client';
+  type P = {
+    user: { username: string; displayName: string; avatar: string; bio: string; role: string; points: number; games: number; wins: number; createdAt: number; color: string | null };
+    recent: { at: number; rounds: number; durationMs: number; players: number; won: boolean; winner: string }[];
+  };
+  const box = $('#profile')!;
+  const notFound = (msg: string) => {
+    document.title = 'مو موجود — ثروة';
+    box.innerHTML = `<div class="panel nf"><div class="nf-code">404</div><h1>${esc(msg)}</h1><p>يمكن الرابط غلط أو انمسح الحساب.</p><a class="btn btn-gold" href="/leaders">${ui('trophy')}شوف المتصدرين</a></div>`;
+  };
+
+  async function draw() {
+    const m = location.pathname.match(/^\/u\/([^/]+)\/?$/);
+    let name = '';
+    try { name = m ? decodeURIComponent(m[1]).toLowerCase() : ''; } catch { /* bad escape */ }
+    if (!name) { notFound('هالمستخدم مو موجود'); return; }
+    let d: P;
+    try { d = await api<P>('/api/u/' + encodeURIComponent(name)); } catch (e) {
+      if ((e as ApiError).status === 404) notFound('هالمستخدم مو موجود');
+      else box.innerHTML = `<div class="panel">${stateHTML('error', 'ما قدرنا نجيب البروفايل — جرّب تحدّث الصفحة.')}</div>`;
+      return;
+    }
+    await loadSession();
+    const u = d.user, mine = !!session.me && session.me.username === u.username;
+    document.title = `${u.displayName} (@${u.username}) — ثروة`;
+    const rate = u.games ? Math.round((u.wins / u.games) * 100) : 0;
+    const games = d.recent.length
+      ? d.recent.map((g) => `<div class="game-row ${g.won ? 'won' : ''}"><span class="g-res">${ui(g.won ? 'trophy' : 'dice')}${g.won ? 'ربح' : 'لعب'}</span>
+          <span>${g.players} لاعبين · ${g.rounds} جولة · ${Math.max(1, Math.round(g.durationMs / 60000))} د</span><small>${g.won ? '' : 'الفائز: ' + esc(g.winner) + ' · '}${timeAgo(g.at)}</small></div>`).join('')
+      : stateHTML('empty', 'لسا ما لعب ولا لعبة.');
+    box.innerHTML = `
+      <section class="panel prof-card">
+        ${avatarHTML(u.avatar, 104, u.color)}
+        <div class="prof-id"><h1><span class="dn"></span>${u.role === 'admin' ? `<span class="badge">${ui('shield')} أدمن</span>` : ''}</h1>
+          <div class="handle" dir="ltr">@${esc(u.username)}</div>
+          ${u.bio ? '<p class="bio"></p>' : ''}
+          <div class="joined">${ui('calendar')} انضم ${dateAr(u.createdAt)}</div></div>
+        ${mine ? `<a class="btn" href="/settings">${ui('pencil')}تعديل الحساب</a>` : ''}
+      </section>
+      <section class="stats" aria-label="الإحصائيات">
+        <div class="stat gold">${ui('star')}<b>${fmtN(u.points)}</b><span>نقاط</span></div>
+        <div class="stat">${ui('dice')}<b>${fmtN(u.games)}</b><span>لعبة</span></div>
+        <div class="stat">${ui('trophy')}<b>${fmtN(u.wins)}</b><span>فوز</span></div>
+        <div class="stat">${ui('chartUp')}<b>${rate}%</b><span>نسبة الفوز</span></div>
+      </section>
+      <section class="panel recent"><h2>${ui('scroll')}آخر الألعاب</h2>${games}</section>`;
+    // Name and bio are the user's own words: shown as typed (text only).
+    $('.dn', box)!.textContent = u.displayName;
+    const bio = $('.bio', box);
+    if (bio) bio.textContent = u.bio;
+  }
+  draw();
+</script>

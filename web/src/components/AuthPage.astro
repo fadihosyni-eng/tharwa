@@ -1,0 +1,210 @@
+---
+// Login + register in one page (tabs switch in place; /login and /register both render this).
+// /register?google=1 is the last step of a new Google sign-up (pick a username).
+import { ui } from '../lib/art-build';
+interface Props { mode: 'login' | 'register' }
+const { mode } = Astro.props;
+// Google's «G» (official colours) for the sign-in button.
+const G_LOGO = '<svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+const perks = [
+  ['star', 'نقاطك محفوظة', 'كل فوز بيزيد نقاطك، وبتطلع على لوحة المتصدرين.'],
+  ['user', 'بروفايل إلك', 'صورتك ولونك وقطعتك المفضّلة بكل غرفة بتدخلها.'],
+  ['store', 'خرايط من المتجر', 'اشترِ خرايط جديدة للّوح بالنقاط اللي ربحتها.'],
+];
+---
+<div class="auth" data-mode={mode}>
+  <aside class="auth-side" aria-hidden="true">
+    <span class="wordmark big">ثروة<i>.</i></span>
+    <p>حساب واحد لكل ألعاب المنصة.</p>
+    <ul>
+      {perks.map(([ic, t, d]) => <li><span class="hi"><Fragment set:html={ui(ic)} /></span><div><b>{t}</b><small>{d}</small></div></li>)}
+    </ul>
+  </aside>
+
+  <div class="panel auth-card" id="authCard">
+    <div class="state state-loading"><span class="spinner"></span><span>لحظة…</span></div>
+  </div>
+</div>
+<template id="gLogo"><Fragment set:html={G_LOGO} /></template>
+<template id="eyeIco"><Fragment set:html={ui('eye')} /></template>
+
+<style is:global>
+  .auth { display: grid; grid-template-columns: 1fr 460px; gap: 34px; align-items: center; max-width: 980px; margin: 10px auto 0; }
+  .auth-side { padding: 10px 6px; }
+  .wordmark.big { font-size: 64px; }
+  .auth-side > p { color: #c3d3e6; font-size: 18px; margin: 10px 0 22px; }
+  .auth-side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+  .auth-side li { display: flex; gap: 12px; align-items: flex-start; }
+  .auth-side li b { display: block; font-size: 16px; }
+  .auth-side li small { color: var(--muted); font-size: 14px; }
+  .auth-side .hi { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255, 197, 61, .1); border: 1px solid rgba(255, 197, 61, .3); color: var(--gold); }
+  .auth-side .hi .ui-ico { width: 21px; height: 21px; }
+  .auth-card { padding: 24px; }
+  .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; background: rgba(7, 16, 42, .9); border: 1px solid var(--line); border-radius: 14px; padding: 4px; gap: 4px; margin-bottom: 18px; }
+  .auth-tabs a { text-align: center; padding: 9px; border-radius: 10px; text-decoration: none !important; color: var(--muted); font-weight: 800; }
+  .auth-tabs a:hover { color: var(--text); }
+  .auth-tabs a.on { background: linear-gradient(135deg, var(--cyan), var(--cyan2)); color: var(--on-cyan); }
+  .auth-card h1 { font-size: 24px; font-weight: 900; }
+  .auth-card .sub { color: var(--muted); margin: 4px 0 16px; }
+  .btn-google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 11px 16px; border-radius: 12px; background: #fff; color: #1f1f1f !important;
+    font-weight: 800; text-decoration: none !important; border: 1px solid #dadce0; transition: box-shadow .15s; }
+  .btn-google:hover { box-shadow: 0 4px 16px rgba(255, 255, 255, .18); }
+  .g-logo { width: 20px; height: 20px; flex: 0 0 auto; }
+  .auth-card .or-sep { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 700; margin: 16px 0; }
+  .auth-card .or-sep::before, .auth-card .or-sep::after { content: ''; flex: 1; height: 1px; background: var(--line2); }
+  .g-who { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: rgba(7, 16, 42, .9); border: 1px solid var(--line2); margin-bottom: 16px; }
+  .g-who b { display: block; }
+  .g-who small { color: var(--muted); }
+  .g-who .g-logo { width: 40px; height: 40px; }
+  .auth-foot { text-align: center; color: var(--muted); font-size: 14px; margin: 14px 0 0; }
+  @media (max-width: 860px) {
+    .auth { grid-template-columns: 1fr; max-width: 480px; }
+    .auth-side { display: none; }
+    .auth-card { padding: 18px; }
+  }
+</style>
+
+<script>
+  import { $, esc, api, toast, showErr, avatarHTML, loadSession, session, setMe, safeNext, USER_RE, EMAIL_RE, type Me } from '../lib/client';
+
+  const GOOGLE_ERRORS: Record<string, string> = {
+    off: 'الدخول بـ Google مو مفعّل هلق.', cancel: 'لغيت الدخول بـ Google.', state: 'انتهت صلاحية المحاولة — جرّب مرة تانية.',
+    google: 'ما قدرنا نتأكد من حساب Google — جرّب مرة تانية.', unverified: 'إيميل حساب Google مو مؤكَّد.',
+    banned: 'حسابك موقوف — تواصل مع الإدارة.', rate: 'كتير محاولات — استنى دقيقة وجرّب.',
+  };
+  const card = $('#authCard')!;
+  const G_LOGO = ($('#gLogo') as HTMLTemplateElement).innerHTML;
+  const EYE = ($('#eyeIco') as HTMLTemplateElement).innerHTML;
+  const qs = new URLSearchParams(location.search);
+  const next = safeNext(qs.get('next'));
+  const withQs = (path: string) => { const q = new URLSearchParams(); if (qs.get('next')) q.set('next', qs.get('next')!); const s = q.toString(); return path + (s ? '?' + s : ''); };
+
+  function render(mode: 'login' | 'register') {
+    const site = session.site;
+    document.title = (mode === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب') + ' — ثروة';
+    const errCode = qs.get('err');
+    const gErr = errCode ? (GOOGLE_ERRORS[errCode] || 'صار خطأ بالدخول بـ Google.') : '';
+    const closed = mode === 'register' && !site.registrationOpen;
+    const google = site.googleEnabled && !closed
+      ? `<a class="btn-google" href="/api/auth/google/start">${G_LOGO}<span>المتابعة بحساب Google</span></a><div class="or-sep"><span>أو</span></div>` : '';
+    card.innerHTML = `
+      <nav class="auth-tabs" aria-label="نوع الدخول"><a href="${withQs('/login')}" data-tab="login" class="${mode === 'login' ? 'on' : ''}" ${mode === 'login' ? 'aria-current="page"' : ''}>تسجيل الدخول</a><a href="${withQs('/register')}" data-tab="register" class="${mode === 'register' ? 'on' : ''}" ${mode === 'register' ? 'aria-current="page"' : ''}>إنشاء حساب</a></nav>
+      <h1>${mode === 'login' ? 'أهلين فيك من جديد' : 'اعمل حسابك ببلاش'}</h1>
+      <p class="sub">${mode === 'login' ? 'ادخل لتجمع نقاط وتحفظ نتايجك.' : 'حسابك بيحفظ اسمك وصورتك ونقاطك وكل ألعابك.'}</p>
+      ${closed ? '<div class="form-err show">التسجيل مسكّر هلق من الإدارة.</div>' : ''}
+      ${gErr ? `<div class="form-err show">${esc(gErr)}</div>` : ''}
+      ${google}
+      <form id="authForm" novalidate>
+        ${mode === 'login'
+          ? '<label class="field"><span>اسم المستخدم أو الإيميل</span><input name="username" autocomplete="username" dir="ltr" maxlength="254" placeholder="sami_99 · name@gmail.com" required><small class="fhint"></small></label>'
+          : `<label class="field"><span>اسم المستخدم</span><input name="username" autocomplete="username" dir="ltr" maxlength="20" placeholder="sami_99" required ${closed ? 'disabled' : ''}><small class="fhint">3–20: أحرف إنكليزية صغيرة، أرقام، أو _ — بيصير رابط بروفايلك</small></label>
+             <label class="field"><span>الإيميل</span><input name="email" type="email" autocomplete="email" dir="ltr" maxlength="254" placeholder="name@gmail.com" required ${closed ? 'disabled' : ''}><small class="fhint">لحماية حسابك — ما بيظهر لحدا</small></label>
+             <label class="field"><span>اسمك الظاهر</span><input name="displayName" maxlength="24" placeholder="مثلاً: سامي" autocomplete="nickname" ${closed ? 'disabled' : ''}><small class="fhint">هيك رح يشوفك اللاعبين (فيك تغيّره بعدين)</small></label>`}
+        <label class="field"><span>كلمة السر</span><div class="pw"><input name="password" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" dir="ltr" required ${closed ? 'disabled' : ''}><button type="button" class="icon-btn pw-eye" aria-label="إظهار كلمة السر" aria-pressed="false">${EYE}</button></div><small class="fhint">${mode === 'register' ? '6 أحرف على الأقل' : ''}</small></label>
+        ${mode === 'register' ? `<label class="field"><span>أكّد كلمة السر</span><input name="password2" type="password" autocomplete="new-password" dir="ltr" ${closed ? 'disabled' : ''}></label>` : ''}
+        <div class="form-err" id="authErr" role="alert"></div>
+        <button class="btn btn-gold big block" id="authGo" ${closed ? 'disabled' : ''}>${mode === 'login' ? 'دخول' : 'إنشاء الحساب'}</button>
+      </form>
+      <p class="auth-foot">${mode === 'login' ? 'ما عندك حساب؟ <a href="' + withQs('/register') + '" data-tab="register">اعمل حساب ببلاش</a>' : 'عندك حساب؟ <a href="' + withQs('/login') + '" data-tab="login">سجّل دخول</a>'}</p>`;
+    bind(mode);
+  }
+
+  function bind(mode: 'login' | 'register') {
+    card.querySelectorAll<HTMLAnchorElement>('[data-tab]').forEach((a) => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const m = a.dataset.tab as 'login' | 'register';
+      history.replaceState(null, '', a.getAttribute('href'));
+      qs.delete('err');
+      render(m);
+    }));
+    const f = $('#authForm') as HTMLFormElement, errBox = $('#authErr'), go = $('#authGo') as HTMLButtonElement;
+    const el = (n: string) => f.elements.namedItem(n) as HTMLInputElement | null;
+    const eye = $('.pw-eye', f)!;
+    eye.addEventListener('click', () => { const i = el('password')!; const show = i.type === 'password'; i.type = show ? 'text' : 'password'; eye.setAttribute('aria-pressed', String(show)); });
+    const setErr = (name: string, msg: string) => {
+      const field = el(name)?.closest('.field');
+      if (!field) return;
+      field.classList.toggle('bad', !!msg);
+      const h = field.querySelector<HTMLElement>('.fhint');
+      if (h) { if (h.dataset.hint === undefined) h.dataset.hint = h.textContent || ''; h.textContent = msg || h.dataset.hint; }
+    };
+    const user = el('username')!, email = el('email');
+    user.addEventListener('input', () => {
+      user.value = user.value.toLowerCase().replace(/\s/g, '');
+      if (mode === 'register') setErr('username', user.value && !USER_RE.test(user.value) ? 'بس أحرف إنكليزية صغيرة وأرقام و _ (3–20)' : '');
+    });
+    if (email) {
+      email.addEventListener('input', () => { email.value = email.value.replace(/\s/g, ''); setErr('email', ''); });
+      email.addEventListener('blur', () => { const v = email.value.toLowerCase(); setErr('email', v && !EMAIL_RE.test(v) ? 'الإيميل مو صحيح — مثلاً: name@gmail.com' : ''); });
+    }
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showErr(errBox, '');
+      const v = Object.fromEntries(new FormData(f)) as Record<string, string>;
+      const mail = String(v.email || '').trim().toLowerCase();
+      let bad = '';
+      if (mode === 'login' && !(v.username || '').trim()) bad = 'اكتب اسم المستخدم أو الإيميل';
+      else if (mode === 'register' && !USER_RE.test(v.username || '')) bad = 'اسم المستخدم لازم يكون 3–20 حرف إنكليزي صغير أو رقم أو _';
+      else if (mode === 'register' && !EMAIL_RE.test(mail)) { bad = 'الإيميل مو صحيح — مثلاً: name@gmail.com'; setErr('email', bad); }
+      else if ((v.password || '').length < 6) bad = 'كلمة السر لازم تكون 6 أحرف على الأقل';
+      else if (mode === 'register' && v.password !== v.password2) bad = 'كلمتين السر مو متطابقين';
+      if (bad) { showErr(errBox, bad); return; }
+      go.disabled = true; go.classList.add('loading'); const label = go.textContent; go.textContent = 'لحظة…';
+      try {
+        const r = await api<{ user: Me }>('/api/auth/' + mode, { username: v.username, email: mail, password: v.password, displayName: v.displayName });
+        setMe(r.user);
+        toast(mode === 'login' ? `أهلين ${r.user.displayName}` : 'انعمل حسابك', 'ok');
+        location.href = next;
+      } catch (er) {
+        const msg = (er as Error).message;
+        if (/الإيميل/.test(msg)) setErr('email', msg);
+        if (/اسم المستخدم مأخود|محجوز/.test(msg)) setErr('username', msg);
+        showErr(errBox, msg);
+        go.disabled = false; go.classList.remove('loading'); go.textContent = label;
+      }
+    });
+    user.focus();
+  }
+
+  // New Google sign-up: Google already gave the email (verified), name and photo — only the username is left.
+  async function renderGoogleFinish() {
+    document.title = 'كمّل حسابك — ثروة';
+    const pend = await api<{ email: string; name: string; picture: string | null } | null>('/api/auth/google/pending').catch(() => null);
+    if (!pend) { location.href = '/login?err=state'; return; }
+    card.innerHTML = `
+      <div class="g-who">${pend.picture ? avatarHTML(pend.picture, 56) : G_LOGO}<div><b>${esc(pend.name || 'أهلين!')}</b><small dir="ltr">${esc(pend.email)}</small></div></div>
+      <h1>آخر خطوة: اختار اسم مستخدم</h1>
+      <p class="sub">إيميلك مؤكَّد من Google. اختار اسم بيصير رابط بروفايلك.</p>
+      <form id="gForm" novalidate>
+        <label class="field"><span>اسم المستخدم</span><input name="username" dir="ltr" maxlength="20" placeholder="sami_99" required><small class="fhint">3–20: أحرف إنكليزية صغيرة، أرقام، أو _</small></label>
+        <label class="field"><span>اسمك الظاهر</span><input name="displayName" maxlength="24" value="${esc(pend.name || '')}"></label>
+        <div class="form-err" id="gErr" role="alert"></div>
+        <button class="btn btn-gold big block" id="gGo">إنشاء الحساب</button>
+      </form>`;
+    const f = $('#gForm') as HTMLFormElement, er = $('#gErr'), go = $('#gGo') as HTMLButtonElement;
+    const u = f.elements.namedItem('username') as HTMLInputElement, dn = f.elements.namedItem('displayName') as HTMLInputElement;
+    u.addEventListener('input', () => {
+      u.value = u.value.toLowerCase().replace(/\s/g, '');
+      u.closest('.field')!.classList.toggle('bad', !!u.value && !USER_RE.test(u.value));
+    });
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showErr(er, '');
+      if (!USER_RE.test(u.value)) { showErr(er, 'اسم المستخدم لازم يكون 3–20 حرف إنكليزي صغير أو رقم أو _'); return; }
+      go.disabled = true; go.textContent = 'لحظة…';
+      try {
+        await api('/api/auth/google/complete', { username: u.value, displayName: dn.value });
+        toast('انعمل حسابك', 'ok');
+        location.href = '/';
+      } catch (x) { showErr(er, (x as Error).message); go.disabled = false; go.textContent = 'إنشاء الحساب'; }
+    });
+    u.focus();
+  }
+
+  loadSession().then(() => {
+    if (session.me) { location.replace(next); return; }
+    const mode = (document.querySelector('.auth') as HTMLElement).dataset.mode as 'login' | 'register';
+    if (mode === 'register' && qs.get('google') === '1') renderGoogleFinish();
+    else render(mode);
+  });
+</script>

@@ -1,0 +1,370 @@
+---
+import Base from '../layouts/Base.astro';
+import { ART, ui, flag, diceHTML, PIECE_COLORS } from '../lib/art-build';
+
+const orbit = ['sy', 'sa', 'jo', 'lb', 'eg', 'iq', 'ps', 'ae', 'ma', 'qa', 'kw', 'dz'];
+const features = [
+  ['port', '22 دولة عربية بأعلامها', 'سوريا والأردن والعراق دايماً عاللوح، والباقي 5 دول عربية بتختارها'],
+  ['gavel', 'مزادات وقروض', 'زاود، بيع عقارك بالمزاد، أو أقرض صاحبك بفايدة'],
+  ['chest', 'بطاقات حظ وخزنة', 'بطاقات بتقلب اللعبة بلحظة'],
+  ['trophy', 'آخر واحد بيربح', 'عمّر فنادق وخلّي الكل يفلس'],
+];
+const howto = [
+  ['cash', 'كل لاعب بيبلّش بمبلغ بيحدده صاحب الغرفة (من $500 لـ $3000).'],
+  ['dice', 'ارمي النردين وامشِ — الدبل بيعطيك دور كمان.'],
+  ['house', 'اشترِ المدن والموانئ والشركات، واللي بيوقف عندك بيدفعلك إيجار.'],
+  ['hotel', 'جمّع كل مدن الدولة لتعمّر بيوت وفنادق ويصير الإيجار نار.'],
+  ['cards', 'بطاقات «حظ» و«خزنة» ممكن تعطيك مصاري أو تاخد منك أو تنقلك.'],
+  ['handshake', 'تبادل عقارات ومصاري، أو أقرض واستلف من اللاعبين بفايدة.'],
+  ['bank', 'ارهن عقاراتك للبنك، أو بيعها بالمزاد لأعلى سعر.'],
+  ['globe', 'اللوح كله دول عربية: سوريا والأردن والعراق دايماً موجودين، والباقي 5 دول بيختارهن صاحب الغرفة من الـ22 دولة عربية.'],
+  ['crown', 'آخر واحد بيضل بدون إفلاس هو الفائز.'],
+];
+---
+<Base active="home" description="ثروة — منصة ألعاب أونلاين من Serva. العب «ثروة» لعبة المدن والعقارات العربية مع أصحابك ببلاش، اجمع نقاط، اشترِ خرايط وتصدّر القائمة.">
+  <div class="ad-wrap" data-ad="home_top" hidden></div>
+
+  <!-- platform hero -->
+  <section class="hero" aria-labelledby="heroTitle">
+    <div class="hero-text">
+      <span class="eyebrow"><Fragment set:html={ui('gamepad')} />منصة ألعاب أونلاين من Serva</span>
+      <h1 id="heroTitle">العب مع صحابك<br /><span class="grad">من أي مكان، ببلاش</span></h1>
+      <p class="lead">اعمل غرفة، ابعت الكود لصحابك، وابدأوا. كل لعبة بتربحها بتجمعلك نقاط بتطلعك على لوحة المتصدرين، وبتشتري فيها خرايط جديدة من المتجر.</p>
+      <div class="hero-cta">
+        <a class="btn btn-gold big" href="#play"><Fragment set:html={ui('play')} />العب ثروة هلق</a>
+        <a class="btn big btn-ghost" href="/leaders"><Fragment set:html={ui('trophy')} />المتصدرين</a>
+      </div>
+      <ul class="hero-facts">
+        <li><Fragment set:html={ui('check')} />بدون تحميل — من المتصفح</li>
+        <li><Fragment set:html={ui('users')} />من 2 لـ 8 لاعبين</li>
+        <li id="liveFact" hidden><Fragment set:html={ui('online')} /><span></span></li>
+      </ul>
+    </div>
+    <div class="hero-art" aria-hidden="false">
+      <div class="orbit">
+        <div class="orbit-ring" aria-hidden="true">
+          {orbit.map((c, k) => (
+            <span class="orb" style={`--a:${(k * 360) / orbit.length}deg`}><span class="flag"><Fragment set:html={flag(c)} /></span></span>
+          ))}
+        </div>
+        <button type="button" class="dice3 hero-dice" id="heroDice" title="ارمي النرد!" aria-label="ارمي النرد"><Fragment set:html={diceHTML()} /></button>
+      </div>
+      <div class="pieces-row" aria-hidden="true">
+        {ART.PIECE_KEYS.map((k, i) => (
+          <span class="tk" style={`--pc:${PIECE_COLORS[i]};--d:${i * 0.12}s`}><Fragment set:html={ART.piece(k)} /></span>
+        ))}
+      </div>
+      <button type="button" class="icon-btn snd-btn" id="sndBtn" aria-label="الصوت" title="الصوت"></button>
+    </div>
+  </section>
+
+  <!-- games catalog -->
+  <section id="games" class="home-sec" aria-labelledby="gamesTitle">
+    <div class="sec-head">
+      <div><h2 id="gamesTitle"><Fragment set:html={ui('gamepad')} />الألعاب</h2><p>اختار لعبتك وبلّش — كل الألعاب بتنلعب أونلاين مع ناس حقيقيين أو بوتات.</p></div>
+    </div>
+    <div class="game-grid" id="gameGrid">
+      <div class="game-card skel" style="height:260px"></div>
+    </div>
+  </section>
+
+  <!-- logged-in summary -->
+  <div id="myCard"></div>
+
+  <!-- Tharwa quick play -->
+  <section id="play" class="home-sec" aria-labelledby="playTitle">
+    <div class="sec-head">
+      <div><h2 id="playTitle"><span class="wordmark sm">ثروة<i>.</i></span> العب هلق</h2><p>اشترِ المدن العربية، عمّر الفنادق، وخلّي منافسينك يفلسوا.</p></div>
+    </div>
+    <div class="play-grid">
+      <div class="panel play-card">
+        <div class="field">
+          <span>اسمك باللعبة</span>
+          <div id="nickBox"><input id="nick" class="input" maxlength="16" placeholder="اسمك باللعبة…" autocomplete="nickname" /></div>
+        </div>
+        <button class="btn btn-gold big block" id="quickBtn" type="button"><Fragment set:html={ui('dice')} />العب الآن</button>
+        <p class="tiny muted">بيدخلك على أول غرفة مفتوحة، أو بيعملك غرفة جديدة.</p>
+        <button class="btn block" id="createBtn" type="button"><Fragment set:html={ui('lock')} />إنشاء غرفة خاصة</button>
+        <div class="or-sep"><span>أو عندك كود؟</span></div>
+        <form class="join-code" id="joinForm">
+          <input id="codeIn" class="input ltr" maxlength="5" placeholder="abc12" aria-label="كود الغرفة" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <button class="btn btn-cyan" type="submit">انضم</button>
+        </form>
+      </div>
+      <div class="panel rooms-card">
+        <div class="rooms-head"><h3><Fragment set:html={ui('users')} />غرف مفتوحة</h3><span class="live-dot" title="بتتحدّث لحالها"></span></div>
+        <div id="roomList" class="room-list"><div class="state state-loading"><span class="spinner"></span><span>عم دوّر…</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tharwa features + how to play -->
+  <section class="home-sec" aria-labelledby="featTitle">
+    <h2 id="featTitle" class="visually-hidden">مميزات ثروة</h2>
+    <div class="features">
+      {features.map(([ic, t, d]) => (
+        <div class="feature"><span class="f-icon"><Fragment set:html={ART.icon(ic)} /></span><b>{t}</b><small>{d}</small></div>
+      ))}
+    </div>
+  </section>
+
+  <section class="home-sec panel howto-panel" aria-labelledby="howTitle">
+    <h2 id="howTitle" class="howto-title"><Fragment set:html={ui('scroll')} />كيف تلعب ثروة</h2>
+    <ol class="howto">
+      {howto.map(([ic, t]) => <li><span class="hi"><Fragment set:html={ui(ic)} /></span><span>{t}</span></li>)}
+    </ol>
+  </section>
+
+  <div class="ad-wrap" data-ad="home_bottom" hidden></div>
+</Base>
+
+<style is:global>
+  .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .home-sec { margin-top: 44px; }
+  .tiny { font-size: 12.5px; margin: -2px 0 0; text-align: center; }
+
+  /* hero */
+  .hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 32px; align-items: center; padding: 26px 0 8px; }
+  .hero h1 { font-size: clamp(34px, 5.2vw, 58px); font-weight: 900; margin: 16px 0 14px; letter-spacing: -.5px; }
+  .hero .grad { background: linear-gradient(90deg, var(--gold), #ffe08a 40%, var(--cyan2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { color: #c3d3e6; font-size: 17.5px; line-height: 1.85; margin: 0 0 24px; max-width: 560px; }
+  .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero-facts { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--muted); font-weight: 700; font-size: 14px; }
+  .hero-facts li { display: inline-flex; align-items: center; gap: 7px; }
+  .hero-facts .ui-ico { color: var(--cyan2); }
+  #liveFact .ui-ico { color: var(--ok); }
+  #liveFact span { color: var(--text); }
+  .hero-art { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .orbit { position: relative; width: 300px; height: 300px; }
+  .orbit::before { content: ''; position: absolute; inset: 18%; border-radius: 50%; background: radial-gradient(circle, rgba(0, 180, 255, .38), transparent 70%); filter: blur(8px); }
+  .orbit::after { content: ''; position: absolute; inset: 4%; border-radius: 50%; border: 1px dashed rgba(47, 226, 255, .28); }
+  .orbit-ring { position: absolute; inset: 0; animation: spin 50s linear infinite; }
+  .orb { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(var(--a)) translateY(-128px) rotate(calc(var(--a) * -1)); }
+  .orb .flag { --fs: 38px; animation: spin 50s linear infinite reverse; }
+  .hero-dice { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); --d: 66px; cursor: pointer; background: none; border: 0; padding: 0; z-index: 1; }
+  .pieces-row { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+  .pieces-row .tk { width: 36px; height: 36px; animation: bob 2.4s ease-in-out infinite; animation-delay: var(--d); }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  .snd-btn { position: absolute; top: 0; inset-inline-end: 0; }
+
+  /* games */
+  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  /* Tharwa leads the catalog as a wide featured card */
+  .game-card.featured { grid-column: 1 / -1; flex-direction: row; min-height: 220px; }
+  .game-card.featured .gc-art { flex: 0 0 46%; height: auto; min-height: 220px; }
+  .game-card.featured .gc-art .wordmark { font-size: 76px; }
+  .game-card.featured .gc-body { padding: 24px 26px; justify-content: center; }
+  .game-card.featured .gc-body h3 { font-size: 26px; }
+  .game-card.featured .gc-body p { flex: 0 0 auto; font-size: 16px; }
+  .gc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .game-card { position: relative; display: flex; flex-direction: column; border-radius: 20px; overflow: hidden; background: var(--panel); border: 1px solid var(--line2);
+    transition: transform .18s, box-shadow .18s, border-color .18s; color: var(--text); text-decoration: none !important; }
+  a.game-card:hover { transform: translateY(-4px); border-color: rgba(0, 180, 255, .6); box-shadow: 0 18px 40px rgba(0, 180, 255, .18); }
+  .gc-art { position: relative; height: 140px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+    background: radial-gradient(320px 160px at 70% 0%, rgba(0, 180, 255, .35), transparent 70%), linear-gradient(135deg, #0b2150, #050d24); }
+  .gc-art::after { content: ''; position: absolute; inset: 0; background: url('../../../public/bg/skyline.svg') center bottom / cover no-repeat; opacity: .5; }
+  .gc-art .wordmark { font-size: 54px; position: relative; z-index: 1; }
+  .gc-art .gc-flags { position: absolute; top: 12px; inset-inline-start: 12px; display: flex; gap: 4px; z-index: 1; }
+  .gc-art .gc-flags .flag { --fs: 20px; }
+  .gc-art .gc-ico { width: 64px; height: 64px; color: var(--cyan2); position: relative; z-index: 1; }
+  .gc-live { position: absolute; top: 12px; inset-inline-end: 12px; z-index: 1; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800;
+    background: rgba(3, 8, 22, .75); border: 1px solid rgba(40, 211, 145, .45); color: #c8f7e4; padding: 3px 10px; border-radius: 99px; }
+  .gc-live::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); animation: blink 1.6s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  .gc-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .gc-body h3 { font-size: 21px; font-weight: 900; }
+  .gc-body p { margin: 0; color: var(--muted); line-height: 1.7; flex: 1; }
+  .gc-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+  .gc-meta { display: inline-flex; align-items: center; gap: 6px; color: var(--cyan2); font-weight: 800; font-size: 13px; }
+
+  /* my card */
+  .my-card { margin-top: 28px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; text-decoration: none !important; color: var(--text);
+    background: linear-gradient(90deg, rgba(0, 180, 255, .12), rgba(255, 197, 61, .06)); border: 1px solid rgba(47, 226, 255, .3); border-radius: 20px; padding: 14px 18px; }
+  .my-card:hover { border-color: rgba(47, 226, 255, .6); }
+  .my-card .who { flex: 1; min-width: 160px; }
+  .my-card .who small { display: block; color: var(--muted); }
+  .my-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+  .my-stats span { display: inline-flex; align-items: center; gap: 6px; background: rgba(3, 8, 22, .55); border: 1px solid var(--line2); border-radius: 12px; padding: 6px 12px; color: var(--muted); font-size: 13.5px; }
+  .my-stats b { color: var(--gold); font-size: 16px; }
+  .my-stats .ui-ico { color: var(--cyan2); }
+
+  /* play */
+  .wordmark.sm { font-size: 30px; }
+  .play-grid { display: grid; grid-template-columns: 420px 1fr; gap: 18px; align-items: start; }
+  .play-card { display: flex; flex-direction: column; gap: 12px; }
+  .play-card .field { margin-bottom: 2px; }
+  .nick-acc { display: flex; align-items: center; gap: 10px; background: rgba(7, 16, 42, .9); border: 1px solid var(--line2); border-radius: 12px; padding: 5px 12px 5px 5px; }
+  .nick-acc b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nick-acc small { color: var(--cyan2); font-weight: 700; white-space: nowrap; }
+  .or-sep { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 700; margin: 4px 0; }
+  .or-sep::before, .or-sep::after { content: ''; flex: 1; height: 1px; background: var(--line2); }
+  .join-code { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .join-code .input { text-align: center; font-weight: 800; letter-spacing: 3px; font-size: 17px; text-transform: lowercase; }
+  .rooms-card { min-height: 100%; }
+  .rooms-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .rooms-head h3 { font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  .rooms-head h3 .ui-ico { color: var(--cyan2); }
+  .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); animation: blink 1.6s ease-in-out infinite; }
+  .room-list { display: flex; flex-direction: column; gap: 8px; }
+  .room-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 14px;
+    background: linear-gradient(90deg, rgba(0, 180, 255, .08), rgba(47, 226, 255, .02)); border: 1px solid rgba(0, 180, 255, .22); }
+  .room-item b { display: block; }
+  .room-item small { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  .room-empty { text-align: center; padding: 26px 14px; color: var(--muted); }
+  .room-empty .ui-ico { width: 34px; height: 34px; color: var(--line2); display: block; margin: 0 auto 8px; }
+
+  /* features + howto */
+  .features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .feature { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 20px 14px; border-radius: var(--radius);
+    background: radial-gradient(260px 120px at 50% 0%, rgba(0, 180, 255, .12), transparent), var(--panel); border: 1px solid var(--line); transition: transform .2s, border-color .2s, box-shadow .2s; }
+  .feature:hover { transform: translateY(-4px); border-color: rgba(0, 180, 255, .5); box-shadow: 0 12px 30px rgba(0, 180, 255, .15); }
+  .f-icon { width: 54px; height: 54px; }
+  .f-icon svg { width: 100%; height: 100%; }
+  .feature small { color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .howto-title { font-size: 21px; display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .howto-title .ui-ico { color: var(--gold); }
+  .howto { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+  .howto li { display: flex; gap: 12px; align-items: flex-start; color: #c9d6e3; line-height: 1.75; }
+  .hi { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 180, 255, .1); border: 1px solid rgba(47, 226, 255, .25); color: var(--cyan2); }
+  .hi .ui-ico { width: 19px; height: 19px; }
+
+  @media (max-width: 960px) {
+    .hero { grid-template-columns: 1fr; text-align: center; gap: 18px; }
+    .lead { margin-inline: auto; }
+    .hero-cta, .hero-facts { justify-content: center; }
+    .play-grid { grid-template-columns: 1fr; }
+    .features { grid-template-columns: 1fr 1fr; }
+    .howto { grid-template-columns: 1fr; }
+    .game-card.featured { flex-direction: column; }
+    .game-card.featured .gc-art { flex: 0 0 auto; min-height: 150px; }
+    .game-card.featured .gc-art .wordmark { font-size: 58px; }
+    .game-card.featured .gc-body { padding: 16px 18px 18px; }
+  }
+  @media (max-width: 760px) {
+    .home-sec { margin-top: 34px; }
+    .orbit { width: 230px; height: 230px; }
+    .orb { transform: translate(-50%, -50%) rotate(var(--a)) translateY(-96px) rotate(calc(var(--a) * -1)); }
+    .orb .flag { --fs: 28px; }
+    .hero-dice { --d: 48px; gap: 12px; }
+    .pieces-row .tk { width: 30px; height: 30px; }
+    .hero h1 { margin-top: 12px; }
+    .lead { font-size: 16px; }
+    .hero-cta .btn { flex: 1 1 100%; }
+    .feature { padding: 16px 10px; }
+  }
+</style>
+
+<script>
+  import '../../../public/flags.js';
+  import '../../../public/fx.js';
+  import { $, $$, esc, fmtN, ui, api, toast, avatarHTML, loadSession, session, mountAds } from '../lib/client';
+
+  const store = {
+    get(k: string) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+  };
+  // Same keys as the game client (public/app.js): room credentials and the guest nickname.
+  const credsKey = (c: string) => 'tharwa_room_' + c;
+  const fmtCash = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('en-US');
+
+  // ---- hero dice + sound (same effects as the game)
+  const dice = $('#heroDice')!, snd = $('#sndBtn')!;
+  const roll = () => window.FX.setDice(dice, [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)], true);
+  window.FX.setDice(dice, [6, 6], false);
+  setTimeout(roll, 350);
+  dice.addEventListener('click', () => { roll(); window.FX.Sound.play('dice'); });
+  const drawSnd = () => { snd.innerHTML = ui(window.FX.Sound.on ? 'sound' : 'mute'); snd.setAttribute('aria-pressed', String(window.FX.Sound.on)); };
+  drawSnd();
+  snd.addEventListener('click', () => { window.FX.Sound.toggle(); drawSnd(); });
+
+  // ---- nickname: locked to the account name when logged in
+  const nickname = () => (session.me && session.me.displayName) || (($('#nick') as HTMLInputElement | null)?.value.trim()) || store.get('tharwa_name') || '';
+  ($('#nick') as HTMLInputElement).value = store.get('tharwa_name') || '';
+
+  function drawGames() {
+    const games = session.site.games || [];
+    const grid = $('#gameGrid')!;
+    if (!session.ok) { grid.innerHTML = `<div class="panel state state-error">${ui('warn')}<span>ما قدرنا نوصل للسيرفر — جرّب تحدّث الصفحة.</span></div>`; return; }
+    if (!games.length) { grid.innerHTML = `<div class="panel state state-empty">${ui('sparkle')}<span>ما في ألعاب مفعّلة هلق.</span></div>`; return; }
+    const flags = ['sy', 'jo', 'iq'].map((c) => `<span class="flag">${window.flagSVG(c)}</span>`).join('');
+    grid.innerHTML = games.map((g) => {
+      const tharwa = g.slug === 'tharwa';
+      const live = g.live ? `<span class="gc-live">${fmtN(g.live)} عم يلعبوا هلق</span>` : '';
+      const art = tharwa ? `<span class="gc-flags">${flags}</span><span class="wordmark">ثروة<i>.</i></span>` : `<span class="gc-ico">${ui('gamepad')}</span>`;
+      const tags = tharwa ? `<div class="gc-tags"><span class="badge cyan">${ui('globe')}22 دولة عربية</span><span class="badge cyan">${ui('robot')}بوتات</span><span class="badge cyan">${ui('lock')}غرف خاصة</span></div>` : '';
+      const inner = `<div class="gc-art">${art}${live}</div><div class="gc-body"><h3>${esc(g.name)}</h3><p>${esc(g.description || '')}</p>${tags}
+        <div class="gc-foot"><span class="gc-meta">${ui('users')} ${esc(g.players || '')} لاعبين</span>${tharwa ? `<span class="btn btn-gold sm">${ui('play')}العب</span>` : '<span class="badge muted">قريباً</span>'}</div></div>`;
+      return tharwa ? `<a class="game-card featured" href="#play">${inner}</a>` : `<div class="game-card" aria-disabled="true">${inner}</div>`;
+    }).join('');
+    const live = games.find((g) => g.slug === 'tharwa')?.live || 0;
+    const lf = $('#liveFact')!;
+    lf.hidden = !live;
+    if (live) $('span', lf)!.textContent = `${fmtN(live)} لاعب عم يلعبوا هلق`;
+    $$('a.game-card').forEach((a) => a.addEventListener('click', () => setTimeout(() => ($('#quickBtn') as HTMLButtonElement).focus({ preventScroll: true }), 450)));
+  }
+
+  function drawMe() {
+    const me = session.me, box = $('#myCard')!;
+    box.innerHTML = me ? `<a class="my-card" href="/u/${encodeURIComponent(me.username)}">${avatarHTML(me.avatar, 52, me.color)}
+      <div class="who"><b>أهلين ${esc(me.displayName)}</b><small dir="ltr">@${esc(me.username)}</small></div>
+      <div class="my-stats"><span>${ui('star')}<b>${fmtN(me.points)}</b> نقطة</span><span>${ui('trophy')}<b>${fmtN(me.wins)}</b> فوز</span><span>${ui('dice')}<b>${fmtN(me.games)}</b> لعبة</span></div></a>` : '';
+    if (me) {
+      $('#nickBox')!.innerHTML = `<div class="nick-acc" title="من حسابك — بتغيّره من الإعدادات">${avatarHTML(me.avatar, 34, me.color)}<b>${esc(me.displayName)}</b><small>من حسابك</small></div>`;
+    }
+  }
+
+  // ---- create / quick play / join (same API calls and storage as the game client)
+  async function go(path: string, extra: Record<string, unknown>, btn: HTMLButtonElement) {
+    const name = nickname();
+    if (!name) { toast('اكتب اسمك أول'); ($('#nick') as HTMLInputElement | null)?.focus(); return; }
+    store.set('tharwa_name', name);
+    btn.disabled = true; btn.classList.add('loading');
+    try {
+      const r = await api<{ code: string; pid: string; token: string }>(path, { name, ...extra });
+      store.set(credsKey(r.code), JSON.stringify({ pid: r.pid, token: r.token }));
+      location.href = '/room/' + r.code;
+    } catch (e) {
+      toast((e as Error).message);
+      btn.disabled = false; btn.classList.remove('loading');
+    }
+  }
+  const quick = $('#quickBtn') as HTMLButtonElement, create = $('#createBtn') as HTMLButtonElement;
+  quick.addEventListener('click', () => go('/api/quick', {}, quick));
+  create.addEventListener('click', () => go('/api/create', { isPrivate: true }, create));
+  const codeIn = $('#codeIn') as HTMLInputElement;
+  codeIn.addEventListener('input', () => { codeIn.value = codeIn.value.toLowerCase().replace(/[^a-z0-9]/g, ''); });
+  $('#joinForm')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const c = codeIn.value.trim().toLowerCase();
+    if (!/^[a-z0-9]{5}$/.test(c)) { toast('الكود لازم يكون 5 حروف'); codeIn.focus(); return; }
+    const n = nickname(); if (n) store.set('tharwa_name', n);
+    location.href = '/room/' + c;
+  });
+  $('#roomList')!.addEventListener('click', (e) => {
+    const b = (e.target as Element).closest<HTMLElement>('[data-room]');
+    if (!b) return;
+    const n = nickname(); if (n) store.set('tharwa_name', n);
+    location.href = '/room/' + b.dataset.room;
+  });
+
+  // ---- public rooms (refreshed every 4 s while the tab is visible)
+  let failed = 0;
+  async function refreshRooms() {
+    if (document.hidden) return;
+    const box = $('#roomList')!;
+    try {
+      const list = await api<{ code: string; host: string; count: number; max: number; cash: number }[]>('/api/rooms');
+      failed = 0;
+      box.innerHTML = list.length
+        ? list.map((r) => `<div class="room-item"><div><b>غرفة ${esc(r.host)}</b><small>${ui('users')} ${r.count}/${r.max} لاعبين · يبلّش بـ ${fmtCash(r.cash)}</small></div><button type="button" class="btn btn-gold sm" data-room="${esc(r.code)}">ادخل</button></div>`).join('')
+        : `<div class="room-empty">${ui('dice')}ما في غرف مفتوحة هلق — اضغط «العب الآن» لتعمل وحدة.</div>`;
+    } catch {
+      if (++failed >= 2) box.innerHTML = `<div class="state state-error">${ui('warn')}<span>ما قدرنا نجيب الغرف — عم نجرّب كمان…</span></div>`;
+    }
+  }
+  refreshRooms();
+  setInterval(refreshRooms, 4000);
+  document.addEventListener('visibilitychange', refreshRooms);
+
+  loadSession().then(() => { drawGames(); drawMe(); mountAds(); });
+</script>

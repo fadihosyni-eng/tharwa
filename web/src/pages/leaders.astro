@@ -1,0 +1,82 @@
+---
+import Base from '../layouts/Base.astro';
+import { ui } from '../lib/art-build';
+---
+<Base title="المتصدرين" active="leaders" description="أعلى 50 لاعب بالنقاط على ثروة — النقاط بتنربح من الألعاب وبتنخسر كمان.">
+  <div class="sec-head">
+    <div>
+      <h1 class="page-title"><Fragment set:html={ui('trophy')} />المتصدرين</h1>
+      <p class="muted">أعلى 50 لاعب بالنقاط — النقاط بتنربح من الألعاب وبتنخسر كمان.</p>
+    </div>
+  </div>
+  <div id="podium" class="podium"></div>
+  <section class="panel lead-list" id="leadList" aria-label="ترتيب اللاعبين">
+    <div class="state state-loading"><span class="spinner"></span><span>عم حمّل…</span></div>
+  </section>
+</Base>
+
+<style is:global>
+  .podium { display: grid; grid-template-columns: 1fr 1.12fr 1fr; gap: 14px; align-items: end; margin-bottom: 18px; }
+  .podium:empty { display: none; }
+  .pod { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 22px 12px 18px; border-radius: 20px; color: var(--text); text-decoration: none !important;
+    background: radial-gradient(240px 140px at 50% 0%, color-mix(in srgb, var(--pc) 22%, transparent), transparent), var(--panel); border: 1px solid color-mix(in srgb, var(--pc) 45%, var(--line)); transition: transform .18s; }
+  .pod:hover { transform: translateY(-4px); }
+  .pod.p1 { order: 2; padding-top: 30px; box-shadow: 0 18px 44px rgba(255, 197, 61, .15); }
+  .pod.p2 { order: 1; } .pod.p3 { order: 3; }
+  .pod .rank { position: absolute; top: 10px; inset-inline-start: 12px; display: inline-flex; align-items: center; gap: 4px; font-weight: 900; color: var(--pc); }
+  .pod .rank .ui-ico { width: 22px; height: 22px; }
+  .pod b { font-size: 17px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pod small { color: var(--muted); }
+  .pod .pts { font-size: 22px; font-weight: 900; color: var(--gold); display: inline-flex; align-items: center; gap: 5px; direction: ltr; }
+  .lead-list { padding: 8px; }
+  .lead-row { display: grid; grid-template-columns: 44px auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 14px; text-decoration: none !important; color: var(--text); }
+  .lead-row + .lead-row { margin-top: 2px; }
+  .lead-row:nth-child(odd) { background: rgba(14, 28, 61, .45); }
+  .lead-row:hover { background: rgba(0, 180, 255, .1); box-shadow: inset 0 0 0 1px rgba(47, 226, 255, .35); }
+  .lead-row.is-me { box-shadow: inset 0 0 0 1px rgba(255, 197, 61, .55); }
+  .lead-rank { font-size: 17px; font-weight: 900; color: var(--muted); text-align: center; }
+  .lead-who { min-width: 0; }
+  .lead-who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lead-who small { color: var(--muted); display: block; }
+  .lead-games { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .lead-pts { font-weight: 900; color: var(--gold); display: inline-flex; align-items: center; gap: 4px; direction: ltr; white-space: nowrap; }
+  @media (max-width: 760px) {
+    .podium { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .pod { padding: 26px 6px 12px; }
+    .pod b { font-size: 14px; }
+    .pod small { display: none; }
+    .pod .pts { font-size: 16px; }
+    .lead-row { grid-template-columns: 30px auto minmax(0, 1fr) auto; gap: 10px; padding: 9px 8px; }
+    .lead-games { display: none; }
+  }
+</style>
+
+<script>
+  import { $, esc, fmtN, ui, api, avatarHTML, loadSession, session, stateHTML } from '../lib/client';
+  type U = { username: string; displayName: string; avatar: string; color: string | null; points: number; games: number; wins: number };
+  const MEDAL = ['#ffd34d', '#d9e4f0', '#e0a06a'];
+
+  async function draw() {
+    const list = $('#leadList')!, podium = $('#podium')!;
+    let users: U[];
+    try { users = await api<U[]>('/api/leaders'); } catch { list.innerHTML = stateHTML('error', 'ما قدرنا نجيب القائمة — جرّب تحدّث الصفحة.'); return; }
+    await loadSession();
+    const me = session.me ? session.me.username : '';
+    if (!users.length) { list.innerHTML = stateHTML('empty', 'لسا ما في لاعبين بنقاط — العب وكون أول واحد!'); return; }
+    const rate = (u: U) => (u.games ? Math.round((u.wins / u.games) * 100) : 0);
+    const href = (u: U) => '/u/' + encodeURIComponent(u.username);
+    // Top 3 on a podium (only when there are at least 3 players), the rest in the list.
+    const top = users.length >= 3 ? users.slice(0, 3) : [];
+    podium.innerHTML = top.map((u, i) => `<a class="pod p${i + 1}" href="${href(u)}" style="--pc:${MEDAL[i]}">
+      <span class="rank">${ui('medal')}${i + 1}</span>${avatarHTML(u.avatar, i === 0 ? 76 : 62, u.color)}
+      <b>${esc(u.displayName)}</b><small dir="ltr">@${esc(u.username)}</small><span class="pts">${fmtN(u.points)} ${ui('star')}</span>
+      <small>${fmtN(u.wins)} فوز من ${fmtN(u.games)}</small></a>`).join('');
+    list.innerHTML = users.slice(top.length).map((u, k) => {
+      const i = k + top.length;
+      return `<a class="lead-row ${u.username === me ? 'is-me' : ''}" href="${href(u)}"><span class="lead-rank">${i < 3 ? `<span style="color:${MEDAL[i]}">${ui('medal')}</span>` : i + 1}</span>
+        ${avatarHTML(u.avatar, 40, u.color)}<span class="lead-who"><b>${esc(u.displayName)}</b><small dir="ltr">@${esc(u.username)}</small></span>
+        <span class="lead-games">${fmtN(u.wins)} فوز من ${fmtN(u.games)} · <bdi dir="ltr">${rate(u)}%</bdi></span><span class="lead-pts">${fmtN(u.points)} ${ui('star')}</span></a>`;
+    }).join('') || stateHTML('empty', 'هدول كل اللاعبين لهلق.');
+  }
+  draw();
+</script>

@@ -15,7 +15,10 @@ import indexHtml from './public/index.html'; // bundled as text: server.js serve
 
 // Paths the Node server must answer (everything else is a static file / the single-page app).
 // Keep in sync with "run_worker_first" in wrangler.jsonc.
-const SERVER_PATH = /^\/(?:api\/|u\/|admin\/?$)/;
+const SERVER_PATH = /^\/(?:api\/|admin\/?$)/;
+// Static pages that need a rewrite (the URL keeps its path): the game room uses the old client
+// (web/site/game.html), and every profile uses the one Astro page u.html, which reads the name from the URL.
+const REWRITES = [[/^\/room\/[^/]+\/?$/, '/game'], [/^\/u\/[^/]+\/?$/, '/u']];
 
 export class Tharwa extends DurableObject {
   // Loads and starts server.js once. Not done at global scope: Workers forbid timers, random
@@ -65,6 +68,9 @@ export default {
       if (url.host !== canon.host && !url.hostname.endsWith('.workers.dev') && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
         return Response.redirect(canon.origin + url.pathname + url.search, 301);
       }
+    }
+    for (const [re, to] of REWRITES) {
+      if (re.test(url.pathname)) return env.ASSETS.fetch(new Request(new URL(to + url.search, url), request));
     }
     if (!SERVER_PATH.test(url.pathname)) return env.ASSETS.fetch(request);
     // Tell the Node server how the visitor reached us (cookies get `Secure` on https).
