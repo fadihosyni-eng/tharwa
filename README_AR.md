@@ -42,7 +42,18 @@ node tharwa-game/server.js
   شارة «لعبة من Serva» بالصفحة الرئيسية وصفحة الدخول، دائرة اللوغو أعلى الغرفة، لوغو باهت بوسط اللوح،
   وأيقونة التبويب. كلهن رابط لـ serva-s.com. المصدر: `product-video-studio/skills/serva-promo-ad/assets/serva-logo-disc.png`.
 
-## 🌍 اللعبة منشورة: https://tharwa.onrender.com
+## 🌍 الموقع الأساسي: https://game.serva-g.com (Cloudflare)
+
+كل التطوير والرفع صار على Cloudflare. `serva-g.com` و`www.serva-g.com` بيحوّلوا لـ game.serva-g.com.
+
+- **الحساب:** Cloudflare تبع saleh83277، والدومين serva-g.com فيه.
+- **الرفع:** `npm run cf:deploy` (بيبني صفحات Astro من `web/` وبيرفع كل شي). التجربة المحلية: `npx wrangler dev --port 8704` (ذاكرة بس، من `.dev.vars`).
+- **قاعدة البيانات:** نفس Supabase عبر Hyperdrive «tharwa-db» (الكاش مطفي). إذا تغيّرت كلمة سر قاعدة البيانات لازم تتحدّث بـ Hyperdrive وبـ Render.
+- **إعدادات Worker «tharwa»:** `ADMIN_USERS` (سر)، `PUBLIC_URL` (بـ wrangler.jsonc)، ولـ Google: `GOOGLE_CLIENT_ID` و`GOOGLE_CLIENT_SECRET`.
+- **GitHub:** الشغل الجديد على فرع `cloudflare`. فرع `main` هو النسخة القديمة يلي بيرفعها Render، فما منبعت عليه لحتى نقرر نسكّر Render.
+
+## النسخة القديمة (لسا شغالة): https://tharwa.onrender.com
+
 المستودع: https://github.com/fadihosyni-eng/tharwa — أي `git push` على `main` بينشر نسخة جديدة لحاله.
 
 ### 🔗 الروابط المهمة
