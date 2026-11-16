@@ -1,6 +1,8 @@
 'use strict';
 // Generates the game's background art (SVG) in the serva-s.com look:
 // navy #030816, neon cyan #00b4ff / #2fe2ff, star gold #ffc53d.
+// The page background itself is CSS (navy gradient + soft aurora glows); these files add a
+// faint Arabic star lattice and a whisper of grain on top of it.
 // Run: node tharwa-game/tools/make-backgrounds.js
 const fs = require('fs');
 const path = require('path');
@@ -15,42 +17,45 @@ const pick = (a) => a[Math.floor(rand() * a.length)];
 const r1 = (n) => Math.round(n * 10) / 10;
 const save = (name, svg) => { fs.writeFileSync(path.join(OUT, name), svg.replace(/\n\s+/g, '\n')); console.log('wrote', name, Math.round(svg.length / 1024) + ' KB'); };
 
-// ---------------------------------------------------------------- circuit pattern (tiles seamlessly)
-function circuit() {
-  const S = 240, paths = [], nodes = [];
-  for (let k = 0; k < 14; k++) {
-    let x = Math.round(rand() * 12) * 20, y = Math.round(rand() * 12) * 20;
-    let d = `M${x} ${y}`;
-    const steps = 2 + Math.floor(rand() * 3);
-    for (let s = 0; s < steps; s++) {
-      const len = (1 + Math.floor(rand() * 3)) * 20;
-      const dir = pick(['h', 'v', 'd']);
-      if (dir === 'h') x += rand() < 0.5 ? len : -len;
-      else if (dir === 'v') y += rand() < 0.5 ? len : -len;
-      else { const sx = rand() < 0.5 ? 1 : -1, sy = rand() < 0.5 ? 1 : -1; x += sx * 20; y += sy * 20; }
-      d += ` L${x} ${y}`;
-    }
-    paths.push(d);
-    nodes.push([x, y]);
+// ---------------------------------------------------------------- Arabic eight-point star lattice (tiles seamlessly)
+// Very faint line art: khatam stars (two interlaced squares) on a square grid, joined by diagonal
+// bridges and small diamonds. Drawn at full strength here; the page sets how faint it is.
+function arabesque() {
+  const S = 120, R = 30, C = S / 2;
+  const star = (cx, cy) => {
+    const sq = (rot) => [0, 1, 2, 3].map((k) => {
+      const a = ((rot + k * 90) * Math.PI) / 180;
+      return `${r1(cx + R * Math.cos(a))} ${r1(cy + R * Math.sin(a))}`;
+    });
+    const p1 = sq(0), p2 = sq(45);
+    const oct = Array.from({ length: 8 }, (_, k) => {
+      const a = ((22.5 + k * 45) * Math.PI) / 180, r = R * 0.42;
+      return `${r1(cx + r * Math.cos(a))} ${r1(cy + r * Math.sin(a))}`;
+    });
+    return `<path d="M${p1.join(' L')} Z M${p2.join(' L')} Z"/><path d="M${oct.join(' L')} Z" stroke-opacity=".55"/>`;
+  };
+  const d = R * Math.SQRT1_2; // where a star's diagonal tip sits
+  const parts = [];
+  for (const [x, y] of [[0, 0], [S, 0], [0, S], [S, S], [C, C]]) parts.push(star(x, y));
+  // diagonal bridges between the centre star and the corner stars
+  for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    parts.push(`<path d="M${r1(C + sx * d)} ${r1(C + sy * d)} L${r1(C + sx * (C - d))} ${r1(C + sy * (C - d))}"/>`);
   }
-  const body = (dx, dy) => `<g transform="translate(${dx} ${dy})">
-    <g fill="none" stroke="#00b4ff" stroke-opacity=".10" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${paths.map((d) => `<path d="${d}"/>`).join('')}</g>
-    <g fill="#2fe2ff" fill-opacity=".22">${nodes.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.4"/>`).join('')}</g>
-    <g fill="none" stroke="#2fe2ff" stroke-opacity=".12">${nodes.slice(0, 5).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5"/>`).join('')}</g></g>`;
-  // draw 9 copies so traces crossing an edge wrap around
-  const copies = [];
-  for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) copies.push(body(dx, dy));
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">${copies.join('')}</svg>`;
+  // little diamonds at the edge midpoints, linking the stars along the grid lines
+  for (const [x, y] of [[C, 0], [C, S], [0, C], [S, C]]) {
+    const q = 9;
+    parts.push(`<path d="M${x} ${y - q} L${x + q} ${y} L${x} ${y + q} L${x - q} ${y} Z" stroke-opacity=".7"/>`);
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}"><g fill="none" stroke="#7fdcff" stroke-width="1" stroke-linejoin="round">${parts.join('')}</g></svg>`;
 }
 
-// ---------------------------------------------------------------- star dust pattern
-function stars() {
-  const S = 320, dots = [];
-  for (let k = 0; k < 60; k++) {
-    const big = rand() < 0.12;
-    dots.push(`<circle cx="${r1(rand() * S)}" cy="${r1(rand() * S)}" r="${big ? 1.4 : r1(0.4 + rand() * 0.6)}" fill="${rand() < 0.25 ? '#2fe2ff' : '#e8f0f8'}" fill-opacity="${r1(big ? 0.55 : 0.12 + rand() * 0.3)}"/>`);
-  }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">${dots.join('')}</svg>`;
+// ---------------------------------------------------------------- film grain (tiny, tiles seamlessly)
+function grain() {
+  const S = 180;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
+    <filter id="n" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" stitchTiles="stitch"/>
+    <feColorMatrix values="0 0 0 0 .75  0 0 0 0 .88  0 0 0 0 1  0 0 0 .55 0"/></filter>
+    <rect width="${S}" height="${S}" filter="url(#n)"/></svg>`;
 }
 
 // ---------------------------------------------------------------- neon city skyline (wide strip)
@@ -110,7 +115,9 @@ function rings() {
     <circle cx="${C}" cy="${C}" r="300" fill="url(#core)"/>${parts.join('')}</svg>`;
 }
 
-save('circuit.svg', circuit());
-save('stars.svg', stars());
+save('arabesque.svg', arabesque());
+save('grain.svg', grain());
+// skyline + rings keep the exact random sequence they were first drawn with
+seed = 10457844;
 save('skyline.svg', skyline());
 save('rings.svg', rings());

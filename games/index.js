@@ -13,6 +13,9 @@
 const xo = require('./xo');
 const connect4 = require('./connect4');
 const ludo = require('./ludo');
+const tarneeb = require('./cards/tarneeb');
+const fourHundred = require('./cards/fourhundred');
+const trix = require('./cards/trix');
 
-const GAMES = { xo, connect4, ludo };
+const GAMES = { xo, connect4, ludo, tarneeb, 400: fourHundred, trix };
 module.exports = { GAMES, get: (slug) => GAMES[String(slug || '')] || null };

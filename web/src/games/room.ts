@@ -8,6 +8,9 @@ import type { Board, Ctx, Room, Player } from './types';
 import { createXO } from './xo';
 import { createConnect4 } from './connect4';
 import { createLudo } from './ludo';
+import { createCardGame } from './cards/table';
+// Team card games report both winning partners in result.winners.
+const isWinner = (r: Room, pid: string | null | undefined) => !!r.result && !!pid && (r.result.winner === pid || ((r.result as { winners?: string[] }).winners || []).includes(pid));
 
 const app = $('#mgApp')!;
 const slug = app.dataset.slug || '';
@@ -126,6 +129,7 @@ function roomPage(code: string) {
   const makeBoard = () => {
     if (slug === 'xo') return createXO(boardEl, under, ctx);
     if (slug === 'connect4') return createConnect4(boardEl, under, ctx);
+    if (meta.cards) return createCardGame(slug, boardEl, under, ctx);
     return createLudo(boardEl, under, ctx);
   };
 
@@ -146,7 +150,7 @@ function roomPage(code: string) {
     }
     if (meP) await ctx.act('leave');
     store.del('g_room_' + code);
-    location.assign(`/play/${slug}`);
+    location.assign(`/games/${slug}`); // the game page (play panel, open rooms)
   });
 
   // ---- chat
@@ -215,7 +219,7 @@ function roomPage(code: string) {
     overlay.hidden = false;
     overlay.dataset.html = '';
     overlay.innerHTML = `<div class="mg-ov-card">${ui('warn')}<h2>${esc(msg)}</h2><p class="muted">يمكن الرابط قديم، أو كل اللاعبين طلعوا.</p>
-      <div class="mg-ov-btns"><a class="btn btn-gold" href="/play/${slug}">${ui('play')}العب ${esc(meta.name)}</a><a class="btn" href="/">${ui('house')}الرئيسية</a></div></div>`;
+      <div class="mg-ov-btns"><a class="btn btn-gold" href="/games/${slug}">${ui('play')}العب ${esc(meta.name)}</a><a class="btn" href="/">${ui('house')}الرئيسية</a></div></div>`;
   }
   check();
 
@@ -288,7 +292,7 @@ function roomPage(code: string) {
     if (r.status !== 'ended') under.querySelector('.mg-result-chip')?.remove();
     if (r.status === 'ended' && endedSeqSounded !== r.seq) {
       endedSeqSounded = r.seq;
-      if (r.result && r.me && r.result.winner === r.me) { sound('win'); try { (window.FX as any).confetti(); } catch { /* no canvas */ } }
+      if (r.result && r.me && isWinner(r, r.me)) { sound('win'); try { (window.FX as any).confetti(); } catch { /* no canvas */ } }
       else if (r.result && r.me && !r.result.draw) sound('bankrupt');
     }
     // chat
@@ -303,7 +307,7 @@ function roomPage(code: string) {
     if (!r.result) return 'خلصت اللعبة';
     if (r.result.draw) return 'تعادل';
     const w = ctx.player(r.result.winner);
-    if (r.me && r.result.winner === r.me) return 'إنت ربحت!';
+    if (r.me && isWinner(r, r.me)) return 'إنت ربحت!';
     return `ربح ${w ? w.name : ''}`;
   }
 
@@ -313,7 +317,9 @@ function roomPage(code: string) {
       ? `<div class="mg-opt"><span class="mg-label">عدد المقاعد</span><div class="mg-seg" data-opt="max">${[2, 3, 4].map((n) => `<button type="button" data-v="${n}" aria-checked="${r.max === n}" ${n < r.players.length ? 'disabled' : ''}>${n}</button>`).join('')}</div></div>`
       : r.game === 'xo'
         ? `<div class="mg-opt"><span class="mg-label">المباراة</span><div class="mg-seg" data-opt="bestOf">${[[1, 'جولة'], [3, 'من 3'], [5, 'من 5']].map(([v, l]) => `<button type="button" data-v="${v}" aria-checked="${(r.opts.bestOf || 1) === v}">${l}</button>`).join('')}</div></div>`
-        : '';
+        : meta.cards // card games: the room's numeric option is the target score; partners sit 1+3 and 2+4
+          ? `${meta.cards.targets ? `<div class="mg-opt"><span class="mg-label">اللعب للـ</span><div class="mg-seg" data-opt="bestOf">${meta.cards.targets.map((v) => `<button type="button" data-v="${v}" aria-checked="${(meta.cards!.targets!.includes(r.opts.bestOf || 0) ? r.opts.bestOf : 41) === v}">${v}</button>`).join('')}</div></div>` : ''}${meta.cards.teams ? '<p class="muted mg-small">المقعد 1 و3 فريق، و2 و4 فريق. بدّك صاحبك شريكك؟ ضيف كمبيوتر قبل ما يفوت.</p>' : ''}`
+          : '';
     return `${opts}<div class="mg-ov-btns">
       <button type="button" class="btn" data-lobby="addBot" ${full ? 'disabled' : ''}>${ui('robot')}ضيف كمبيوتر</button>
       <button type="button" class="btn btn-gold" data-lobby="start" ${r.players.length < r.min ? 'disabled' : ''}>${ui('play')}ابدأ</button>
@@ -372,7 +378,7 @@ function roomPage(code: string) {
   function resultCard(r: Room, me: Player | null) {
     const res = r.result;
     if (!res) return '';
-    const won = !!me && res.winner === me.id;
+    const won = !!me && isWinner(r, me.id);
     const title = res.draw ? 'تعادل!' : won ? 'مبروك، ربحت!' : me && !me.left ? 'المرة الجاية إلك' : `ربح ${esc((ctx.player(res.winner) || { name: '' }).name)}`;
     const rank = res.ranking.length > 2 || r.game === 'ludo'
       ? `<ol class="mg-rank">${res.ranking.map((pid, i) => { const p = ctx.player(pid); return p ? `<li style="--c:${p.color}"><span class="mg-place">${i + 1}</span>${avatar(p, 30)}<b>${esc(p.name)}</b>${p.left ? '<small class="muted">طلع</small>' : ''}</li>` : ''; }).join('')}</ol>`
@@ -394,7 +400,7 @@ function roomPage(code: string) {
       ${r.game === 'xo' && r.state && r.state.bestOf > 1 ? `<p class="muted">النتيجة ${r.state.score[0]} : ${r.state.score[1]}</p>` : ''}
       ${rank}${pts}
       ${voted && waiting.length ? `<p class="muted mg-small">ناطرين: ${esc(waiting.join('، '))}</p>` : ''}
-      <div class="mg-ov-btns">${again}<button type="button" class="btn" data-look>${ui('eye')}شوف اللوح</button><a class="btn btn-ghost" href="/">${ui('gamepad')}ألعاب تانية</a></div>
+      <div class="mg-ov-btns">${again}<button type="button" class="btn" data-look>${ui('eye')}شوف اللوح</button><a class="btn btn-ghost" href="/games">${ui('gamepad')}ألعاب تانية</a></div>
     </div>`;
   }
   function wireResult(r: Room) {

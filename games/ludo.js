@@ -49,7 +49,7 @@ function actions(s, pid) {
   const seat = seatOf(s, pid);
   if (s.over || seat !== s.turn) return [];
   if (s.phase === 'roll') return [{ type: 'roll' }];
-  return s.legal.map((token) => ({ type: 'move', token }));
+  return s.legal.map((piece) => ({ type: 'move', piece }));
 }
 
 function nextTurn(s, events) {
@@ -145,7 +145,7 @@ function apply(s, pid, a, ctx = {}) {
   }
   if (a && a.type === 'move') {
     if (s.phase !== 'move') throw gameErr('ارمي النرد أول', 409);
-    const i = Number(a.token);
+    const i = Number(a.piece); // «piece», not «token»: the room API already uses «token» for the player's secret
     if (!Number.isInteger(i) || !s.legal.includes(i)) throw gameErr('هالقطعة ما فيها تتحرك بهالرقم');
     const again = moveToken(s, seat, i, events);
     s.legal = [];
@@ -209,7 +209,7 @@ function botAction(s, pid) {
     const v = scoreMove(s, seat, i, s.dice);
     if (v > bestScore) { bestScore = v; best = i; }
   }
-  return best === null ? null : { type: 'move', token: best };
+  return best === null ? null : { type: 'move', piece: best };
 }
 
 function ranking(s) {

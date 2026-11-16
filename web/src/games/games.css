@@ -66,6 +66,7 @@
 .mg-board { margin-inline: auto; width: min(100%, 640px, calc(100svh - 270px)); min-width: min(100%, 300px); }
 .mg-board:has(.mg-ludo) { width: min(100%, 640px, calc(100svh - 350px)); }
 .mg-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 14px; z-index: 5; background: rgba(3, 8, 22, .55); backdrop-filter: blur(3px); border-radius: 22px; }
+.mg-board:empty + .mg-overlay { position: relative; inset: auto; min-height: 340px; } /* lobby before the first game: no board under the card yet */
 .mg-ov-card { width: min(100%, 440px); max-height: 100%; overflow: auto; text-align: center; padding: 22px; border-radius: 22px; background: linear-gradient(180deg, rgba(14, 28, 61, .97), rgba(7, 16, 42, .98)); border: 1px solid var(--line2); box-shadow: 0 24px 60px rgba(0, 0, 0, .55); }
 .mg-ov-card > .ui-ico { width: 40px; height: 40px; color: var(--gold); }
 .mg-ov-card h2 { justify-content: center; font-size: 21px; }
@@ -210,13 +211,13 @@
   background: linear-gradient(145deg, #ffffff, #dfe9f5); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .07), inset 0 -4px 8px rgba(0, 0, 0, .08); }
 .mg-die .face span { width: calc(var(--d) * .16); height: calc(var(--d) * .16); border-radius: 50%; }
 .mg-die .face span.on { background: radial-gradient(circle at 40% 35%, #44556b, #0d141d); }
-.mg-die .f1 span.on { background: radial-gradient(circle at 40% 35%, #ff6b78, #b5122a); width: calc(var(--d) * .24); height: calc(var(--d) * .24); }
-.mg-die .f1 { transform: rotateY(0deg) translateZ(calc(var(--d) / 2)); }
-.mg-die .f6 { transform: rotateY(180deg) translateZ(calc(var(--d) / 2)); }
-.mg-die .f2 { transform: rotateY(90deg) translateZ(calc(var(--d) / 2)); }
-.mg-die .f5 { transform: rotateY(-90deg) translateZ(calc(var(--d) / 2)); }
-.mg-die .f3 { transform: rotateX(90deg) translateZ(calc(var(--d) / 2)); }
-.mg-die .f4 { transform: rotateX(-90deg) translateZ(calc(var(--d) / 2)); }
+.mg-die .face.one span.on { background: radial-gradient(circle at 40% 35%, #ff6b78, #b5122a); width: calc(var(--d) * .24); height: calc(var(--d) * .24); }
+.mg-die .front { transform: rotateY(0deg) translateZ(calc(var(--d) / 2)); }
+.mg-die .back { transform: rotateY(180deg) translateZ(calc(var(--d) / 2)); }
+.mg-die .right { transform: rotateY(90deg) translateZ(calc(var(--d) / 2)); }
+.mg-die .left { transform: rotateY(-90deg) translateZ(calc(var(--d) / 2)); }
+.mg-die .top { transform: rotateX(90deg) translateZ(calc(var(--d) / 2)); }
+.mg-die .bottom { transform: rotateX(-90deg) translateZ(calc(var(--d) / 2)); }
 .mg-dice-btn.bounce .mg-die { animation: mgDiceBounce .95s ease-out; }
 @keyframes mgDiceBounce { 0% { transform: translateY(0); } 25% { transform: translateY(-18px); } 55% { transform: translateY(0); } 72% { transform: translateY(-5px); } 100% { transform: translateY(0); } }
 

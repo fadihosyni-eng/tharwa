@@ -101,7 +101,11 @@ const tokenSVG = (corner: number) => `
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const PIPS: Record<number, number[]> = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
-const dieHTML = () => `<div class="mg-die"><div class="tilt"><div class="cube">${[1, 6, 2, 5, 3, 4].map((v) => `<div class="face f${v}">${Array.from({ length: 9 }, (_, k) => `<span class="${PIPS[v].includes(k) ? 'on' : ''}"></span>`).join('')}</div>`).join('')}</div></div></div>`;
+// The die only ever shows the number actually rolled: the pips are on the front face only, the other five
+// faces are blank, and it tumbles in whole turns so it always lands facing front (like «ثروة»'s dice).
+// Before the first roll every face is blank.
+const pipsHTML = (v: number) => Array.from({ length: 9 }, (_, k) => `<span class="${(PIPS[v] || []).includes(k) ? 'on' : ''}"></span>`).join('');
+const dieHTML = () => `<div class="mg-die"><div class="tilt"><div class="cube">${['front', 'back', 'right', 'left', 'top', 'bottom'].map((p) => `<div class="face ${p}">${pipsHTML(0)}</div>`).join('')}</div></div></div>`;
 
 export function createLudo(el: HTMLElement, under: HTMLElement, ctx: Ctx): Board {
   el.innerHTML = `<div class="mg-ludo"><svg viewBox="0 0 ${15 * C} ${15 * C}" class="mg-ludo-svg" role="img" aria-label="لوح لودو">${boardSVG()}<g class="tokens"></g></svg></div>`;
@@ -124,8 +128,22 @@ export function createLudo(el: HTMLElement, under: HTMLElement, ctx: Ctx): Board
 
   const canRoll = (r: Room) => r.status === 'playing' && !!r.turn && r.turn.pid === r.me && r.state.phase === 'roll';
   const canMove = (r: Room) => r.status === 'playing' && !!r.turn && r.turn.pid === r.me && r.state.phase === 'move';
-  const setDie = (v: number, animate: boolean) => window.FX.setDice(diceBtn, [v], animate);
-  setDie(6, false);
+  let spins = 0, shown = 0;
+  const cube = diceBtn.querySelector<HTMLElement>('.cube')!;
+  function setDie(v: number, animate: boolean) {
+    if (v !== shown) {
+      const front = cube.querySelector<HTMLElement>('.face.front')!;
+      front.innerHTML = pipsHTML(v);
+      front.classList.toggle('one', v === 1);
+      shown = v;
+    }
+    if (!animate) return;
+    // whole turns only: it tumbles (blank sides showing mid-spin) and lands on the front face
+    spins++;
+    cube.style.transition = 'transform .95s cubic-bezier(.2,.9,.25,1)';
+    cube.style.transform = `rotateX(${spins * 720}deg) rotateY(${spins * 360}deg)`;
+    diceBtn.classList.remove('bounce'); void diceBtn.offsetWidth; diceBtn.classList.add('bounce');
+  }
 
   async function roll() {
     if (!room || sending || busyAnim || !canRoll(room)) return;
@@ -149,7 +167,7 @@ export function createLudo(el: HTMLElement, under: HTMLElement, ctx: Ctx): Board
       if (pick < 0) return;
     }
     sending = true;
-    await ctx.act('move', { token: pick });
+    await ctx.act('move', { piece: pick });
     sending = false;
   });
 

@@ -31,7 +31,7 @@ const { game } = Astro.props as { game: MiniGame };
             <label class="mg-label" for="mgName">اسمك باللعبة</label>
             <input id="mgName" class="mg-input" maxlength="16" autocomplete="nickname" placeholder="اكتب اسمك" />
           </div>
-          {game.maxPlayers > 2 && (
+          {game.maxPlayers > game.minPlayers && (
             <div class="mg-opt">
               <span class="mg-label">عدد اللاعبين</span>
               <div class="mg-seg" id="mgSeatsPick" role="radiogroup" aria-label="عدد اللاعبين">

@@ -32,6 +32,7 @@ function run(file, args = []) {
     if (!Array.isArray(net)) throw new Error('/api/net did not return a list');
     run('api.js', [BASE]);
     run('auth.js', [BASE]);
+    run('tharwa-rules.js', [BASE]); // «لا إيجار للمسجون» + bankrupt players stay as spectators
     run('google.js');
     // spam protection: one IP cannot create rooms without limit
     let limited = false;
@@ -45,6 +46,7 @@ function run(file, args = []) {
     console.log('spam limit + address privacy OK');
     // Last: it runs a while, and this runner's own pooled connection would go stale meanwhile.
     run('minigames.js', [BASE]); // إكس أو، أربعة بخط، لودو: rules, bots, room API
+    run('cards-games.js', [BASE]); // طرنيب، أربعمية، تركس: deck, rules, scoring, bots, AFK, room API
     console.log('ALL TESTS PASSED');
   } finally {
     srv.kill();

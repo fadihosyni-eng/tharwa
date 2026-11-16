@@ -5,6 +5,9 @@ import tharwaArt from '../../assets/games/tharwa.svg?url';
 import xoArt from '../../assets/games/xo.svg?url';
 import connect4Art from '../../assets/games/connect4.svg?url';
 import ludoArt from '../../assets/games/ludo.svg?url';
+import tarneebArt from '../../games/cards/art/tarneeb.svg?url';
+import fourHundredArt from '../../games/cards/art/400.svg?url';
+import trixArt from '../../games/cards/art/trix.svg?url';
 
 export type GameInfo = {
   slug: string;
@@ -84,6 +87,48 @@ export const CATALOG: GameInfo[] = [
       ['arrow', 'امشِ بقطعك حوالين اللوح لحد ما توصل لطريق بيتك بالنص.'],
       ['bolt', 'إذا وقفت على قطعة خصمك، بترجعها على بيتها.'],
       ['crown', 'أول واحد بيوصّل قطعه كلها للنص بيربح.'],
+    ],
+  },
+  {
+    slug: 'tarneeb',
+    name: 'طرنيب',
+    description: 'شدّة بالفرق: اطلب اللمّات، اختار الطرنيب وجيب طلبك مع شريكك.',
+    pitch: 'أشهر لعبة شدّة بالشام: اتفاهم مع شريكك، اطلب على قد ورقك، واختار الطرنيب اللي بيكسّر خصومك. العب مع أصحابك أو ضد الكمبيوتر.',
+    minPlayers: 4, maxPlayers: 4, bots: true, tags: ['party', 'cards', 'classic'],
+    art: tarneebArt, accent: '#2f7dff', aliases: ['tarneeb', 'tarnib', 'طرنيب', 'شدة', 'ورق', 'cards'], duration: '15–30 د',
+    howto: [
+      ['users', '4 لاعبين بفريقين — شريكك قاعد قبالك، و13 ورقة لكل واحد.'],
+      ['gavel', 'اطلب من 7 لـ 13 لمّة، وأعلى طلب بيختار الطرنيب وبيبلّش.'],
+      ['cards', 'العب من نفس النقشة إذا معك، وإلا طرنب أو ارمي ورقة.'],
+      ['trophy', 'جيب طلبك لتاخد لمّاتك — وأول فريق بيوصل 41 بيربح.'],
+    ],
+  },
+  {
+    slug: '400',
+    name: 'أربعمية',
+    description: 'كل واحد بيطلب لمّاته والكبّة طرنيب دايماً.',
+    pitch: 'لعبة الحساب والجرأة: كل لاعب بيطلب لحاله، بس الربح للفريق. اطلب كتير وجيبه لتاخد دبل، وانتبه لا تكسر.',
+    minPlayers: 4, maxPlayers: 4, bots: true, tags: ['party', 'cards', 'classic'],
+    art: fourHundredArt, accent: '#2fe2ff', aliases: ['400', 'arba3meyeh', 'أربعمية', 'اربعميه', 'شدة', 'ورق', 'cards'], duration: '20–40 د',
+    howto: [
+      ['users', '4 لاعبين بفريقين، والكبّة طرنيب دايماً.'],
+      ['gavel', 'كل واحد بيطلب قدّيش رح يجيب لمّات (أقل شي 2)، والمجموع لازم يكون 11 ع الأقل.'],
+      ['coins', 'جبت طلبك؟ بتاخد قيمته — ومن 5 وطالع بينحسب دبل. كسرت؟ بينقص منك.'],
+      ['trophy', 'بيربح الفريق لما واحد منه يوصل 41 وشريكه فوق الصفر.'],
+    ],
+  },
+  {
+    slug: 'trix',
+    name: 'تركس',
+    description: '4 ممالك و5 ألعاب: الشيخ، البنات، الديناري، اللطوش والتركس.',
+    pitch: 'اللعبة اللي بدها راس: كل واحد بمملكته بيختار اللعبة اللي بتناسب ورقه. هرّب من الشيخ والبنات، دبّل على خصومك، وطلاع أول بالتركس.',
+    minPlayers: 4, maxPlayers: 4, bots: true, tags: ['party', 'cards', 'strategy'],
+    art: trixArt, accent: '#5a7dff', aliases: ['trix', 'trex', 'تركس', 'تريكس', 'شدة', 'ورق', 'cards'], duration: '40–60 د',
+    howto: [
+      ['crown', 'كل لاعب إلو مملكة فيها 5 ألعاب، وبيختار ترتيبها حسب ورقه.'],
+      ['shield', 'الشيخ −75، كل بنت −25، كل ديناري −10، كل لمّة −15 — هرّب منهن.'],
+      ['bolt', 'دبّل الشيخ أو البنات: اللي بياكلها بيدفع دبل وإنت بتربح.'],
+      ['chart', 'بالتركس نزّل ورقك على الصفوف وطلاع أول: +200.'],
     ],
   },
 ];

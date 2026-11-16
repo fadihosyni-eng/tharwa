@@ -8,6 +8,8 @@ const CHIPS = [
   { key: 'duo', label: 'لتنين', ico: ui('users') },
   { key: 'party', label: 'جماعية', ico: ui('party') },
   { key: 'bots', label: 'ضد الكمبيوتر', ico: ui('robot') },
+  // shown only when the live registry has a card game (tag «cards»)
+  { key: 'cards', label: 'ورق الشدة', ico: ui('cards'), hidden: true },
 ];
 ---
 <Base title="مكتبة الألعاب" active="games" description="مكتبة ألعاب Serva Games: ألعاب جماعية أونلاين بتنلعب من المتصفح بلا تنزيل — مع صحابك أو ضد الكمبيوتر.">
@@ -19,7 +21,7 @@ const CHIPS = [
   <div class="lib-tools">
     <div class="chips" role="group" aria-label="فلترة الألعاب">
       {CHIPS.map((c, i) => (
-        <button type="button" class="chip" data-f={c.key} aria-pressed={i === 0 ? 'true' : 'false'}><Fragment set:html={c.ico} />{c.label}</button>
+        <button type="button" class="chip" data-f={c.key} aria-pressed={i === 0 ? 'true' : 'false'} hidden={c.hidden}><Fragment set:html={c.ico} />{c.label}</button>
       ))}
     </div>
     <label class="search">
@@ -56,7 +58,7 @@ const CHIPS = [
   }
   @media (max-width: 600px) {
     .lib-grid .gcard { flex-direction: column; min-height: 0; }
-    .lib-grid .gcard-art { flex: 0 0 auto; aspect-ratio: 8 / 5; }
+    .lib-grid .gcard-art { flex: 0 0 auto; aspect-ratio: 8 / 5; min-height: 0; }
     .lib-grid .gcard-art::after { inset: auto 0 0; width: auto; height: 40%; background: linear-gradient(180deg, transparent, rgba(10, 21, 48, .9)); }
     .lib-grid .gcard-body { margin-top: -14px; padding: 4px 16px 16px; }
     .lib-grid .gcard-top { flex-direction: row; align-items: center; }
@@ -77,14 +79,16 @@ const CHIPS = [
   const q = $('#q') as HTMLInputElement;
 
   // ?f=duo|party|bots and ?q=… are kept in the URL so a filtered library can be shared
+  const isCards = (g: LiveGame) => (g.tags || []).some((t) => /^(cards|ورق|ورق الشدة|شدة)$/i.test(String(t).trim()));
   const params = new URLSearchParams(location.search);
-  if (['all', 'duo', 'party', 'bots'].includes(params.get('f') || '')) filter = params.get('f')!;
+  if (['all', 'duo', 'party', 'bots', 'cards'].includes(params.get('f') || '')) filter = params.get('f')!;
   q.value = params.get('q') || '';
 
   const matches = (g: LiveGame) => {
     if (filter === 'duo' && !isDuo(g)) return false;
     if (filter === 'party' && !isParty(g)) return false;
     if (filter === 'bots' && !g.bots) return false;
+    if (filter === 'cards' && !isCards(g)) return false;
     const t = norm(q.value);
     if (!t) return true;
     return norm([g.name, g.slug, g.description, ...(g.tags || []), ...(g.aliases || [])].join(' ')).includes(t);
@@ -108,5 +112,13 @@ const CHIPS = [
   q.addEventListener('input', draw);
   $('#clearQ')!.addEventListener('click', () => { filter = 'all'; q.value = ''; draw(); q.focus(); });
 
-  loadSession().then(() => { games = liveGames(session.site.games); draw(); });
+  loadSession().then(() => {
+    games = liveGames(session.site.games);
+    const cardsChip = $('.chip[data-f="cards"]');
+    if (cardsChip) cardsChip.hidden = !games.some(isCards);
+    if (filter === 'cards' && !games.some(isCards)) filter = 'all';
+    draw();
+    // a shared ?f= link: bring the active chip into view in the sideways-scrolling row (phones)
+    if (filter !== 'all') $(`.chip[data-f="${filter}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
 </script>

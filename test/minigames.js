@@ -125,7 +125,7 @@ function testLudo() {
   const { SAFE, absOf } = L._internal;
   let s = L.setup(['a', 'b']);
   assert.deepStrictEqual(s.corners, [0, 2], 'two players sit in opposite corners');
-  throwsMsg(() => L.apply(s, 'a', { type: 'move', token: 0 }), /النرد/, 'move before rolling');
+  throwsMsg(() => L.apply(s, 'a', { type: 'move', piece: 0 }), /النرد/, 'move before rolling');
   let ev = L.apply(s, 'a', { type: 'roll' }, { dice: 3 });
   assert(ev.some((e) => e.t === 'pass'), 'no token can leave base without a 6');
   assert.strictEqual(L.current(s), 'b', 'turn passes');
@@ -137,7 +137,7 @@ function testLudo() {
   assert.strictEqual(s.phase, 'move');
   assert.deepStrictEqual(s.legal.sort(), [0, 1, 2, 3]);
   throwsMsg(() => L.apply(s, 'b', { type: 'roll' }), /حرّك/, 'cannot roll twice');
-  L.apply(s, 'b', { type: 'move', token: 0 });
+  L.apply(s, 'b', { type: 'move', piece: 0 });
   assert.strictEqual(s.tokens[1][0], 6);
   ev = L.apply(s, 'b', { type: 'roll' }, { dice: 6 });
   assert(ev.some((e) => e.t === 'forfeit'), 'third 6 in a row forfeits the turn');
@@ -147,8 +147,8 @@ function testLudo() {
   // three 6s only count when in a row
   s = L.setup(['a', 'b']);
   s.tokens[0] = [5, 10, -1, -1];
-  L.apply(s, 'a', { type: 'roll' }, { dice: 6 }); L.apply(s, 'a', { type: 'move', token: 0 });
-  L.apply(s, 'a', { type: 'roll' }, { dice: 6 }); L.apply(s, 'a', { type: 'move', token: 0 });
+  L.apply(s, 'a', { type: 'roll' }, { dice: 6 }); L.apply(s, 'a', { type: 'move', piece: 0 });
+  L.apply(s, 'a', { type: 'roll' }, { dice: 6 }); L.apply(s, 'a', { type: 'move', piece: 0 });
   assert.strictEqual(s.sixes, 2);
 
   // capture on a normal square: victim goes home, mover rolls again
@@ -212,18 +212,18 @@ function testLudo() {
   s = L.setup(['a', 'b']);
   s.tokens[0] = [5, 9, -1, -1];
   L.apply(s, 'a', { type: 'roll' }, { dice: 2 });
-  throwsMsg(() => L.apply(s, 'a', { type: 'move', token: 2 }), /ما فيها/, 'base token cannot move on a 2');
+  throwsMsg(() => L.apply(s, 'a', { type: 'move', piece: 2 }), /ما فيها/, 'base token cannot move on a 2');
   throwsMsg(() => L.apply(s, 'b', { type: 'roll' }), /دورك/, 'out of turn');
 
   // bot: prefers a capture, then leaving base
   s = L.setup(['a', 'b']);
   s.tokens[0] = [25, 3, -1, -1]; s.tokens[1] = [1, -1, -1, -1];
   L.apply(s, 'a', { type: 'roll' }, { dice: 2 });
-  assert.strictEqual(L.botAction(s, 'a').token, 0, 'bot captures');
+  assert.strictEqual(L.botAction(s, 'a').piece, 0, 'bot captures');
   s = L.setup(['a', 'b']);
   s.tokens[0] = [12, -1, -1, -1]; s.tokens[1] = [-1, -1, -1, -1];
   L.apply(s, 'a', { type: 'roll' }, { dice: 6 });
-  assert.notStrictEqual(L.botAction(s, 'a').token, 0, 'bot brings a token out on a 6');
+  assert.notStrictEqual(L.botAction(s, 'a').piece, 0, 'bot brings a token out on a 6');
 
   // many bot-vs-bot games: every bot move is legal and every game ends
   const t0 = Date.now();
@@ -235,7 +235,7 @@ function testLudo() {
     while (!L.result(s)) {
       const p = L.current(s);
       const a = L.botAction(s, p);
-      assert(L.actions(s, p).some((x) => x.type === a.type && x.token === a.token), 'ludo bot move is legal');
+      assert(L.actions(s, p).some((x) => x.type === a.type && x.piece === a.piece), 'ludo bot move is legal');
       L.apply(s, p, a);
       for (const t of s.tokens.flat()) assert(t >= -1 && t <= 56, 'token progress in range');
       if (++steps > 20000) throw new Error('ludo game does not end');
@@ -245,8 +245,27 @@ function testLudo() {
   console.log(`ludo rules + ${games} bot games OK (${Date.now() - t0} ms)`);
 }
 
+// The room layer passes a move's fields through to the game untouched (a Ludo move once used «token»,
+// which clashed with the player's secret «token» in /api/g/act — the move field is «piece» now).
+function testRoomLayer() {
+  const MG = require('../lib/minigames');
+  const T = MG._test;
+  const room = T.newRoom(L, { isPrivate: true, max: 2, opts: {} });
+  const a = T.addPlayer(room, 'أ', false), b = T.addPlayer(room, 'ب', false);
+  T.startGame(room);
+  const st = room.state, seatA = st.seats.indexOf(a.id);
+  const first = seatA === 0 ? a : b, k = st.seats.indexOf(first.id);
+  st.tokens[k] = [5, 9, -1, -1];
+  L.apply(st, first.id, { type: 'roll' }, { dice: 2 });
+  assert.deepStrictEqual(st.legal, [0, 1]);
+  T.roomAct(room, first, { code: room.code, pid: first.id, token: first.token, type: 'move', piece: 1 });
+  assert.deepStrictEqual(st.tokens[k].slice(0, 2), [5, 11], 'piece 1 moved through the room layer');
+  MG.rooms.delete(room.code);
+  console.log('room layer passes moves through OK');
+}
+
 function testBotsAllGames() {
-  for (const [slug, mod] of Object.entries(GAMES)) {
+  for (const [slug, mod] of Object.entries(GAMES).filter(([k]) => ['xo', 'connect4', 'ludo'].includes(k))) { // card games: test/cards-games.js
     for (let g = 0; g < (slug === 'connect4' ? 12 : 120); g++) {
       const pids = ['p1', 'p2', 'p3', 'p4'].slice(0, slug === 'ludo' ? 2 + (g % 3) : 2);
       const s = mod.setup(pids, { bestOf: [1, 3, 5][g % 3] });
@@ -364,13 +383,13 @@ async function testApi(BASE) {
     st = await snapshot(lu.code, lu);
     if (st.turn && st.turn.pid === lu.pid) {
       if (st.state.phase === 'roll') assert.strictEqual((await act(lu.code, lu, 'roll')).status, 200);
-      else assert.strictEqual((await act(lu.code, lu, 'move', { token: st.state.legal[0] })).status, 200);
+      else assert.strictEqual((await act(lu.code, lu, 'move', { piece: st.state.legal[0] })).status, 200);
     } else await new Promise((r) => setTimeout(r, 250));
     if (st.state.rolls >= 6) break;
   }
   stop();
   assert(st.state.rolls >= 6, 'bots keep the ludo game moving (' + st.state.rolls + ' rolls)');
-  assert.strictEqual((await act(lu.code, lu, 'move', { token: 9 })).status >= 400, true, 'illegal ludo action refused');
+  assert([400, 409].includes((await act(lu.code, lu, 'move', { piece: 9 })).status), 'illegal ludo move refused by the game (not an auth error)');
 
   // quick play: the second player lands in the first one's public room
   const q1 = await call('/api/g/quick', { game: 'connect4', name: 'سريع1' });
@@ -458,6 +477,7 @@ async function testApi(BASE) {
   testC4();
   testLudo();
   testBotsAllGames();
+  testRoomLayer();
   if (process.argv[2]) await testApi(process.argv[2]);
   console.log('MINIGAMES TESTS PASSED');
 })().catch((e) => { console.error('FAILED:', e.stack || e.message); process.exit(1); });
