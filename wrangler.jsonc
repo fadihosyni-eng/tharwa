@@ -30,7 +30,11 @@
   // Live address: game.serva-g.com. serva-g.com and www are sent here by cf-redirect/ (a separate tiny Worker).
   "workers_dev": false,
   "routes": [{ "pattern": "game.serva-g.com", "custom_domain": true }],
-  "vars": { "PUBLIC_URL": "https://game.serva-g.com" },
+  "vars": {
+    "PUBLIC_URL": "https://game.serva-g.com",
+    // Google sign-in client (project tharwa-514918). The ID is public; GOOGLE_CLIENT_SECRET is a Worker secret.
+    "GOOGLE_CLIENT_ID": "411563134145-4g6frfukb9vvulcvn59m08304q3stnnl.apps.googleusercontent.com"
+  },
 
   // Supabase through Hyperdrive «tharwa-db» (caching off). A Worker can't verify Supabase's own TLS CA,
   // so a direct pg connection is cut during the handshake; worker.js uses env.HYPERDRIVE when present.
