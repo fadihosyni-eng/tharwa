@@ -5,8 +5,9 @@
 const assert = require('assert');
 const BASE = process.argv[2] || 'http://localhost:8701';
 
-// A tiny cookie-keeping client per user. Each one looks like its own IP (X-Forwarded-For)
-// so the per-IP rate limits don't trip while the suite creates many rooms.
+// A tiny cookie-keeping client per user. Each one looks like its own IP (X-Forwarded-For, and
+// CF-Connecting-IP for `wrangler dev`, where the server prefers it) so the per-IP rate limits
+// don't trip while the suite creates many rooms.
 let ipSeq = 0;
 function client() {
   let cookie = '';
@@ -15,7 +16,7 @@ function client() {
     async req(path, body, headers = {}) {
       const r = await fetch(BASE + path, {
         method: body ? 'POST' : 'GET',
-        headers: { 'X-Forwarded-For': ip, ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}), ...headers },
+        headers: { 'X-Forwarded-For': ip, 'CF-Connecting-IP': ip, ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}), ...headers },
         body: body ? JSON.stringify(body) : undefined,
       });
       const set = r.headers.getSetCookie ? r.headers.getSetCookie() : [];

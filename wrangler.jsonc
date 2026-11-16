@@ -1,0 +1,30 @@
+// Cloudflare Workers config for «ثروة» (see worker.js for how requests flow).
+// Local:  npx wrangler dev        (put STORE=memory in .dev.vars — never the real database)
+// Deploy: npx wrangler deploy     (secrets: npx wrangler secret put DATABASE_URL, …)
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tharwa",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // The bundle is an ES module, which has no __dirname; server.js / store.js only use it to build
+  // file paths that are never read on Cloudflare (static files come from "assets").
+  "define": { "__dirname": "\"/bundle\"" },
+
+  // Static files from ./public. Unknown page paths (/room/abc12, /login, /settings …) get index.html.
+  // These paths go to the Worker (→ the game server) instead; keep in sync with SERVER_PATH in worker.js.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/u/*", "/admin", "/admin/"]
+  },
+
+  // One Durable Object («main») runs the whole game server. SQLite-backed class = allowed on the Free plan.
+  "durable_objects": {
+    "bindings": [{ "name": "THARWA", "class_name": "Tharwa" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Tharwa"] }],
+
+  "observability": { "enabled": true, "logs": { "enabled": true } }
+}

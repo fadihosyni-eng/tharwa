@@ -5,7 +5,7 @@ services:
     name: tharwa
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --omit=dev   # wrangler (Cloudflare only) is a devDependency
     startCommand: node server.js
     healthCheckPath: /api/board
     envVars:

@@ -6,12 +6,17 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/run-all.js"
+    "test": "node test/run-all.js",
+    "cf:dev": "wrangler dev --port 8702",
+    "cf:deploy": "wrangler deploy"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "pg": "^8.11.3"
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "wrangler": "4.157.0"
   }
 }

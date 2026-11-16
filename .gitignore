@@ -4,3 +4,7 @@ node_modules/
 Thumbs.db
 data/local.json
 data/local.json.tmp
+# Cloudflare (local dev)
+.wrangler/
+.dev.vars
+.dev.vars.*

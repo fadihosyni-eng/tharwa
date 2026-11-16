@@ -5,6 +5,8 @@
 //   • Postgres  — used when process.env.DATABASE_URL is set (e.g. a free Neon database on Render).
 //                 Needs the `pg` package (listed in package.json; Render runs `npm install`).
 //   • JSON file — used otherwise (local dev / tests). File: process.env.DATA_FILE or data/local.json.
+//   • Memory    — STORE=memory: same as the JSON backend but never touches disk or a database
+//                 (local Cloudflare `wrangler dev`, tests). Everything is lost on restart. Wins over DATABASE_URL.
 // Render's free disk is wiped on every sleep/redeploy, so production MUST use DATABASE_URL.
 //
 // Timestamps are numbers (ms since epoch) in both backends.
@@ -27,10 +29,12 @@ function bucketDays(times, days) {
 }
 
 // ---------------------------------------------------------------- JSON file backend
+// file = null -> memory only (nothing is read or written).
 function jsonStore(file) {
   let db = { users: [], sessions: [], settings: {}, results: [], audit: [], userMaps: [], seq: { result: 0, audit: 0 } };
   let timer = null;
   const save = () => {
+    if (!file) return;
     clearTimeout(timer);
     timer = setTimeout(() => {
       const tmp = file + '.tmp';
@@ -41,8 +45,9 @@ function jsonStore(file) {
   const clone = (x) => (x ? JSON.parse(JSON.stringify(x)) : null);
   const findUser = (id) => db.users.find((u) => u.id === id);
   return {
-    kind: 'json',
+    kind: file ? 'json' : 'memory',
     async init() {
+      if (!file) return;
       fs.mkdirSync(path.dirname(file), { recursive: true });
       try { db = { ...db, ...JSON.parse(fs.readFileSync(file, 'utf8')) }; } catch (e) { /* new file */ }
       process.on('exit', () => { try { flushSync(); } catch (e) { /* ignore */ } });
@@ -278,6 +283,7 @@ function pgStore(url) {
 }
 
 function createStore() {
+  if (String(process.env.STORE || '').toLowerCase() === 'memory') return jsonStore(null);
   if (process.env.DATABASE_URL) return pgStore(normalizeDbUrl(process.env.DATABASE_URL));
   return jsonStore(process.env.DATA_FILE || path.join(__dirname, 'local.json'));
 }

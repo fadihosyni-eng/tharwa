@@ -1,6 +1,7 @@
 'use strict';
 // «ثروة» server — Node built-ins only (plus `pg` in production when DATABASE_URL is set).
 // HTTP for actions, Server-Sent Events for live room state, accounts/admin in lib/accounts.js.
+// Runs as `node server.js`, or inside a Cloudflare Durable Object (worker.js calls start()).
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -29,14 +30,20 @@ const TIMER_OPTIONS = [0, 60, 90, 120];
 const AUTOPILOT_AFTER_MS = 20000;   // a disconnected player is auto-played after this
 const LOBBY_DROP_MS = 30000;        // a disconnected player leaves the lobby after this
 const IDLE_ROOM_MS = 15 * 60000;    // empty rooms are deleted after this
+// Live-stream keep-alive. On Cloudflare a closed tab is only noticed when writes to it fail,
+// so worker.js sets a shorter interval there (SSE_PING_MS=5000).
+const SSE_PING_MS = Number(process.env.SSE_PING_MS) || 20000;
 // Limits for running on the open internet.
 const MAX_ROOMS = 300;
 const MAX_CLIENTS_PER_ROOM = 40;
 const CREATE_LIMIT = 10;            // new rooms/joins (and, separately, logins/registers) per IP per minute
 const createLog = new Map();        // bucket:ip -> [timestamps]
+// On Cloudflare the real visitor address is in cf-connecting-ip (set by Cloudflare, cannot be faked).
 function clientIp(req) {
+  const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+  if (cf) return cf;
   const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return fwd || req.socket.remoteAddress || '';
+  return fwd || (req.socket && req.socket.remoteAddress) || '';
 }
 function rateLimit(req, bucket = 'create') {
   const ip = bucket + ':' + clientIp(req), now = Date.now();
@@ -45,11 +52,8 @@ function rateLimit(req, bucket = 'create') {
   list.push(now);
   createLog.set(ip, list);
 }
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, list] of createLog) if (!list.some((t) => now - t < 60000)) createLog.delete(ip);
-}, 60000).unref();
-const isLoopback = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress) && !req.headers['x-forwarded-for'];
+const isLoopback = (req) => !req.headers['cf-connecting-ip'] && !req.headers['x-forwarded-for']
+  && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket && req.socket.remoteAddress);
 
 // ---------------------------------------------------------------- helpers
 const uid = () => crypto.randomBytes(6).toString('hex');
@@ -315,12 +319,14 @@ function readBody(req) {
 }
 // Client-side pages that all load index.html.
 const PAGE_RE = /^\/(?:room\/[a-z0-9]{5}|u\/[^/]{1,40}|settings|login|register|admin|leaders|store)\/?$/i;
+// index.html source: the file on disk, or (on Cloudflare) the copy start({ indexHtml }) was given.
+let readIndex = (cb) => fs.readFile(path.join(PUB, 'index.html'), cb);
 async function servePage(req, pathname, res) {
   let status = 200;
   const um = pathname.match(/^\/u\/([^/]{1,40})\/?$/);
   if (um && !(await store.getUserByName(decodeURIComponent(um[1]).toLowerCase()))) status = 404;
   if (/^\/admin\/?$/.test(pathname)) { const me = await A.currentUser(req); if (!me || me.role !== 'admin') status = 404; }
-  fs.readFile(path.join(PUB, 'index.html'), (e, buf) => {
+  readIndex((e, buf) => {
     if (e) { res.writeHead(500).end(); return; }
     res.writeHead(status, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache' });
     res.end(buf);
@@ -359,7 +365,9 @@ function listRooms() {
 // Addresses friends can use to reach this PC (Radmin VPN / same Wi-Fi).
 function netAddresses() {
   const out = [];
-  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+  let ifaces = {};
+  try { ifaces = os.networkInterfaces() || {}; } catch (e) { /* not available (e.g. Cloudflare Workers) */ }
+  for (const [name, list] of Object.entries(ifaces)) {
     for (const a of list || []) {
       if (a.family !== 'IPv4' || a.internal || a.address.startsWith('169.254.')) continue;
       const kind = /radmin/i.test(name) ? 'radmin' : /proton|nord|wireguard|openvpn|tun|tap/i.test(name) ? 'vpn' : 'lan';
@@ -387,14 +395,20 @@ function sse(req, res, u) {
   if (p) { p.conns++; p.lastSeen = Date.now(); }
   res.write('event: state\ndata: ' + JSON.stringify(publicRoom(room)) + '\n\n');
   if (p && p.conns === 1) afterChange(room);
-  const ka = setInterval(() => res.write(': ka\n\n'), 20000);
-  req.on('close', () => {
+  const ka = setInterval(() => res.write(': ka\n\n'), SSE_PING_MS);
+  // The viewer left. Node reports it on req and res; Cloudflare's node:http bridge only on res.
+  let gone = false;
+  const onGone = () => {
+    if (gone) return;
+    gone = true;
     clearInterval(ka);
     room.clients.delete(client);
     if (p) { p.conns = Math.max(0, p.conns - 1); p.lastSeen = Date.now(); }
     room.lastActive = Date.now();
     if (rooms.has(room.code)) broadcast(room);
-  });
+  };
+  req.on('close', onGone);
+  res.on('close', onGone);
 }
 
 // The account behind this request (banned accounts are refused here).
@@ -500,8 +514,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ---------------------------------------------------------------- clock (timers, cleanup, autopilot)
-setInterval(() => {
+function tick() {
   const now = Date.now();
+  for (const [ip, list] of createLog) if (!list.some((t) => now - t < 60000)) createLog.delete(ip);
   for (const room of [...rooms.values()]) {
     let changed = false;
     if (room.status === 'lobby') {
@@ -532,13 +547,25 @@ setInterval(() => {
     pump(room);
     checkEnded(room);
   }
-}, 1000);
+}
 
 // ---------------------------------------------------------------- start
-const store = createStore();
-A.init({
-  store, rooms,
-  helpers: { httpErr, json, readBody, rateLimit, closeRoom, broadcast, log: E.log, cash: B.CASH_OPTIONS, timers: TIMER_OPTIONS },
-}).then(() => {
-  server.listen(PORT, () => console.log(`ثروة شغالة على http://localhost:${PORT} (تخزين: ${store.kind})`));
-}).catch((e) => { console.error('[store] could not start:', e.message); process.exit(1); });
+// Nothing runs at load time (Cloudflare Workers forbid timers/random/I-O at global scope):
+// start() opens the store, starts the clock and listens. Safe to call more than once.
+let store, started = null;
+function start(opts = {}) {
+  if (opts.indexHtml != null) { const buf = Buffer.from(opts.indexHtml); readIndex = (cb) => cb(null, buf); }
+  if (started) return started;
+  store = createStore();
+  started = A.init({
+    store, rooms,
+    helpers: { httpErr, json, readBody, rateLimit, closeRoom, broadcast, log: E.log, cash: B.CASH_OPTIONS, timers: TIMER_OPTIONS },
+  }).then(() => new Promise((resolve) => {
+    setInterval(tick, 1000);
+    server.listen(PORT, () => { console.log(`ثروة شغالة على http://localhost:${PORT} (تخزين: ${store.kind})`); resolve(PORT); });
+  }), (e) => { started = null; throw e; }); // a failed start (e.g. database down) is retried on the next call
+  return started;
+}
+
+module.exports = { start, PORT };
+if (require.main === module) start().catch((e) => { console.error('[store] could not start:', e.message); process.exit(1); });
