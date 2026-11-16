@@ -1,6 +1,6 @@
 'use strict';
-// «ثروة» server — zero dependencies (Node built-ins only).
-// HTTP for actions, Server-Sent Events for live room state.
+// «ثروة» server — Node built-ins only (plus `pg` in production when DATABASE_URL is set).
+// HTTP for actions, Server-Sent Events for live room state, accounts/admin in lib/accounts.js.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -9,6 +9,8 @@ const os = require('os');
 const B = require('./game/board');
 const E = require('./game/engine');
 const Bot = require('./game/bot');
+const { createStore } = require('./data/store');
+const A = require('./lib/accounts');
 
 const PORT = Number(process.env.PORT) || 8700;
 const PUB = path.join(__dirname, 'public');
@@ -29,14 +31,14 @@ const IDLE_ROOM_MS = 15 * 60000;    // empty rooms are deleted after this
 // Limits for running on the open internet.
 const MAX_ROOMS = 300;
 const MAX_CLIENTS_PER_ROOM = 40;
-const CREATE_LIMIT = 10;            // new rooms/joins per IP per minute
-const createLog = new Map();        // ip -> [timestamps]
+const CREATE_LIMIT = 10;            // new rooms/joins (and, separately, logins/registers) per IP per minute
+const createLog = new Map();        // bucket:ip -> [timestamps]
 function clientIp(req) {
   const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   return fwd || req.socket.remoteAddress || '';
 }
-function rateLimit(req) {
-  const ip = clientIp(req), now = Date.now();
+function rateLimit(req, bucket = 'create') {
+  const ip = bucket + ':' + clientIp(req), now = Date.now();
   const list = (createLog.get(ip) || []).filter((t) => now - t < 60000);
   if (list.length >= CREATE_LIMIT) throw httpErr(429, 'كتير طلبات — استنى دقيقة وجرّب');
   list.push(now);
@@ -63,10 +65,10 @@ function cleanName(n) {
 }
 function httpErr(status, msg) { const e = new Error(msg); e.userMsg = msg; e.status = status; return e; }
 
-function newRoom(isPrivate) {
+function newRoom(isPrivate, defaults = {}) {
   if (rooms.size >= MAX_ROOMS) throw httpErr(503, 'السيرفر مليان هلق — جرّب بعد شوي');
   const room = {
-    code: roomCode(), hostId: null, settings: { ...DEFAULTS, isPrivate: !!isPrivate }, status: 'lobby',
+    code: roomCode(), hostId: null, settings: { ...DEFAULTS, ...defaults, isPrivate: !!isPrivate }, status: 'lobby',
     players: [], clients: new Set(), log: [], chat: [], game: null,
     createdAt: Date.now(), lastActive: Date.now(), botTimer: null,
   };
@@ -81,11 +83,17 @@ function rollMap(room) {
 }
 function freeColor(room) { return COLORS.find((c) => !room.players.some((p) => p.color === c)) || COLORS[0]; }
 function freePiece(room) { return PIECES.find((k) => !room.players.some((p) => p.piece === k)) || PIECES[0]; }
-function addPlayer(room, name, isBot) {
+// `user` (optional) = the logged-in account: their display name, colour and piece are used.
+function addPlayer(room, name, isBot, user) {
   const p = {
-    id: uid(), token: isBot ? null : token(), name: cleanName(name), color: freeColor(room), piece: freePiece(room),
+    id: uid(), token: isBot ? null : token(), name: cleanName(user ? user.displayName : name), color: freeColor(room), piece: freePiece(room),
     isBot: !!isBot, conns: 0, lastSeen: Date.now(),
   };
+  if (user) {
+    Object.assign(p, { userId: user.id, username: user.username, points: user.points, avatar: user.avatar });
+    if (user.color && !room.players.some((x) => x.color === user.color)) p.color = user.color;
+    if (user.piece && !room.players.some((x) => x.piece === user.piece)) p.piece = user.piece;
+  }
   room.players.push(p);
   if (!room.hostId && !isBot) room.hostId = p.id;
   return p;
@@ -114,7 +122,7 @@ function publicRoom(room) {
     players: room.players.map((p) => ({
       id: p.id, name: p.name, color: p.color, piece: p.piece, isBot: p.isBot, connected: p.isBot || p.conns > 0,
       money: p.money, pos: p.pos, inJail: p.inJail, jailTurns: p.jailTurns, bankrupt: p.bankrupt,
-      jailCards: p.jailCards, left: !!p.left,
+      jailCards: p.jailCards, left: !!p.left, username: p.username || null, points: p.userId ? p.points || 0 : null,
     })),
     game: g ? { ...g, chance: undefined, chest: undefined } : null,
     log: room.log.slice(-60), chat: room.chat.slice(-80),
@@ -125,7 +133,13 @@ function broadcast(room) {
   const msg = 'event: state\ndata: ' + JSON.stringify(publicRoom(room)) + '\n\n';
   for (const c of room.clients) c.res.write(msg);
 }
-function afterChange(room) { broadcast(room); pump(room); }
+function afterChange(room) { broadcast(room); pump(room); checkEnded(room); }
+// When a game ends, store the result once and update the players' accounts.
+function checkEnded(room) {
+  if (room.status !== 'ended' || !room.game || room.recorded) return;
+  room.recorded = true;
+  A.recordGame(room).then(() => broadcast(room)).catch((e) => console.error('[results]', e.message));
+}
 
 // ---------------------------------------------------------------- automation (bots & autopilot)
 function isAuto(room, p) {
@@ -241,12 +255,13 @@ function roomAct(room, p, type, data) {
       needHost(); needLobby();
       if (room.players.length < 2) throw httpErr(409, 'بدك لاعبين اثنين على الأقل');
       E.newGame(room);
+      room.startedAt = Date.now(); room.recorded = false;
       return true;
     case 'restart': {
       needHost();
       if (room.status !== 'ended') throw httpErr(409, 'اللعبة لسا ما خلصت');
       room.players = room.players.filter((x) => !x.left);
-      room.status = 'lobby'; room.game = null;
+      room.status = 'lobby'; room.game = null; room.recorded = false;
       rollMap(room);
       E.log(room, '🔄 رجعنا عاللوبي — جاهزين للعبة جديدة بدول جديدة');
       return true;
@@ -264,6 +279,7 @@ function roomAct(room, p, type, data) {
     case 'leave':
       if (room.status === 'lobby') { E.log(room, `${p.name} طلع من الغرفة`); removePlayer(room, p.id); return true; }
       if (room.status === 'playing' && !p.bankrupt) E.bankrupt(room, p);
+      checkEnded(room); // record the result even if the room closes right after
       p.left = true;
       if (!room.players.some((x) => !x.isBot && !x.left)) { closeRoom(room); return false; }
       if (room.hostId === p.id) { const h = room.players.find((x) => !x.isBot && !x.left); room.hostId = h ? h.id : null; }
@@ -288,6 +304,19 @@ function readBody(req) {
     req.on('data', (c) => { size += c.length; if (size > 32 * 1024) { reject(httpErr(413, 'الطلب كبير')); req.destroy(); } else chunks.push(c); });
     req.on('end', () => { try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}); } catch (e) { reject(httpErr(400, 'بيانات غلط')); } });
     req.on('error', reject);
+  });
+}
+// Client-side pages that all load index.html.
+const PAGE_RE = /^\/(?:room\/[a-z0-9]{5}|u\/[^/]{1,40}|settings|login|register|admin)\/?$/i;
+async function servePage(req, pathname, res) {
+  let status = 200;
+  const um = pathname.match(/^\/u\/([^/]{1,40})\/?$/);
+  if (um && !(await store.getUserByName(decodeURIComponent(um[1]).toLowerCase()))) status = 404;
+  if (/^\/admin\/?$/.test(pathname)) { const me = await A.currentUser(req); if (!me || me.role !== 'admin') status = 404; }
+  fs.readFile(path.join(PUB, 'index.html'), (e, buf) => {
+    if (e) { res.writeHead(500).end(); return; }
+    res.writeHead(status, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache' });
+    res.end(buf);
   });
 }
 function serveStatic(pathname, res) {
@@ -361,26 +390,40 @@ function sse(req, res, u) {
   });
 }
 
-async function api(pathname, body, res) {
+// The account behind this request (banned accounts are refused here).
+async function roomUser(req) {
+  const u = await A.currentUser(req, { allowBanned: true });
+  if (u && u.banned) throw httpErr(403, 'حسابك موقوف — ما فيك تدخل غرف');
+  return u;
+}
+async function newRoomFor(req, user, isPrivate) {
+  const site = await A.getSite();
+  if (site.maintenance && !(user && user.role === 'admin')) throw httpErr(503, '🛠️ الموقع بالصيانة هلق — جرّب بعد شوي');
+  return newRoom(isPrivate, site.defaultRoom);
+}
+async function api(req, pathname, body, res) {
   if (pathname === '/api/create') {
-    const room = newRoom(body.isPrivate);
-    const p = addPlayer(room, body.name, false);
+    const user = await roomUser(req);
+    const room = await newRoomFor(req, user, body.isPrivate);
+    const p = addPlayer(room, body.name, false, user);
     E.log(room, `🏠 ${p.name} عمل الغرفة`);
     return json(res, 200, { code: room.code, pid: p.id, token: p.token });
   }
   if (pathname === '/api/quick') {
+    const user = await roomUser(req);
     const open = listRooms()[0];
-    const room = open ? rooms.get(open.code) : newRoom(false);
-    const p = addPlayer(room, body.name, false);
+    const room = open ? rooms.get(open.code) : await newRoomFor(req, user, false);
+    const p = addPlayer(room, body.name, false, user);
     E.log(room, open ? `👋 ${p.name} دخل الغرفة` : `🏠 ${p.name} عمل الغرفة`);
     broadcast(room);
     return json(res, 200, { code: room.code, pid: p.id, token: p.token });
   }
   if (pathname === '/api/join') {
+    const user = await roomUser(req);
     const room = getRoom(body.code);
     if (room.status !== 'lobby') throw httpErr(409, 'اللعبة بلّشت — فيك تتفرّج بس');
     if (room.players.length >= room.settings.maxPlayers) throw httpErr(409, 'الغرفة مليانة');
-    const p = addPlayer(room, body.name, false);
+    const p = addPlayer(room, body.name, false, user);
     E.log(room, `👋 ${p.name} دخل الغرفة`);
     room.lastActive = Date.now();
     broadcast(room);
@@ -405,6 +448,13 @@ async function api(pathname, body, res) {
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
   try {
+    // Cross-site protection: a state-changing request from another site's page is refused.
+    if (req.method !== 'GET' && req.headers.origin) {
+      let host = '';
+      try { host = new URL(req.headers.origin).host; } catch (e) { /* bad origin */ }
+      if (host !== req.headers.host) throw httpErr(403, 'طلب من موقع تاني — مرفوض');
+    }
+    if (await A.handle(req, res, u)) return;
     if (req.method === 'GET' && u.pathname === '/api/events') return sse(req, res, u);
     if (req.method === 'GET' && u.pathname === '/api/board') return json(res, 200, B.publicBoard());
     if (req.method === 'GET' && u.pathname === '/api/rooms') return json(res, 200, listRooms());
@@ -419,8 +469,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && u.pathname.startsWith('/api/')) {
       if (['/api/create', '/api/quick', '/api/join'].includes(u.pathname)) rateLimit(req);
-      return await api(u.pathname, await readBody(req), res);
+      return await api(req, u.pathname, await readBody(req), res);
     }
+    if (req.method === 'GET' && PAGE_RE.test(u.pathname) && !/^\/room\//.test(u.pathname)) return await servePage(req, u.pathname, res);
     if (req.method === 'GET') return serveStatic(u.pathname, res);
     res.writeHead(405).end();
   } catch (e) {
@@ -460,7 +511,15 @@ setInterval(() => {
     if (room.clients.size === 0 && now - room.lastActive > IDLE_ROOM_MS) { closeRoom(room); continue; }
     if (changed) broadcast(room);
     pump(room);
+    checkEnded(room);
   }
 }, 1000);
 
-server.listen(PORT, () => console.log(`ثروة شغالة على http://localhost:${PORT}`));
+// ---------------------------------------------------------------- start
+const store = createStore();
+A.init({
+  store, rooms,
+  helpers: { httpErr, json, readBody, rateLimit, closeRoom, broadcast, log: E.log, cash: B.CASH_OPTIONS, timers: TIMER_OPTIONS },
+}).then(() => {
+  server.listen(PORT, () => console.log(`ثروة شغالة على http://localhost:${PORT} (تخزين: ${store.kind})`));
+}).catch((e) => { console.error('[store] could not start:', e.message); process.exit(1); });

@@ -58,16 +58,29 @@
   }
   const credsKey = (c) => 'tharwa_room_' + c;
   function getCreds(code) { try { return JSON.parse(store.get(credsKey(code)) || 'null'); } catch (e) { return null; } }
-  function nickname() { return ($('#nick') && $('#nick').value.trim()) || store.get('tharwa_name') || ''; }
+  function nickname() { return (ACC.me && ACC.me.displayName) || ($('#nick') && $('#nick').value.trim()) || store.get('tharwa_name') || ''; }
+  // Name field: locked to the account name when logged in.
+  const nickField = () => (ACC.me
+    ? `<div class="nick-acc">${ACC.avatarHTML(ACC.me.avatar, 34, ACC.me.color)}<input id="nick" value="${esc(ACC.me.displayName)}" readonly title="من حسابك — بتغيّره من الإعدادات"><small>من حسابك</small></div>`
+    : `<input id="nick" maxlength="16" placeholder="اسمك باللعبة…" value="${esc(store.get('tharwa_name') || '')}">`);
 
   // ================================================================ boot
   async function boot() {
-    try { S.board = await api('/api/board'); } catch (e) { app.innerHTML = '<div class="home"><div class="hint">ما قدرت أوصل للسيرفر</div></div>'; return; }
+    try { [S.board] = await Promise.all([api('/api/board'), ACC.load()]); } catch (e) { app.innerHTML = '<div class="home"><div class="hint">ما قدرت أوصل للسيرفر</div></div>'; return; }
+    if (ACC.route(location.pathname.replace(/\/$/, '') || '/') !== false) return; // login, profile, settings, admin
     const m = location.pathname.match(/^\/room\/([a-z0-9]{5})\/?$/i);
     if (m) { S.code = m[1].toLowerCase(); enterRoom(); } else renderHome();
   }
 
   // ================================================================ home
+  // One card per enabled game (from the admin «الألعاب» registry). «ثروة» leads to the play card below.
+  function gamesHTML() {
+    const games = ACC.site.games || [];
+    if (!games.length) return '';
+    return `<section class="games"><h3>🕹️ الألعاب</h3><div class="game-cards">${games.map((g) => `<button type="button" class="game-card" data-game="${esc(g.slug)}">
+      <span class="gc-art">${g.slug === 'tharwa' ? `<span class="gc-logo">ثروة<span>.</span></span>` : '🎮'}</span>
+      <b>${esc(g.name)}</b><small>${esc(g.description || '')}</small><span class="gc-meta">👥 ${esc(g.players || '')} لاعبين${g.live ? ` · 🟢 ${g.live} عم يلعبوا هلق` : ''}</span><span class="btn sm gold">العب</span></button>`).join('')}</div></section>`;
+  }
   function renderHome() {
     document.title = 'ثروة — لعبة المدن والعقارات';
     const orbit = ['sy', 'sa', 'jo', 'lb', 'eg', 'iq', 'ps', 'ae', 'ma', 'qa', 'kw', 'dz'];
@@ -78,8 +91,10 @@
       ['trophy', 'آخر واحد بيربح', 'عمّر فنادق وخلّي الكل يفلس'],
     ];
     app.innerHTML = `
+    ${ACC.headerHTML()}
     <div class="home">
       <button class="icon-btn home-snd" id="sndBtn" title="الصوت">${FX.Sound.on ? '🔊' : '🔇'}</button>
+      ${ACC.adHTML('home_top')}
       <div class="hero">
         <div class="orbit">
           <div class="orbit-ring">${orbit.map((c, k) => `<span class="orb" style="--a:${(k * 360) / orbit.length}deg">${flag(c, 'lg')}</span>`).join('')}</div>
@@ -91,8 +106,12 @@
         <div class="pieces-row">${ART.PIECE_KEYS.map((k, i) => `<span class="tk" style="--pc:${['#f5c04a', '#38d4c0', '#f0585e', '#a78bfa', '#5ad06b', '#f472b6', '#4f9df7', '#fb923c'][i]};--d:${i * 0.12}s">${ART.piece(k)}</span>`).join('')}</div>
       </div>
       <div class="features">${features.map(([ic, t, d]) => `<div class="feature"><span class="f-icon">${ART.icon(ic)}</span><b>${t}</b><small>${d}</small></div>`).join('')}</div>
-      <div class="home-card">
-        <input id="nick" maxlength="16" placeholder="اسمك باللعبة…" value="${esc(store.get('tharwa_name') || '')}">
+      ${ACC.site.maintenance ? '<div class="announce warn">🛠️ الموقع بالصيانة هلق — ما فيك تعمل غرف جديدة، جرّب بعد شوي.</div>' : ''}
+      ${gamesHTML()}
+      ${ACC.me ? `<a class="panel my-card" href="/u/${esc(ACC.me.username)}">${ACC.avatarHTML(ACC.me.avatar, 48, ACC.me.color)}<div><b>حسابي — ${esc(ACC.me.displayName)}</b><small dir="ltr">@${esc(ACC.me.username)}</small></div>
+        <div class="my-stats"><span>⭐ <b>${ACC.me.points}</b> نقطة</span><span>🏆 <b>${ACC.me.wins}</b> فوز</span><span>🎲 <b>${ACC.me.games}</b> لعبة</span></div></a>` : ''}
+      <div class="home-card" id="playCard">
+        ${nickField()}
         <button class="btn gold big" id="quickBtn">🎲 العب الآن</button>
         <button class="btn" id="createBtn">🔒 إنشاء غرفة خاصة</button>
         <div class="join-code"><input id="codeIn" maxlength="5" placeholder="عندك كود غرفة؟" dir="ltr"><button class="btn" id="joinBtn">انضم</button></div>
@@ -113,7 +132,10 @@
           </ul>
         </div>
       </div>
+      ${ACC.adHTML('home_bottom')}
     </div>`;
+    ACC.bindHeader();
+    $$('[data-game]').forEach((b) => { b.onclick = () => { $('#playCard').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#quickBtn').focus(); }; });
     const go = async (path, extra = {}) => {
       const name = nickname();
       if (!name) { toast('اكتب اسمك أول'); $('#nick').focus(); return; }
@@ -172,7 +194,7 @@
   function renderJoin(info) {
     app.innerHTML = `<div class="home"><div class="hero"><div class="logo">ثروة<span>.</span></div>
       <div class="tagline">انعزمت على غرفة <b dir="ltr">${esc(S.code)}</b> — ${info.count}/${info.max} لاعبين</div>${BY_SERVA}</div>
-      <div class="home-card"><input id="nick" maxlength="16" placeholder="اسمك باللعبة…" value="${esc(store.get('tharwa_name') || '')}">
+      <div class="home-card">${nickField()}
       <button class="btn gold big" id="enterBtn">ادخل الغرفة</button>
       <button class="btn ghost" id="watchBtn">بس بدي اتفرّج</button></div></div>`;
     const join = async () => {
@@ -312,14 +334,18 @@
           <div class="room-code">كود الغرفة: <b>${esc(S.code)}</b></div>
           <div id="netLinks" class="net-links"></div>
         </div>
+        ${ACC.adHTML('room_side')}
       </aside>
       <main class="col col-board"><div class="board" id="board"></div></main>
       <aside class="col col-a">
         <div class="top-row"><a class="mini-logo" href="/" title="الصفحة الرئيسية">ثروة<span>.</span></a>
           <a class="serva-chip" href="${SERVA_URL}" target="_blank" rel="noopener" title="لعبة من Serva"><img src="/brand/serva-logo-160.webp" alt="Serva" width="34" height="34"></a>
-          <button class="icon-btn" id="sndBtn" title="الصوت">${FX.Sound.on ? '🔊' : '🔇'}</button></div>
+          <button class="icon-btn" id="sndBtn" title="الصوت">${FX.Sound.on ? '🔊' : '🔇'}</button>
+          ${ACC.me ? `<a class="acc-chip" href="/u/${esc(ACC.me.username)}" target="_blank" title="${esc(ACC.me.displayName)} — بروفايلي">${ACC.avatarHTML(ACC.me.avatar, 38, ACC.me.color)}</a>`
+    : '<a class="icon-btn acc-in" href="/login" target="_blank" title="تسجيل الدخول">👤</a>'}</div>
       </aside>
     </div>
+    ${ACC.site.announcement ? `<div class="announce room-ann" id="roomAnn">📢 ${esc(ACC.site.announcement)}<button class="x-btn" type="button" onclick="this.parentNode.remove()">✕</button></div>` : ''}
     <button class="chat-fab" id="chatFab" type="button" title="الدردشة" aria-label="الدردشة" aria-expanded="false">💬<span class="chat-badge" id="chatBadge" hidden>0</span></button>
     <div class="chat-drawer" id="chatDrawer" role="dialog" aria-label="الدردشة" aria-hidden="true">
       <div class="chat-head"><b>💬 الدردشة</b><button class="x-btn" id="chatClose" type="button" title="سكّر">✕</button></div>
@@ -873,7 +899,9 @@
     const isCur = g && st.status === 'playing' && g.order[g.turn] === p.id;
     const icons = (p.id === st.hostId ? '👑' : '') + (p.isBot ? '🤖' : '') + (!p.connected && !p.left ? '📴' : '') + (p.inJail ? '🔒' : '') + (p.bankrupt ? '💀' : '') + (p.jailCards ? '🎫' : '');
     const avatar = `<span class="tk av" style="--pc:${p.color}">${ART.piece(p.piece)}</span>`;
-    const name = `<span class="pname">${esc(p.name)}${S.me && p.id === S.me.pid ? ' <small class="hint">(أنت)</small>' : ''}</span><span class="icons">${icons}</span>`;
+    const nm = p.username ? `<a href="/u/${esc(p.username)}" target="_blank" class="plink" title="@${esc(p.username)}">${esc(p.name)}</a>` : esc(p.name);
+    const pts = p.points != null ? `<small class="ptag" title="نقاط الحساب">⭐ ${p.points}</small>` : '';
+    const name = `<span class="pname">${nm}${S.me && p.id === S.me.pid ? ' <small class="hint">(أنت)</small>' : ''}</span>${pts}<span class="icons">${icons}</span>`;
     if (st.status === 'lobby') {
       const kick = isHost(st) && p.id !== st.hostId ? `<button class="x-btn" data-kick="${p.id}" title="طلّعه">✕</button>` : '';
       return `<div class="prow" data-prow="${p.id}">${avatar}${name}${kick}</div>`;

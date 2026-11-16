@@ -106,10 +106,63 @@
       <ellipse cx="100" cy="100" rx="92" ry="30"/><path d="M8 100H192"/><path d="M22 52 H178 M22 148 H178" />
     </g>`, '0 0 200 200', 'globe');
 
+  // ---------------------------------------------------------------- profile avatars (48x48, 12 drawings x 2 palettes)
+  // Palettes use the Serva colours: navy/cyan and navy/gold.
+  const PAL = [
+    { bg: '#0b2150', ring: '#00b4ff', a: '#2fe2ff', b: '#ffc53d', skin: '#f6c9a0', dark: '#06122e' },
+    { bg: '#1a1033', ring: '#ffc53d', a: '#ffc53d', b: '#2fe2ff', skin: '#d9a273', dark: '#120a24' },
+  ];
+  const AV_DRAW = [
+    // 1 person, short hair
+    (c) => `<circle cx="24" cy="20" r="8.5" fill="${c.skin}"/><path d="M15.5 18 Q16 9.5 24 9.5 Q32 9.5 32.5 18 Q29 13.5 24 14 Q19 13.5 15.5 18Z" fill="${c.dark}"/>
+      <path d="M9 44 Q10 31 24 31 Q38 31 39 44Z" fill="${c.a}"/><circle cx="21" cy="20.5" r="1.1" fill="${c.dark}"/><circle cx="27" cy="20.5" r="1.1" fill="${c.dark}"/><path d="M21.5 24.2 Q24 25.8 26.5 24.2" stroke="${c.dark}" stroke-width="1.2" fill="none" stroke-linecap="round"/>`,
+    // 2 person, hijab
+    (c) => `<path d="M12 44 Q12 30 24 29 Q36 30 36 44Z" fill="${c.b}"/><path d="M14.5 26 Q13 8 24 8 Q35 8 33.5 26 Q31 33 24 33 Q17 33 14.5 26Z" fill="${c.a}"/>
+      <ellipse cx="24" cy="20.5" rx="6.6" ry="7.6" fill="${c.skin}"/><circle cx="21.4" cy="20" r="1" fill="${c.dark}"/><circle cx="26.6" cy="20" r="1" fill="${c.dark}"/><path d="M22 23.6 Q24 25 26 23.6" stroke="${c.dark}" stroke-width="1.1" fill="none" stroke-linecap="round"/>`,
+    // 3 person, beard + shmagh
+    (c) => `<path d="M9 44 Q10 31 24 31 Q38 31 39 44Z" fill="${c.dark}" stroke="${c.a}" stroke-width="1.2"/><circle cx="24" cy="20" r="8.5" fill="${c.skin}"/>
+      <path d="M15.5 21 Q16 30 24 30 Q32 30 32.5 21 Q29 26 24 25.5 Q19 26 15.5 21Z" fill="#3a2a1c"/><path d="M13 19 Q13 7 24 7 Q35 7 35 19 L33 16 Q24 11 15 16Z" fill="#fff"/>
+      <path d="M13 19 Q14 12 24 12 Q34 12 35 19" stroke="${c.b}" stroke-width="1.6" fill="none"/><circle cx="21" cy="19.5" r="1.1" fill="${c.dark}"/><circle cx="27" cy="19.5" r="1.1" fill="${c.dark}"/>`,
+    // 4 cat
+    (c) => `<path d="M12 22 L13 8 L21 15 Q24 14 27 15 L35 8 L36 22 Q36 37 24 37 Q12 37 12 22Z" fill="${c.a}"/><path d="M15 12 L16 17 L19 15Z M33 12 L32 17 L29 15Z" fill="${c.b}"/>
+      <ellipse cx="19.5" cy="23" rx="2" ry="2.6" fill="${c.dark}"/><ellipse cx="28.5" cy="23" rx="2" ry="2.6" fill="${c.dark}"/><path d="M22.5 28 L25.5 28 L24 29.6Z" fill="#ff7a8a"/>
+      <path d="M24 29.6 Q22 31.5 20.5 30.5 M24 29.6 Q26 31.5 27.5 30.5 M9 27 L17 27.5 M9 30.5 L17 29.5 M39 27 L31 27.5 M39 30.5 L31 29.5" stroke="${c.dark}" stroke-width="1" fill="none" stroke-linecap="round"/>`,
+    // 5 fox
+    (c) => `<path d="M10 14 L18 18 L24 16 L30 18 L38 14 L35 28 Q30 38 24 39 Q18 38 13 28Z" fill="#ff8a3d"/><path d="M15 27 Q19 31 24 39 Q29 31 33 27 Q29 30 24 30 Q19 30 15 27Z" fill="#fff4e6"/>
+      <path d="M10 14 L17 18 L14 23Z M38 14 L31 18 L34 23Z" fill="${c.dark}" opacity=".5"/><circle cx="19.5" cy="24" r="1.6" fill="${c.dark}"/><circle cx="28.5" cy="24" r="1.6" fill="${c.dark}"/><circle cx="24" cy="35.5" r="1.8" fill="${c.dark}"/>`,
+    // 6 owl
+    (c) => `<path d="M12 16 L16 9 L20 14 Q24 12 28 14 L32 9 L36 16 Q38 40 24 40 Q10 40 12 16Z" fill="#8a6a4a"/><path d="M17 31 Q24 27 31 31 Q31 38 24 38 Q17 38 17 31Z" fill="#d9c09a"/>
+      <circle cx="19" cy="21" r="5" fill="#fff"/><circle cx="29" cy="21" r="5" fill="#fff"/><circle cx="19" cy="21" r="2.6" fill="${c.dark}"/><circle cx="29" cy="21" r="2.6" fill="${c.dark}"/>
+      <circle cx="19.8" cy="20.2" r=".8" fill="#fff"/><circle cx="29.8" cy="20.2" r=".8" fill="#fff"/><path d="M22.5 25 L25.5 25 L24 28Z" fill="${c.b}"/>`,
+    // 7 bear
+    (c) => `<circle cx="14" cy="13" r="5" fill="#a0673a"/><circle cx="34" cy="13" r="5" fill="#a0673a"/><circle cx="14" cy="13" r="2.4" fill="#e3b081"/><circle cx="34" cy="13" r="2.4" fill="#e3b081"/>
+      <circle cx="24" cy="24" r="13" fill="#a0673a"/><ellipse cx="24" cy="29" rx="6" ry="4.6" fill="#e3b081"/><ellipse cx="24" cy="27" rx="2.2" ry="1.6" fill="${c.dark}"/>
+      <circle cx="19" cy="21.5" r="1.5" fill="${c.dark}"/><circle cx="29" cy="21.5" r="1.5" fill="${c.dark}"/><path d="M22 30.5 Q24 32 26 30.5" stroke="${c.dark}" stroke-width="1.1" fill="none" stroke-linecap="round"/>`,
+    // 8 falcon
+    (c) => `<path d="M14 40 Q10 24 18 14 Q24 8 31 12 Q36 15 35 22 L40 25 L34 26 Q34 36 26 40Z" fill="#7b5a3c"/><path d="M18 30 Q24 24 30 30 Q29 38 24 39 Q19 38 18 30Z" fill="#efe2c8"/>
+      <circle cx="28" cy="18" r="3.2" fill="#ffd34d"/><circle cx="28.4" cy="18" r="1.6" fill="${c.dark}"/><path d="M35 22 L40 25 L34 26Z" fill="${c.b}"/><path d="M20 18 Q24 21 26 24" stroke="${c.dark}" stroke-width="1.4" fill="none" opacity=".6"/>`,
+    // 9 rocket
+    (c) => `<path d="M24 6 Q33 13 32 28 L16 28 Q15 13 24 6Z" fill="#eef5ff"/><circle cx="24" cy="18" r="4" fill="${c.a}" stroke="${c.dark}" stroke-width="1.4"/>
+      <path d="M16 22 L10 31 L16 30Z M32 22 L38 31 L32 30Z" fill="${c.b}"/><path d="M18 28 L30 28 L28 33 L20 33Z" fill="#9fb3cc"/><path d="M20 33 Q24 44 28 33Z" fill="#ff8a3d"/><path d="M22 33 Q24 39 26 33Z" fill="#ffd34d"/>`,
+    // 10 dice
+    (c) => `<rect x="10" y="10" width="28" height="28" rx="6" fill="#fbfbfb" stroke="${c.a}" stroke-width="2"/><g fill="${c.dark}"><circle cx="17" cy="17" r="2.6"/><circle cx="31" cy="17" r="2.6"/><circle cx="24" cy="24" r="2.6"/><circle cx="17" cy="31" r="2.6"/><circle cx="31" cy="31" r="2.6"/></g>`,
+    // 11 palm tree
+    (c) => `<path d="M6 41 Q24 34 42 41 V44 H6Z" fill="#f2d49b"/><path d="M24.5 19 Q26 30 23 41" stroke="#8a5a30" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M24 19 Q14 11 6 17 Q15 15 24 19Z M24 19 Q34 10 42 16 Q33 14 24 19Z M24 19 Q19 8 11 8 Q19 11 24 19Z M24 19 Q30 7 38 8 Q30 11 24 19Z" fill="#3ecf8e"/><circle cx="23" cy="21" r="2" fill="#7a4f20"/><circle cx="26.5" cy="21.5" r="2" fill="#7a4f20"/>`,
+    // 12 lantern (fanoos) with crescent
+    (c) => `<path d="M24 5 V9" stroke="${c.b}" stroke-width="2" stroke-linecap="round"/><path d="M18 12 L30 12 L33 17 L15 17Z" fill="${c.b}"/><path d="M16 17 L32 17 L30 34 L18 34Z" fill="${c.a}" opacity=".35" stroke="${c.b}" stroke-width="1.6"/>
+      <path d="M24 19 Q27 25 24 31 Q21 25 24 19Z" fill="#ffd34d"/><path d="M17 34 L31 34 L28 39 L20 39Z" fill="${c.b}"/><path d="M38 9 A6 6 0 1 0 41 19 A4.6 4.6 0 1 1 38 9Z" fill="#ffd34d"/>`,
+  ];
+  const AVATAR_KEYS = Array.from({ length: 24 }, (_, i) => 'a' + (i + 1));
+  function avatar(key) {
+    const n = Number(String(key || '').slice(1)) || 1, k = (n - 1) % 12, c = PAL[Math.floor((n - 1) / 12) % 2];
+    return svg(`<circle cx="24" cy="24" r="23" fill="${c.bg}"/><g clip-path="circle(23px at 24px 24px)">${AV_DRAW[k](c)}</g><circle cx="24" cy="24" r="22.5" fill="none" stroke="${c.ring}" stroke-width="1.6" opacity=".9"/>`, '0 0 48 48', 'avatar-svg');
+  }
+
   window.ART = {
     icon: (name) => svg(ICONS[name] || ICONS.coin),
     piece: (key) => svg((PIECES[key] || PIECES.star).art, '0 0 24 24', 'piece-svg'),
     pieceLabel: (key) => (PIECES[key] || PIECES.star).label,
-    PIECE_KEYS, HOUSE, HOTEL, GLOBE, BILL,
+    PIECE_KEYS, HOUSE, HOTEL, GLOBE, BILL, avatar, AVATAR_KEYS,
   };
 })();

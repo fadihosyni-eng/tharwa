@@ -3,10 +3,14 @@
 // on 8700 is never touched. Run: node tharwa-game/test/run-all.js
 const { spawn, spawnSync } = require('child_process');
 const path = require('path');
+const os = require('os');
+const fs = require('fs');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = process.env.TEST_PORT || '8701';
 const BASE = `http://localhost:${PORT}`;
+// Accounts go to a throw-away JSON file, never to a real database.
+const DATA_FILE = path.join(os.tmpdir(), `tharwa-test-${process.pid}.json`);
 
 function run(file, args = []) {
   const r = spawnSync(process.execPath, [path.join(__dirname, file), ...args], { stdio: 'inherit' });
@@ -16,7 +20,7 @@ function run(file, args = []) {
 (async () => {
   run('cards.js');
   run('sim.js', ['150']);
-  const srv = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env: { ...process.env, PORT }, stdio: 'ignore' });
+  const srv = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env: { ...process.env, PORT, DATA_FILE, DATABASE_URL: '', ADMIN_USERS: '' }, stdio: 'ignore' });
   try {
     for (let k = 0; k < 40; k++) {
       try { const r = await fetch(BASE + '/api/board'); if (r.ok) break; } catch (e) { /* not up yet */ }
@@ -26,6 +30,7 @@ function run(file, args = []) {
     console.log('invite addresses:', net.map((n) => `${n.kind} ${n.url}`).join(' | ') || '(none)');
     if (!Array.isArray(net)) throw new Error('/api/net did not return a list');
     run('api.js', [BASE]);
+    run('auth.js', [BASE]);
     // spam protection: one IP cannot create rooms without limit
     let limited = false;
     for (let k = 0; k < 14; k++) {
@@ -39,5 +44,6 @@ function run(file, args = []) {
     console.log('ALL TESTS PASSED');
   } finally {
     srv.kill();
+    for (const f of [DATA_FILE, DATA_FILE + '.tmp']) { try { fs.unlinkSync(f); } catch (e) { /* not there */ } }
   }
 })().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });
