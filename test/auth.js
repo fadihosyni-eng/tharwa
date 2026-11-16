@@ -5,14 +5,17 @@
 const assert = require('assert');
 const BASE = process.argv[2] || 'http://localhost:8701';
 
-// A tiny cookie-keeping client per user.
+// A tiny cookie-keeping client per user. Each one looks like its own IP (X-Forwarded-For)
+// so the per-IP rate limits don't trip while the suite creates many rooms.
+let ipSeq = 0;
 function client() {
   let cookie = '';
+  const ip = '10.9.0.' + (++ipSeq);
   return {
     async req(path, body, headers = {}) {
       const r = await fetch(BASE + path, {
         method: body ? 'POST' : 'GET',
-        headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}), ...headers },
+        headers: { 'X-Forwarded-For': ip, ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}), ...headers },
         body: body ? JSON.stringify(body) : undefined,
       });
       const set = r.headers.getSetCookie ? r.headers.getSetCookie() : [];
@@ -25,8 +28,22 @@ function client() {
   };
 }
 
+// First `state` event of a room (SSE).
+async function snapshot(code) {
+  const ctrl = new AbortController();
+  const r = await fetch(`${BASE}/api/events?code=${code}`, { signal: ctrl.signal });
+  const reader = r.body.getReader();
+  let buf = '';
+  for (;;) {
+    const { value } = await reader.read();
+    buf += Buffer.from(value).toString('utf8');
+    const m = buf.match(/event: state\ndata: (.*)\n\n/);
+    if (m) { ctrl.abort(); return JSON.parse(m[1]); }
+  }
+}
+
 (async () => {
-  const boss = client(), sami = client(), guest = client();
+  const boss = client(), sami = client(), guest = client(), rana = client();
 
   // register: first account is admin, the next is a normal user
   let r = await boss.req('/api/auth/register', { username: 'Boss', displayName: 'المدير', password: 'secret1' });
@@ -89,8 +106,38 @@ function client() {
   await act(guest, g.body, 'leave'); // the guest leaves -> sami wins
   await new Promise((res) => setTimeout(res, 400));
   r = await guest.req('/api/u/sami_1');
-  assert.deepStrictEqual([r.body.user.games, r.body.user.wins, r.body.user.points], [1, 1, 25 + 10 + 50], 'game recorded with points');
+  assert.deepStrictEqual([r.body.user.games, r.body.user.wins, r.body.user.points], [1, 1, 25 + 50], 'win vs a guest: only the win bonus (guests pay nothing)');
   assert.strictEqual(r.body.recent.length, 1); assert.strictEqual(r.body.recent[0].won, true);
+
+  // stake transfer between two accounts: rana (100 pts) beats sami (75 pts) -> sami pays 20, rana gets 20 + 50
+  r = await rana.req('/api/auth/register', { username: 'rana', displayName: 'رنا', password: 'pass123' });
+  const ranaId = (await boss.req('/api/admin/users?q=rana')).body.users[0].id;
+  await boss.req('/api/admin/user', { id: ranaId, action: 'points', amount: 100, reason: 'رصيد' });
+  const g2 = (await rana.req('/api/create', { name: 'x', isPrivate: true })).body;
+  const s2 = (await sami.req('/api/join', { code: g2.code, name: 'x' })).body;
+  await rana.req('/api/act', { code: g2.code, pid: g2.pid, token: g2.token, type: 'start' });
+  await sami.req('/api/act', { code: g2.code, pid: s2.pid, token: s2.token, type: 'leave' });
+  await new Promise((res) => setTimeout(res, 400));
+  assert.strictEqual((await guest.req('/api/u/sami_1')).body.user.points, 75 - 20, 'loser pays the stake');
+  assert.strictEqual((await guest.req('/api/u/rana')).body.user.points, 100 + 20 + 50, 'winner gets stakes + win bonus');
+  const st2 = await snapshot(g2.code);
+  assert.deepStrictEqual([st2.game.pointsResult[g2.pid], st2.game.pointsResult[s2.pid]], [70, -20], 'per-player result shown in the room');
+  assert.strictEqual((await guest.req('/api/leaders')).body[0].username, 'rana', 'leaderboard sorted by points');
+
+  // maps: buying needs points, deducts them, grants ownership; only owners can pick a paid map
+  assert.strictEqual((await sami.req('/api/maps/buy', { id: 'gulf' })).status, 400, 'not enough points');
+  await boss.req('/api/admin/user', { id: samiId, action: 'points', amount: 1000, reason: 'تجربة' });
+  r = await sami.req('/api/maps/buy', { id: 'gulf' });
+  assert.strictEqual(r.status, 200); assert.strictEqual(r.body.points, 55 + 1000 - 500, 'price deducted');
+  assert((await sami.req('/api/maps')).body.maps.find((m) => m.id === 'gulf').owned, 'map owned after buying');
+  assert.strictEqual((await sami.req('/api/maps/buy', { id: 'gulf' })).status, 409, 'cannot buy twice');
+  const g3 = (await rana.req('/api/create', { name: 'x', isPrivate: true })).body;
+  assert.strictEqual((await rana.req('/api/act', { code: g3.code, pid: g3.pid, token: g3.token, type: 'setMap', data: { id: 'gulf' } })).status, 403, 'non-owner cannot pick a paid map');
+  const g4 = (await sami.req('/api/create', { name: 'x', isPrivate: true })).body;
+  assert.strictEqual((await sami.req('/api/act', { code: g4.code, pid: g4.pid, token: g4.token, type: 'setMap', data: { id: 'gulf' } })).status, 200, 'owner picks the map');
+  const st4 = await snapshot(g4.code);
+  assert.strictEqual(st4.mapId, 'gulf');
+  assert.strictEqual((await sami.req('/api/act', { code: g4.code, pid: g4.pid, token: g4.token, type: 'setCountry', data: { slot: 'c1', code: 'lb' } })).status, 409, 'country picker only on the classic map');
 
   // admin closes a room
   const r2 = await sami.req('/api/create', { name: 'x', isPrivate: true });

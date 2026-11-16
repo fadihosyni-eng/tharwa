@@ -58,7 +58,9 @@
             <button type="button" id="accOut">🚪 تسجيل الخروج</button></div></div>`
       : `<div class="row" style="gap:8px"><a class="btn sm" href="/login">تسجيل الدخول</a><a class="btn sm gold" href="/register">إنشاء حساب</a></div>`;
     const ann = ACC.site.announcement ? `<div class="announce">📢 ${esc(ACC.site.announcement)}</div>` : '';
-    return `<header class="topbar"><a class="mini-logo" href="/">ثروة<span>.</span></a><div class="topbar-end">${right}</div></header>${ann}`;
+    const here = location.pathname;
+    const nav = `<nav class="topnav"><a href="/store" class="${here === '/store' ? 'on' : ''}">${ART.ui('store')}<span>المتجر</span></a><a href="/leaders" class="${here === '/leaders' ? 'on' : ''}">${ART.ui('trophy')}<span>المتصدرين</span></a></nav>`;
+    return `<header class="topbar"><a class="mini-logo" href="/">ثروة<span>.</span></a>${nav}<div class="topbar-end">${right}</div></header>${ann}`;
   };
   ACC.bindHeader = (root = document) => {
     const btn = $('#accBtn', root), drop = $('#accDrop', root);
@@ -84,6 +86,8 @@
     if ((m = path.match(/^\/u\/([^/]+)\/?$/))) return renderProfile(decodeURIComponent(m[1]).toLowerCase());
     if (path === '/settings') return ACC.me ? renderSettings() : (location.href = '/login?next=/settings');
     if (path === '/admin') return ACC.me && ACC.me.role === 'admin' ? renderAdmin() : renderNotFound();
+    if (path === '/leaders') return renderLeaders();
+    if (path === '/store') return renderStore();
     return false;
   };
   function shell(inner, cls = '') {
@@ -177,6 +181,60 @@
     </div>`);
   }
 
+  // ---------------------------------------------------------------- leaderboard
+  async function renderLeaders() {
+    document.title = 'المتصدرين — ثروة';
+    shell('<div class="panel"><div class="hint">عم حمّل…</div></div>');
+    const list = await api('/api/leaders').catch(() => []);
+    const rows = list.map((u, i) => {
+      const rate = u.games ? Math.round((u.wins / u.games) * 100) : 0;
+      return `<a class="lead-row ${i < 3 ? 'top' + (i + 1) : ''}" href="/u/${esc(u.username)}"><span class="lead-rank">${i < 3 ? ART.ui('medal') : i + 1}</span>
+        ${avatarHTML(u.avatar, 38, u.color)}<span><b>${esc(u.displayName)}</b><small dir="ltr">@${esc(u.username)}</small></span>
+        <span class="lead-games hint">${u.wins} فوز من ${u.games} · ${rate}%</span><span class="lead-pts">${fmtN(u.points)} ${ART.ui('star')}</span></a>`;
+    }).join('');
+    shell(`<div class="store-head"><h1>${ART.ui('trophy')} المتصدرين</h1><span class="hint">أعلى 50 لاعب بالنقاط — النقاط بتنربح من الألعاب وبتنخسر كمان</span></div>
+      <section class="panel">${rows || '<div class="hint">لسا ما في لاعبين بنقاط.</div>'}</section>`);
+  }
+
+  // ---------------------------------------------------------------- store (maps)
+  const GRID = (i) => (i <= 10 ? [11, 11 - i] : i < 20 ? [11 - (i - 10), 1] : i <= 30 ? [1, 1 + (i - 20)] : [1 + (i - 30), 11]);
+  function miniBoard(m, tiles, defaultSets) {
+    const th = m.theme || {}, slots = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8'];
+    const color = (k) => (th.sets ? th.sets[slots.indexOf(k)] : defaultSets[k].color);
+    const cells = tiles.map((t, i) => {
+      const [r, c] = GRID(i);
+      return `<i class="${t.type === 'city' ? 'c' : ''}" style="grid-row:${r};grid-column:${c};${t.type === 'city' ? `--sc:${color(t.set)}` : ''}"></i>`;
+    }).join('');
+    const vars = [th.boardBg && `--mb-board:${th.boardBg}`, th.tile && `--mb-tile:${th.tile}`, th.line && `--mb-line:${th.line}`, th.centerBg && `--mb-center:${th.centerBg}`,
+      th.accent && `--mb-accent:${th.accent}`, m.bg && `--mb-bg:url('${m.bg}')`].filter(Boolean).join(';');
+    return `<div class="mini-board" style="${vars}">${cells}<div class="mb-center"><b>${esc(m.name)}</b></div></div>`;
+  }
+  async function renderStore() {
+    document.title = 'المتجر — ثروة';
+    shell('<div class="panel"><div class="hint">عم حمّل…</div></div>');
+    const [{ maps, points }, board] = await Promise.all([api('/api/maps'), api('/api/board')]);
+    const cards = maps.map((m) => {
+      const action = m.owned ? `<span class="badge green">${ART.ui('check')} مملوكة</span>`
+        : !ACC.me ? '<a class="btn sm" href="/login?next=/store">سجّل دخول لتشتري</a>'
+          : `<button class="btn gold sm" data-buy="${m.id}" data-price="${m.price}" ${points < m.price ? 'disabled title="ما معك نقاط كافية"' : ''}>اشترِ بـ ${fmtN(m.price)} ${ART.ui('star')}</button>`;
+      return `<article class="map-card ${m.owned ? 'owned' : ''}">${miniBoard(m, board.tiles, board.sets)}
+        <h3>${esc(m.name)} ${m.price ? `<span class="price">${fmtN(m.price)} ${ART.ui('star')}</span>` : '<span class="badge green">مجانية</span>'}</h3>
+        <p>${esc(m.description)}</p>
+        <div class="map-meta"><span class="hint">${m.sets ? m.sets.slice(-1)[0].name + ' أغلى منطقة' : '22 دولة عربية'}</span>${action}</div></article>`;
+    }).join('');
+    shell(`<div class="store-head"><h1>${ART.ui('store')} المتجر — خرائط اللوح</h1>${ACC.me ? `<span class="my-pts">${ART.ui('star')} معك ${fmtN(points)} نقطة</span>` : ''}</div>
+      <p class="hint">كل خريطة بتغيّر شكل اللوح وأسماء المدن. صاحب الغرفة بيختار الخريطة من اللوبي، والكل بيلعب عليها.</p>
+      <div class="store-grid">${cards}</div>`);
+    $$('[data-buy]').forEach((b) => {
+      b.onclick = async () => {
+        const m = maps.find((x) => x.id === b.dataset.buy);
+        if (!(await confirmBox(`تشتري «${m.name}» بـ ${m.price} نقطة؟`, 'اشتري'))) return;
+        b.disabled = true; b.classList.add('loading');
+        try { const r = await api('/api/maps/buy', { id: m.id }); ACC.me.points = r.points; toast('صارت الخريطة إلك — اختارها من لوبي الغرفة', 'ok'); renderStore(); } catch (e) { toast(e.message); b.disabled = false; b.classList.remove('loading'); }
+      };
+    });
+  }
+
   // ---------------------------------------------------------------- settings
   function renderSettings() {
     const me = ACC.me;
@@ -262,7 +320,7 @@
 
   // ---------------------------------------------------------------- admin dashboard
   const ADMIN_TABS = [['overview', '📊 نظرة عامة'], ['users', '👥 المستخدمين'], ['rooms', '🎲 الغرف'], ['settings', '⚙️ الإعدادات'],
-    ['ads', '📣 الإعلانات'], ['games', '🕹️ الألعاب'], ['audit', '📜 السجل']];
+    ['ads', '📣 الإعلانات'], ['maps', '🗺️ الخرائط'], ['games', '🕹️ الألعاب'], ['audit', '📜 السجل']];
   let adminTab = 'overview';
   function renderAdmin() {
     document.title = 'لوحة التحكم — ثروة';
@@ -311,8 +369,8 @@
           <td>${u.role === 'admin' ? '<span class="badge">🛡️ أدمن</span>' : 'مستخدم'}</td><td>⭐ ${fmtN(u.points)}</td><td>${u.games}</td><td>${u.wins}</td>
           <td>${u.banned ? '<span class="badge red">موقوف</span>' : '<span class="badge green">فعّال</span>'}</td><td>${dateAr(u.createdAt)}</td><td>${timeAgo(u.lastSeen)}</td>
           <td class="acts"><button class="btn sm" data-a="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'فك الإيقاف' : 'إيقاف'}</button>
-            <button class="btn sm" data-a="${u.role === 'admin' ? 'unadmin' : 'admin'}">${u.role === 'admin' ? 'شيل الأدمن' : 'خلّيه أدمن'}</button>
-            <button class="btn sm" data-a="points">± نقاط</button><button class="btn sm" data-a="resetPassword">كلمة سر مؤقتة</button>
+            <button class="btn sm" data-a="points">${ART.ui('star')} +/− نقاط</button>
+            <button class="btn sm" data-a="${u.role === 'admin' ? 'unadmin' : 'admin'}">${ART.ui('shield')} ${u.role === 'admin' ? 'شيل لوحة التحكم' : 'أعطيه لوحة التحكم'}</button><button class="btn sm" data-a="resetPassword">كلمة سر مؤقتة</button>
             <button class="btn sm danger" data-a="delete">حذف</button></td></tr>`).join('') || '<tr><td colspan="9" class="hint">ما في نتايج</td></tr>'}</tbody></table>`;
         $$('#uTbl [data-a]').forEach((b) => { b.onclick = () => userAction(b.closest('tr').dataset.id, b.dataset.a, draw); });
       }
@@ -350,7 +408,8 @@
           <label class="field"><span>وقت الدور (ثانية)</span><select name="turnTimer">${[0, 60, 90, 120].map((v) => `<option value="${v}" ${v === s.defaultRoom.turnTimer ? 'selected' : ''}>${v || 'بدون'}</option>`).join('')}</select></label></div>
         <h3>⭐ النقاط</h3>
         <div class="grid3"><label class="field"><span>نقاط الفوز</span><input name="perWin" type="number" min="0" value="${s.points.perWin}" dir="ltr"></label>
-          <label class="field"><span>نقاط كل لعبة</span><input name="perGame" type="number" min="0" value="${s.points.perGame}" dir="ltr"></label></div>
+          <label class="field"><span>رهان كل لعبة (بيدفعه الخسران للفايز)</span><input name="stake" type="number" min="0" value="${s.points.stake}" dir="ltr"></label>
+          <label class="field"><span>نقاط المشاركة (لكل لاعب)</span><input name="perGame" type="number" min="0" value="${s.points.perGame}" dir="ltr"></label></div>
         <div class="form-err" id="siteErr"></div><button class="btn gold">حفظ الإعدادات</button></form>`;
       $('#fSite').onsubmit = async (e) => {
         e.preventDefault();
@@ -359,7 +418,7 @@
           await api('/api/admin/settings', {
             announcement: { on: f.annOn.checked, text: f.annText.value }, maintenance: f.maintenance.checked, registrationOpen: f.registrationOpen.checked,
             defaultRoom: { startingCash: Number(f.startingCash.value), maxPlayers: Number(f.maxPlayers.value), turnTimer: Number(f.turnTimer.value) },
-            points: { perWin: Number(f.perWin.value), perGame: Number(f.perGame.value) },
+            points: { perWin: Number(f.perWin.value), perGame: Number(f.perGame.value), stake: Number(f.stake.value) },
           });
           toast('انحفظت الإعدادات ✔', 'ok');
         } catch (x) { er.textContent = x.message; er.classList.add('show'); }
@@ -396,6 +455,29 @@
         };
       });
     },
+    async maps(body) {
+      const s = await api('/api/admin/settings');
+      body.innerHTML = `<h2>🗺️ الخرائط</h2><p class="hint">الخرائط بتنباع بالمتجر بالنقاط. فيك تسكّر خريطة، تغيّر سعرها، أو تهديها لمستخدم.</p>
+        ${s.maps.map((m) => `<form class="panel set-sec map-form" data-id="${m.id}"><div class="set-row" style="border:0">
+          <div class="st"><b>${esc(m.name)}</b><small>${esc(m.description)}</small></div>
+          ${m.id === 'classic' ? '<span class="badge green">مجانية دايماً</span>' : `<label class="switch"><input type="checkbox" name="enabled" ${m.enabled ? 'checked' : ''}><span></span></label>`}</div>
+          ${m.id === 'classic' ? '' : `<div class="grid3"><label class="field"><span>السعر (نقاط)</span><input name="price" type="number" min="0" value="${m.price}" dir="ltr"></label></div><button class="btn gold">حفظ</button>`}</form>`).join('')}
+        <form class="panel set-sec" id="fGrant"><h3>🎁 إهداء خريطة</h3><div class="grid3">
+          <label class="field"><span>اسم المستخدم</span><input name="username" dir="ltr" placeholder="sami_99"></label>
+          <label class="field"><span>الخريطة</span><select name="id">${s.maps.filter((m) => m.id !== 'classic').map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></label></div>
+          <div class="form-err" id="grantErr"></div><button class="btn gold">أهدِ الخريطة</button></form>`;
+      $$('.map-form').forEach((f) => {
+        f.onsubmit = async (e) => {
+          e.preventDefault();
+          try { await api('/api/admin/map', { id: f.dataset.id, enabled: f.enabled.checked, price: Number(f.price.value) }); toast('انحفظ ✔', 'ok'); } catch (x) { toast(x.message); }
+        };
+      });
+      $('#fGrant').onsubmit = async (e) => {
+        e.preventDefault();
+        const f = e.target, er = $('#grantErr'); er.classList.remove('show');
+        try { await api('/api/admin/grantMap', { username: f.username.value, id: f.id.value }); toast('انهدت الخريطة ✔', 'ok'); f.reset(); } catch (x) { er.textContent = x.message; er.classList.add('show'); }
+      };
+    },
     async games(body) {
       const s = await api('/api/admin/settings');
       body.innerHTML = `<h2>🕹️ الألعاب</h2><p class="hint">كل لعبة مفعّلة بتطلع ككرت بالصفحة الرئيسية. الألعاب الجديدة بتنضاف هون لما تجهز.</p>
@@ -415,7 +497,7 @@
     async audit(body) {
       const list = await api('/api/admin/audit');
       const names = { ban: 'إيقاف', unban: 'فك إيقاف', admin: 'تعيين أدمن', unadmin: 'شيل أدمن', resetPassword: 'كلمة سر مؤقتة', points: 'تعديل نقاط',
-        delete: 'حذف مستخدم', closeRoom: 'تسكير غرفة', settings: 'تعديل الإعدادات', ad: 'تعديل إعلان', game: 'تعديل لعبة' };
+        delete: 'حذف مستخدم', closeRoom: 'تسكير غرفة', settings: 'تعديل الإعدادات', ad: 'تعديل إعلان', game: 'تعديل لعبة', map: 'تعديل خريطة', grantMap: 'إهداء خريطة' };
       body.innerHTML = `<h2>📜 سجل الإدارة</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>الوقت</th><th>الأدمن</th><th>العملية</th><th>على</th><th>تفاصيل</th></tr></thead><tbody>
         ${list.map((e) => `<tr><td>${new Date(e.at).toLocaleString('ar-SY-u-nu-latn')}</td><td dir="ltr">@${esc(e.adminName)}</td><td>${names[e.action] || esc(e.action)}</td><td dir="ltr">${esc(e.target || '—')}</td>
           <td><code dir="ltr">${e.detail ? esc(JSON.stringify(e.detail)).slice(0, 140) : ''}</code></td></tr>`).join('') || '<tr><td colspan="5" class="hint">لسا ما في شي</td></tr>'}</tbody></table></div>`;

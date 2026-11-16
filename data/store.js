@@ -27,7 +27,7 @@ function bucketDays(times, days) {
 
 // ---------------------------------------------------------------- JSON file backend
 function jsonStore(file) {
-  let db = { users: [], sessions: [], settings: {}, results: [], audit: [], seq: { result: 0, audit: 0 } };
+  let db = { users: [], sessions: [], settings: {}, results: [], audit: [], userMaps: [], seq: { result: 0, audit: 0 } };
   let timer = null;
   const save = () => {
     clearTimeout(timer);
@@ -64,7 +64,17 @@ function jsonStore(file) {
     },
     async deleteUser(id) {
       db.users = db.users.filter((u) => u.id !== id);
-      db.sessions = db.sessions.filter((s) => s.userId !== id); save();
+      db.sessions = db.sessions.filter((s) => s.userId !== id);
+      db.userMaps = (db.userMaps || []).filter((m) => m.userId !== id); save();
+    },
+    async topUsers(limit = 50) {
+      return db.users.filter((u) => !u.banned).sort((a, b) => b.points - a.points || b.wins - a.wins || a.createdAt - b.createdAt).slice(0, limit).map(clone);
+    },
+    // maps owned by a user (bought in the store or granted by an admin)
+    async listUserMaps(userId) { return (db.userMaps || []).filter((m) => m.userId === userId).map((m) => m.mapId); },
+    async addUserMap(userId, mapId) {
+      db.userMaps = db.userMaps || [];
+      if (!db.userMaps.some((m) => m.userId === userId && m.mapId === mapId)) { db.userMaps.push({ userId, mapId, at: Date.now() }); save(); }
     },
     async listUsers({ q = '', limit = 50, offset = 0 } = {}) {
       const s = q.toLowerCase();
@@ -139,7 +149,11 @@ function pgStore(url) {
         CREATE INDEX IF NOT EXISTS game_results_created ON game_results (created_at);
         CREATE TABLE IF NOT EXISTS audit (
           id SERIAL PRIMARY KEY, at BIGINT NOT NULL, admin_id TEXT, admin_name TEXT, action TEXT NOT NULL,
-          target TEXT, detail JSONB);`);
+          target TEXT, detail JSONB);
+        CREATE TABLE IF NOT EXISTS user_maps (
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, map_id TEXT NOT NULL, at BIGINT NOT NULL,
+          PRIMARY KEY (user_id, map_id));
+        CREATE INDEX IF NOT EXISTS users_points ON users (points DESC);`);
     },
     async createUser(u) {
       try {
@@ -161,6 +175,13 @@ function pgStore(url) {
       return toUser((await q('UPDATE users SET points=points+$2, games=games+$3, wins=wins+$4 WHERE id=$1 RETURNING *', [id, dPoints, dGames, dWins])).rows[0]);
     },
     async deleteUser(id) { await q('DELETE FROM users WHERE id=$1', [id]); },
+    async topUsers(limit = 50) {
+      return (await q('SELECT * FROM users WHERE banned = FALSE ORDER BY points DESC, wins DESC, created_at ASC LIMIT $1', [limit])).rows.map(toUser);
+    },
+    async listUserMaps(userId) { return (await q('SELECT map_id FROM user_maps WHERE user_id=$1', [userId])).rows.map((r) => r.map_id); },
+    async addUserMap(userId, mapId) {
+      await q('INSERT INTO user_maps (user_id, map_id, at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [userId, mapId, Date.now()]);
+    },
     async listUsers({ q: s = '', limit = 50, offset = 0 } = {}) {
       const like = '%' + String(s).toLowerCase().replace(/[%_\\]/g, '\\$&') + '%';
       const where = s ? 'WHERE username LIKE $1 OR LOWER(display_name) LIKE $1' : '';

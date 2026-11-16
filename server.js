@@ -9,6 +9,7 @@ const os = require('os');
 const B = require('./game/board');
 const E = require('./game/engine');
 const Bot = require('./game/bot');
+const Maps = require('./game/maps');
 const { createStore } = require('./data/store');
 const A = require('./lib/accounts');
 
@@ -70,16 +71,20 @@ function newRoom(isPrivate, defaults = {}) {
   const room = {
     code: roomCode(), hostId: null, settings: { ...DEFAULTS, ...defaults, isPrivate: !!isPrivate }, status: 'lobby',
     players: [], clients: new Set(), log: [], chat: [], game: null,
-    createdAt: Date.now(), lastActive: Date.now(), botTimer: null,
+    createdAt: Date.now(), lastActive: Date.now(), botTimer: null, mapId: 'classic',
   };
   rollMap(room);
   rooms.set(room.code, room);
   return room;
 }
 // Pick this room's countries: Syria, Jordan, Iraq always on top + 5 random Arab ones.
+// Themed maps (game/maps.js) have fixed names; only the classic map uses the country map.
 function rollMap(room) {
   room.map = B.randomMap();
-  room.tiles = B.tilesFor(room.map);
+  applyTiles(room);
+}
+function applyTiles(room) {
+  room.tiles = (room.mapId !== 'classic' && Maps.tilesForMap(room.mapId)) || B.tilesFor(room.map);
 }
 function freeColor(room) { return COLORS.find((c) => !room.players.some((p) => p.color === c)) || COLORS[0]; }
 function freePiece(room) { return PIECES.find((k) => !room.players.some((p) => p.piece === k)) || PIECES[0]; }
@@ -118,7 +123,7 @@ function publicRoom(room) {
   const g = room.game;
   return {
     code: room.code, hostId: room.hostId, settings: room.settings, status: room.status, now: Date.now(),
-    map: room.map,
+    map: room.map, mapId: room.mapId || 'classic',
     players: room.players.map((p) => ({
       id: p.id, name: p.name, color: p.color, piece: p.piece, isBot: p.isBot, connected: p.isBot || p.conns > 0,
       money: p.money, pos: p.pos, inJail: p.inJail, jailTurns: p.jailTurns, bankrupt: p.bankrupt,
@@ -238,14 +243,16 @@ function roomAct(room, p, type, data) {
     case 'setCountry': {
       needHost(); needLobby();
       const slot = String((data && data.slot) || ''), code = String((data && data.code) || '');
+      if (room.mapId !== 'classic') throw httpErr(409, 'اختيار الدول بس على خريطة «كلاسيك عربي»');
       if (!B.SLOTS.includes(slot) || !B.ARAB.includes(code) || !B.COUNTRIES[code]) throw httpErr(400, 'دولة غير معروفة');
       room.map = B.setCountry(room.map, slot, code);
-      room.tiles = B.tilesFor(room.map);
+      applyTiles(room);
       E.log(room, `🌍 ${p.name} حط ${B.COUNTRIES[code].name} عاللوح`);
       return true;
     }
     case 'shuffleMap': {
       needHost(); needLobby();
+      if (room.mapId !== 'classic') throw httpErr(409, 'الدول العشوائية بس على خريطة «كلاسيك عربي»');
       rollMap(room); // `mode` is ignored: the board is always Arab-only
       const names = Object.keys(B.SETS).filter((k) => !B.FIXED[k]).map((k) => B.COUNTRIES[room.map[k]].name);
       E.log(room, '🌍 دول جديدة عاللوح: ' + names.join('، ') + ' — مع سوريا والأردن والعراق');
@@ -307,7 +314,7 @@ function readBody(req) {
   });
 }
 // Client-side pages that all load index.html.
-const PAGE_RE = /^\/(?:room\/[a-z0-9]{5}|u\/[^/]{1,40}|settings|login|register|admin)\/?$/i;
+const PAGE_RE = /^\/(?:room\/[a-z0-9]{5}|u\/[^/]{1,40}|settings|login|register|admin|leaders|store)\/?$/i;
 async function servePage(req, pathname, res) {
   let status = 200;
   const um = pathname.match(/^\/u\/([^/]{1,40})\/?$/);
@@ -401,6 +408,17 @@ async function newRoomFor(req, user, isPrivate) {
   if (site.maintenance && !(user && user.role === 'admin')) throw httpErr(503, '🛠️ الموقع بالصيانة هلق — جرّب بعد شوي');
   return newRoom(isPrivate, site.defaultRoom);
 }
+// Host picks the board map; paid maps must be owned by the host's account.
+async function setMap(room, p, data) {
+  if (room.hostId !== p.id) throw httpErr(403, 'بس صاحب الغرفة بيقدر يعمل هالشي');
+  if (room.status !== 'lobby') throw httpErr(409, 'اللعبة بلّشت');
+  const id = String(data.id || '');
+  if (!Maps.BY_ID[id]) throw httpErr(400, 'خريطة غير معروفة');
+  if (!(await A.canUseMap(p.userId, id))) throw httpErr(403, 'هالخريطة مو إلك — فيك تشتريها من المتجر');
+  room.mapId = id;
+  applyTiles(room);
+  E.log(room, `🗺️ ${p.name} اختار خريطة «${Maps.BY_ID[id].name}»`);
+}
 async function api(req, pathname, body, res) {
   if (pathname === '/api/create') {
     const user = await roomUser(req);
@@ -434,6 +452,7 @@ async function api(req, pathname, body, res) {
     const p = auth(room, body.pid, body.token);
     room.lastActive = Date.now();
     const type = String(body.type || '');
+    if (type === 'setMap') { await setMap(room, p, body.data || {}); afterChange(room); return json(res, 200, { ok: true }); }
     const handled = roomAct(room, p, type, body.data || {});
     if (handled === null) {
       if (room.game && room.game.autopilot && E.current(room) === p) room.game.autopilot = false; // player is back

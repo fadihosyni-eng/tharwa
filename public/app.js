@@ -22,13 +22,43 @@
   };
   // Tiles of the current room: city/country names come from the room's country map.
   const T = (i) => (S.tiles || S.board.tiles)[i];
-  const SET = (k) => S.board.sets[k];
-  function resolveTiles(map) {
+  const SLOT_KEYS = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8'];
+  // Current board map (theme + names). Classic = countries picked per room.
+  const MAP = () => (S.maps || []).find((m) => m.id === (S.room && S.room.mapId)) || null;
+  const SET = (k) => {
+    const m = MAP(), c = m && m.theme && m.theme.sets && m.theme.sets[SLOT_KEYS.indexOf(k)];
+    return c ? { ...S.board.sets[k], color: c } : S.board.sets[k];
+  };
+  function resolveTiles(map, mapId) {
+    const m = mapId && mapId !== 'classic' ? (S.maps || []).find((x) => x.id === mapId) : null;
+    let port = 0, util = 0;
     S.tiles = S.board.tiles.map((t) => {
+      if (m && m.sets) {
+        if (t.type === 'city') { const set = m.sets[SLOT_KEYS.indexOf(t.set)]; return { ...t, country: set.flag || null, countryName: set.name, name: set.cities[t.rank] }; }
+        if (t.type === 'port' && m.ports) return { ...t, name: m.ports[port++] };
+        if (t.type === 'util' && m.utils) return { ...t, name: m.utils[util++] };
+        return t;
+      }
       if (t.type !== 'city') return t;
       const code = map && map[t.set], c = code && S.board.countries[code];
       return { ...t, country: code, countryName: c ? c.name : '', name: c ? c.cities[t.rank] : '' };
     });
+  }
+  // Theme variables of the room's map on the room element.
+  function applyTheme() {
+    const room = $('.room'), m = MAP();
+    if (!room) return;
+    const th = (m && m.theme) || {};
+    room.classList.toggle('themed', !!(m && m.id !== 'classic'));
+    room.dataset.map = m ? m.id : 'classic';
+    const vars = { '--tile': th.tile, '--tile2': th.tile2, '--m-line': th.line, '--m-accent': th.accent, '--m-accent2': th.accent2,
+      '--m-text': th.text, '--m-board': th.boardBg, '--m-center': th.centerBg, '--m-bg': m && m.bg && m.id !== 'classic' ? `url('${m.bg}')` : null };
+    for (const [k, v] of Object.entries(vars)) { if (v) room.style.setProperty(k, v); else room.style.removeProperty(k); }
+  }
+  // Flag of the tile's country, or a glowing emblem for maps without flags.
+  function mark(t, cls) {
+    if (t.country) return flag(t.country, cls);
+    return `<span class="flag emblem ${cls}" style="--ec:${SET(t.set).color}"><i></i></span>`;
   }
   const flag = (code, cls = '') => `<span class="flag ${cls}">${window.flagSVG(code)}</span>`;
   // Official Serva logo (resized copy of the original, never redrawn).
@@ -66,7 +96,8 @@
 
   // ================================================================ boot
   async function boot() {
-    try { [S.board] = await Promise.all([api('/api/board'), ACC.load()]); } catch (e) { app.innerHTML = '<div class="home"><div class="hint">ما قدرت أوصل للسيرفر</div></div>'; return; }
+    ART.autoIconize(); // every emoji in the UI becomes a matching SVG icon
+    try { [S.board, { maps: S.maps }] = await Promise.all([api('/api/board'), api('/api/maps'), ACC.load()]); } catch (e) { app.innerHTML = '<div class="home"><div class="hint">ما قدرت أوصل للسيرفر</div></div>'; return; }
     if (ACC.route(location.pathname.replace(/\/$/, '') || '/') !== false) return; // login, profile, settings, admin
     const m = location.pathname.match(/^\/room\/([a-z0-9]{5})\/?$/i);
     if (m) { S.code = m[1].toLowerCase(); enterRoom(); } else renderHome();
@@ -240,19 +271,22 @@
       store.del(credsKey(S.code)); S.me = null;
       if (prev) toast('صرت متفرّج بهالغرفة', 'ok');
     }
-    const mapKey = JSON.stringify(st.map || {});
+    const mapKey = (st.mapId || 'classic') + JSON.stringify(st.map || {});
     if (mapKey !== S.mapKey) {
       S.mapKey = mapKey;
-      resolveTiles(st.map);
+      resolveTiles(st.map, st.mapId);
       if (S.built) {
         $$('#board .tile').forEach((el) => {
           const i = Number(el.dataset.i), t = T(i);
-          if (t.type === 'city') { el.innerHTML = tileInner(t, i); el.title = t.name + ' — ' + t.countryName; }
+          if (t.type === 'city' || t.type === 'port' || t.type === 'util') { el.innerHTML = tileInner(t, i); el.title = t.name + (t.countryName ? ' — ' + t.countryName : ''); }
+          const bld = el.querySelector('.bld'); if (bld) delete bld.dataset.h;
+          const bown = el.querySelector('.bown'); if (bown) delete bown.dataset.k;
         });
       }
     }
     if (!S.built) buildLayout();
-    document.title = (st.status === 'playing' ? '🎲 ' : '') + 'ثروة — غرفة ' + st.code;
+    applyTheme();
+    document.title = (st.status === 'playing' ? '● ' : '') + 'ثروة — غرفة ' + st.code;
     processMoves(st);
     updateBoard(st);
     updateDice(st);
@@ -417,7 +451,7 @@
     // Property strip: transparent with the price while for sale; filled with the
     // owner's colour (and their piece + buildings) once someone buys it.
     const band = `<div class="band"><span class="bprice">${fmt(t.price)}</span><span class="bown"></span><span class="bld"></span></div>`;
-    if (t.type === 'city') return `${band}<div class="tbody">${flag(t.country, 'on-tile')}<div class="tname">${esc(t.name)}</div></div>`;
+    if (t.type === 'city') return `${band}<div class="tbody">${mark(t, 'on-tile')}<div class="tname">${esc(t.name)}</div></div>`;
     if (t.price) return `${band}<div class="tbody">${tileIcon(t)}<div class="tname">${esc(t.name)}</div></div>`;
     const sub = t.type === 'tax' ? (t.percent ? t.percent + '%' : fmt(t.amount)) : '';
     return `<div class="tbody">${tileIcon(t)}<div class="tname">${esc(t.name)}</div>${sub ? `<div class="tprice">${sub}</div>` : ''}</div>`;
@@ -440,7 +474,6 @@
     FX.setDice($('#dice'), [5, 6], false);
     b.addEventListener('click', (e) => {
       if (e.target.closest('.card2')) { $('#cCard').innerHTML = ''; return; }
-      if (e.target.closest('.n-close')) { $('#cNotice').innerHTML = ''; return; }
       const tile = e.target.closest('.tile');
       if (tile && S.buildMode) {
         // Build mode: a glowing city builds at once; any other tile does nothing.
@@ -617,19 +650,18 @@
     const n = g.notice;
     const from = st.players.find((p) => p.id === n.from), to = st.players.find((p) => p.id === n.to);
     if (n.kind !== 'rent' || !from || !to) return;
-    const av = (p) => `<span class="tk nav" style="--pc:${p.color}">${ART.piece(p.piece)}</span>`;
-    const html = `<div class="notice"><button class="n-close" type="button" title="سكّر">✕</button>
-        <div class="n-avs">${av(from)}<span class="n-arrow">←</span>${av(to)}</div>
-        <div class="n-main">💸 <b style="color:${from.color}">${esc(from.name)}</b> دفع <span class="n-amt">${fmt(n.amount)}</span> إيجار لـ <b style="color:${to.color}">${esc(to.name)}</b></div>
-        <div class="n-sub">🏠 ${esc(n.tile)}</div>
-      </div>`;
+    const av = (p) => `<span class="tk rp-av" style="--pc:${p.color}" title="${esc(p.name)}">${ART.piece(p.piece)}</span>`;
+    // Slim pill: payer -> amount -> owner, tile name underneath (fades by itself).
+    const html = `<div class="rent-pill" role="status">${av(from)}<span class="rp-arrow">${ART.ui('arrow')}</span>
+        <div class="rp-mid"><b class="rp-amt">${fmt(n.amount)}</b><small><span style="color:${from.color}">${esc(from.name)}</span> دفع إيجار ${esc(n.tile)} لـ <span style="color:${to.color}">${esc(to.name)}</span></small></div>
+        <span class="rp-arrow">${ART.ui('arrow')}</span>${av(to)}</div>`;
     clearTimeout(S.noticeShow);
     S.noticeShow = setTimeout(() => {
       const box = $('#cNotice');
       if (!box) return;
       box.innerHTML = html;
       clearTimeout(S.noticeTimer);
-      S.noticeTimer = setTimeout(() => { box.innerHTML = ''; }, 4000);
+      S.noticeTimer = setTimeout(() => { box.innerHTML = ''; }, 3200);
       FX.Sound.play('cash');
       flyCash(n.from, n.to);
     }, S.running ? 900 : 0);
@@ -738,7 +770,7 @@
     const t = T(i);
     let head, rows;
     if (t.type === 'city') {
-      head = `<div class="deed-head" style="--sc:${SET(t.set).color}">${flag(t.country, 'mid')}<div class="dh-text"><b>${esc(t.name)}</b><small>${esc(t.countryName)}</small></div></div>`;
+      head = `<div class="deed-head" style="--sc:${SET(t.set).color}">${mark(t, 'mid')}<div class="dh-text"><b>${esc(t.name)}</b><small>${esc(t.countryName)}</small></div></div>`;
       rows = [['الإيجار', fmt(t.rent[0])], ['مع الدولة كاملة', fmt(t.rent[0] * (S.room.settings.doubleRent ? 2 : 1))], ['بيت واحد', fmt(t.rent[1])], ['4 بيوت', fmt(t.rent[4])], ['فندق', fmt(t.rent[5])]];
     } else if (t.type === 'port') {
       head = `<div class="deed-head plain"><span class="dh-icon">${ART.icon('port')}</span><div class="dh-text"><b>${esc(t.name)}</b><small>ميناء</small></div></div>`;
@@ -753,32 +785,38 @@
     const top = $('#cTop'), actions = $('#cActions'), logEl = $('#cLog');
     if (!top) return;
     const g = st.game, me = meP(st);
-    logEl.innerHTML = st.log.slice(-7).reverse().map((l) => `<div>${esc(l.text)}</div>`).join('');
+    const logHTML = st.log.slice(-7).reverse().map((l) => `<div>${esc(l.text)}</div>`).join('');
+    if (logHTML !== S.logHTML) { S.logHTML = logHTML; logEl.innerHTML = logHTML; }
+    const setTop = (h) => { if (h !== S.topHTML) { S.topHTML = h; top.innerHTML = h; } };
 
     $('#center').classList.remove('compact');
     if (st.status === 'lobby') {
-      const codes = Object.keys(S.board.sets).map((k) => st.map && st.map[k]).filter(Boolean);
+      const m = MAP(), themed = m && m.id !== 'classic';
+      const codes = themed ? m.sets.map((x) => x.flag).filter(Boolean) : Object.keys(S.board.sets).map((k) => st.map && st.map[k]).filter(Boolean);
       const ring = codes.map((c, k) => `<span class="ring-flag" style="--a:${(k * 360) / codes.length}deg">${flag(c, 'lg')}</span>`).join('');
-      top.innerHTML = `<div class="emblem"><div class="ring">${ring}</div><div class="brand">ثروة<span>.</span></div></div>
-        <div class="sub">${st.players.length}/${st.settings.maxPlayers} لاعبين بالغرفة — كل لاعب بيبلّش بـ ${fmt(st.settings.startingCash)}</div>`;
-      if (!me) actions.innerHTML = '<div class="spectator">أنت متفرّج</div>';
+      setTop(`<div class="emblem"><div class="ring">${ring}</div><div class="brand">ثروة<span>.</span></div></div>
+        <div class="sub">${st.players.length}/${st.settings.maxPlayers} لاعبين بالغرفة — كل لاعب بيبلّش بـ ${fmt(st.settings.startingCash)}</div>`);
+      if (!me) setActions(actions, null, '<div class="spectator">أنت متفرّج</div>');
       else if (isHost(st)) {
-        actions.innerHTML = btn('start', '▶ ابدأ اللعبة', 'gold big', st.players.length < 2) +
-          (st.players.length < 2 ? '<div class="hint">بدك لاعبين اثنين على الأقل — ابعت الرابط لصاحبك أو ضيف لاعب آلي</div>' : '');
-      } else actions.innerHTML = '<div class="hint">بانتظار صاحب الغرفة يبدأ اللعبة…</div>';
+        setActions(actions, null, btn('start', '▶ ابدأ اللعبة', 'gold big', st.players.length < 2) +
+          (st.players.length < 2 ? '<div class="hint">بدك لاعبين اثنين على الأقل — ابعت الرابط لصاحبك أو ضيف لاعب آلي</div>' : ''));
+      } else setActions(actions, null, '<div class="hint">بانتظار صاحب الغرفة يبدأ اللعبة…</div>');
       return;
     }
     if (st.status === 'ended') {
       const w = st.players.find((p) => p.id === g.winner);
-      top.innerHTML = `<div class="winner"><div class="trophy">${ART.icon('trophy')}</div>${w ? `<span class="tk big" style="--pc:${w.color}">${ART.piece(w.piece)}</span>` : ''}<div>${esc(w ? w.name : '—')} ربح اللعبة!</div></div>`;
-      actions.innerHTML = isHost(st) ? btn('restart', '🔄 لعبة جديدة بنفس الغرفة', 'gold big') : '<div class="hint">بانتظار صاحب الغرفة يبدأ لعبة جديدة</div>';
+      // Points won/lost by each account in this game (filled in by the server right after the end).
+      const pr = g.pointsResult || {};
+      const lines = st.players.filter((p) => p.id in pr).map((p) => `<div class="pts-line ${pr[p.id] >= 0 ? 'up' : 'down'}"><span class="tk" style="--pc:${p.color}">${ART.piece(p.piece)}</span><b>${esc(p.name)}</b><span class="pts-d">${pr[p.id] >= 0 ? '+' : '−'}${Math.abs(pr[p.id])} ${ART.ui('star')}</span></div>`).join('');
+      setTop(`<div class="winner"><div class="trophy">${ART.icon('trophy')}</div>${w ? `<span class="tk big" style="--pc:${w.color}">${ART.piece(w.piece)}</span>` : ''}<div>${esc(w ? w.name : '—')} ربح اللعبة!</div></div>${lines ? `<div class="pts-res">${lines}</div>` : ''}`);
+      setActions(actions, null, isHost(st) ? btn('restart', '🔄 لعبة جديدة بنفس الغرفة', 'gold big') : '<div class="hint">بانتظار صاحب الغرفة يبدأ لعبة جديدة</div>');
       return;
     }
 
     const cur = st.players.find((p) => p.id === g.order[g.turn]);
-    top.innerHTML = `<div class="turn"><span class="dot" style="background:${cur.color}"></span>دور <b>${esc(cur.name)}</b>${g.autopilot ? ' <small class="hint">(تلقائي)</small>' : ''}${g.turnEndsAt ? ' <span class="timer" id="turnTimer"></span>' : ''}</div>`;
-    let h = '';
-    if (g.auction) h = auctionHTML(st, me);
+    setTop(`<div class="turn"><span class="dot" style="background:${cur.color}"></span>دور <b>${esc(cur.name)}</b>${g.autopilot ? ' <small class="hint">(تلقائي)</small>' : ''}${g.turnEndsAt ? ' <span class="timer" id="turnTimer"></span>' : ''}</div>`);
+    let h = '', key = null;
+    if (g.auction) { h = auctionHTML(st, me); key = `auc:${g.auction.idx}:${g.auction.lot || 1}`; }
     else if (S.running) h = '<div class="hint">…</div>';
     else if (me && cur.id === me.id) {
       switch (g.phase) {
@@ -790,14 +828,16 @@
           break;
         case 'buy': {
           const t = T(g.pendingBuy);
-          h = `<div class="offer2">${deedHTML(g.pendingBuy)}<div class="offer-side">
+          key = 'buy:' + g.pendingBuy;
+          h = `<div class="offer2">${deedHTML(g.pendingBuy)}<div class="offer-side" data-live="side">
               <div>بدك تشتري <b>${esc(t.name)}</b>؟</div><small class="hint">معك ${fmt(me.money)}</small>
               ${btn('buy', 'اشتري ' + fmt(t.price), 'gold', me.money < t.price)}${btn('skip', st.settings.auction ? 'لا — للمزاد 🔨' : 'لا شكراً')}</div></div>`;
           break;
         }
         case 'debt': {
           const tot = g.debts.reduce((s, d) => s + d.amount, 0);
-          h = `<div class="debt">⚠️ عليك دين <b>${fmt(tot)}</b><br><small>بيع بيوت أو ارهن عقارات (اضغط على عقارك باللوح أو من «أملاكي») — الدين بينسدّ لحاله أول ما يصير معك مصاري</small></div><div class="row">${btn('bankrupt', '💀 أعلن الإفلاس', 'danger')}</div>`;
+          key = 'debt';
+          h = `<div data-live="debt"><div class="debt">⚠️ عليك دين <b>${fmt(tot)}</b><br><small>بيع بيوت أو ارهن عقارات (اضغط على عقارك باللوح أو من «أملاكي») — الدين بينسدّ لحاله أول ما يصير معك مصاري</small></div><div class="row">${btn('bankrupt', '💀 أعلن الإفلاس', 'danger')}</div></div>`;
           break;
         }
         case 'done': h = btn('end', 'إنهاء الدور ✔', 'gold big') + buildBtn(st); break;
@@ -805,8 +845,38 @@
       }
     } else if (cur.isBot || g.autopilot) h = `<div class="hint">${esc(cur.name)} عم يفكّر…</div>`;
     else h = `<div class="hint">بانتظار ${esc(cur.name)}…</div>`;
-    actions.innerHTML = h;
+    setActions(actions, key, h);
     $('#center').classList.toggle('compact', h.includes('class="deed"'));
+  }
+  // Updates the centre actions without re-creating what is already on screen: with the same `key`
+  // (same auction lot / buy offer / debt) only the [data-live] parts change, so the deed and the
+  // auction box never flash or replay their entry animation. The bid amount ticks to its new value.
+  function setActions(el, key, html) {
+    if (S.actHTML === html && el.dataset.key === (key || '')) return;
+    if (key && el.dataset.key === key) {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = html;
+      const fresh = [...tpl.content.querySelectorAll('[data-live]')];
+      if (fresh.length && fresh.every((n) => el.querySelector(`[data-live="${n.dataset.live}"]`))) {
+        for (const n of fresh) {
+          const cur = el.querySelector(`[data-live="${n.dataset.live}"]`);
+          if (cur.dataset.src === n.innerHTML) continue;
+          const before = cur.dataset.src;
+          cur.dataset.src = n.innerHTML;
+          if (n.dataset.live === 'bid' && before !== undefined) {
+            const from = Number(cur.dataset.v || 0), to = Number(n.dataset.v || 0);
+            cur.dataset.v = to;
+            if (to > 0) { countUp(cur, from, to); cur.classList.remove('bump'); void cur.offsetWidth; cur.classList.add('bump'); } else cur.innerHTML = n.innerHTML;
+          } else cur.innerHTML = n.innerHTML;
+        }
+        S.actHTML = html;
+        return;
+      }
+    }
+    el.dataset.key = key || '';
+    el.innerHTML = html;
+    S.actHTML = html;
+    $$('[data-live]', el).forEach((n) => { n.dataset.src = n.innerHTML; });
   }
   function buildBtn(st) {
     if (S.buildMode) return `${btn('buildMode', '✔ خلصت', 'build-btn on')}<div class="build-hint">🏗️ اضغط على مدينة مضوية لتعمّر — Esc للخروج</div>`;
@@ -828,12 +898,12 @@
     else if (me && a.bidder === me.id) foot = '<div class="hint">أنت صاحب أعلى مزايدة 👌</div>';
     return `<div class="offer2 auction-wrap">${deedHTML(a.idx)}<div class="auction">
       <div class="a-title"><span class="a-gavel">${ART.icon('gavel')}</span> ${seller ? `<span><b>${esc(seller.name)}</b> عم يبيع <b>${esc(t.name)}</b></span>` : `مزاد على <b>${esc(t.name)}</b>`}</div>
-      ${a.min || (pr && pr.mortgaged) ? `<div class="hint">${a.min ? `أقل سعر ${fmt(a.min)}` : ''}${a.min && pr && pr.mortgaged ? ' · ' : ''}${pr && pr.mortgaged ? 'مرهونة' : ''}</div>` : ''}
-      <div class="a-bid">${a.bid ? fmt(a.bid) : '—'}</div>
-      <div class="a-who">${b ? `<span class="pdot" style="background:${b.color}"></span> ${esc(b.name)}` : 'لسا ما حدا زاود'}</div>
-      ${a.lots > 1 ? `<div class="a-lots"><b>لوت ${a.lot} من ${a.lots}</b>${(st.game.auctionQueue || []).map((l) => `<span class="lot-chip">${esc(T(l.idx).name)}</span>`).join('')}</div>` : ''}
+      <div class="hint" data-live="min">${a.min ? `أقل سعر ${fmt(a.min)}` : ''}${a.min && pr && pr.mortgaged ? ' · ' : ''}${pr && pr.mortgaged ? 'مرهونة' : ''}</div>
+      <div class="a-bid" data-live="bid" data-v="${a.bid}">${a.bid ? fmt(a.bid) : '—'}</div>
+      <div class="a-who" data-live="who">${b ? `<span class="tk a-av" style="--pc:${b.color}">${ART.piece(b.piece)}</span> ${esc(b.name)}` : 'لسا ما حدا زاود'}</div>
+      <div class="a-lots" data-live="lots">${a.lots > 1 ? `<b>لوت ${a.lot} من ${a.lots}</b>${(st.game.auctionQueue || []).map((l) => `<span class="lot-chip">${esc(T(l.idx).name)}</span>`).join('')}` : ''}</div>
       <div class="a-timer"><div class="a-bar" id="aucBar"></div></div><div class="hint" id="aucTimer"></div>
-      ${foot}
+      <div class="a-foot" data-live="foot">${foot}</div>
     </div></div>`;
   }
   function tick() {
@@ -843,13 +913,13 @@
     const tt = $('#turnTimer');
     if (tt && g.turnEndsAt) {
       const s = Math.max(0, Math.ceil((g.turnEndsAt - nowSrv()) / 1000));
-      tt.textContent = '⏱ ' + s + ' ث';
+      tt.textContent = s + ' ث';
       tt.classList.toggle('low', s <= 10);
     }
     const at = $('#aucTimer');
     if (at && g.auction) {
       const left = Math.max(0, g.auction.endsAt - nowSrv());
-      at.textContent = '⏱ بيسكّر بعد ' + Math.ceil(left / 1000) + ' ثانية';
+      at.textContent = 'بيسكّر بعد ' + Math.ceil(left / 1000) + ' ثانية';
       const bar = $('#aucBar');
       if (bar) { bar.style.width = Math.min(100, (left / 8000) * 100) + '%'; bar.classList.toggle('low', left < 2500); }
     }
@@ -936,7 +1006,30 @@
     }).join('')}</div></div>`;
   }
   // The 8 countries on this room's board, most valuable first.
+  // Board map picker (lobby). Paid maps need to be owned by the host's account.
+  function mapsHTML(st) {
+    const host = isHost(st), cur = MAP() || { id: 'classic', name: 'كلاسيك عربي' };
+    const list = (S.maps || []).filter((m) => m.enabled);
+    const cards = list.map((m) => {
+      const can = host && m.owned;
+      const tag = m.id === cur.id ? '<small class="m-on">مختارة</small>' : m.owned ? '' : `<small class="m-price">${m.price} ${ART.ui('star')}</small>`;
+      return `<${can ? 'button' : 'div'} class="map-pick ${m.id === cur.id ? 'on' : ''} ${m.owned ? '' : 'locked'}" ${can ? `data-mapid="${m.id}"` : ''} style="--a:${(m.theme && m.theme.accent) || '#00b4ff'};--b:${(m.theme && m.theme.tile2) || '#0e1c3d'}">
+        <span class="mp-sw">${(m.theme && m.theme.sets ? m.theme.sets : Object.values(S.board.sets).map((x) => x.color)).slice(0, 8).map((c) => `<i style="background:${c}"></i>`).join('')}</span>
+        <b>${esc(m.name)}</b>${tag}${m.owned ? '' : ART.ui('lock', 'm-lock')}</${can ? 'button' : 'div'}>`;
+    }).join('');
+    return `<div class="panel"><div class="lbl"><span>🗺️ خريطة اللوح</span><a class="btn sm" href="/store" target="_blank">🛒 المتجر</a></div>
+      <div class="map-picks">${cards}</div>
+      <div class="hint" style="text-align:start;margin-top:6px">${host ? (ACC.me ? 'الخرائط المقفولة بتشتريها بالنقاط من المتجر.' : 'سجّل دخول لتستعمل الخرائط اللي اشتريتها.') : 'صاحب الغرفة بيختار الخريطة.'}</div></div>`;
+  }
+  function themedSetsHTML() {
+    const m = MAP();
+    return `<div class="panel"><div class="lbl"><span>🌍 مناطق «${esc(m.name)}»</span></div><div class="country-list">${m.sets.slice().reverse().map((set, n) => {
+      const k = SLOT_KEYS[7 - n];
+      return `<div class="country"><span class="sw" style="background:${SET(k).color}"></span>${set.flag ? flag(set.flag, 'sm') : `<span class="flag emblem sm" style="--ec:${SET(k).color}"><i></i></span>`}<b>${esc(set.name)}</b><small>${n === 0 ? 'الأغلى' : n === 7 ? 'الأرخص' : ''}</small></div>`;
+    }).join('')}</div></div>`;
+  }
   function countriesHTML(st) {
+    if (MAP() && MAP().id !== 'classic') return themedSetsHTML();
     const keys = Object.keys(S.board.sets).reverse();
     const host = isHost(st);
     return `<div class="panel"><div class="lbl"><span>🌍 دول اللوح</span>${host ? '<button class="btn sm" data-shuffle>🎲 دول عشوائية</button>' : ''}</div>
@@ -986,7 +1079,7 @@
   function propLabel(i) {
     const t = T(i);
     const sw = t.type === 'city' ? SET(t.set).color : '#4b5d73';
-    return `<span class="sw" style="background:${sw}"></span>${t.type === 'city' ? flag(t.country, 'sm') : `<span class="mini-icon">${ART.icon(iconName(t))}</span>`}${esc(t.name)}`;
+    return `<span class="sw" style="background:${sw}"></span>${t.type === 'city' ? mark(t, 'sm') : `<span class="mini-icon">${ART.icon(iconName(t))}</span>`}${esc(t.name)}`;
   }
   function tradeSummary(st, side) {
     const parts = side.props.map((i) => esc(T(i).name));
@@ -1065,6 +1158,7 @@
     </div>`;
     if (st.status === 'lobby') {
       h += piecesHTML(st);
+      h += mapsHTML(st);
       h += countriesHTML(st);
       h += settingsHTML(st);
       if (S.me) h += '<button class="btn ghost sm" data-leave>اطلع من الغرفة</button>';
@@ -1107,6 +1201,8 @@
     const cash = t.closest('[data-cash]');
     if (cash && !cash.disabled) { act('settings', { startingCash: Number(cash.dataset.cash) }); return; }
     if (t.closest('[data-addbot]')) { act('addBot'); return; }
+    const mp = t.closest('[data-mapid]');
+    if (mp) { act('setMap', { id: mp.dataset.mapid }); return; }
     const sh = t.closest('[data-shuffle]');
     if (sh) { act('shuffleMap'); return; }
     const slot = t.closest('[data-slot]');
@@ -1240,7 +1336,7 @@
         ['بيت 1', r[1], h === 1], ['بيتين', r[2], h === 2], ['3 بيوت', r[3], h === 3], ['4 بيوت', r[4], h === 4], ['🏨 فندق', r[5], h === 5]];
       body += `<table class="rent">${rows.map(([l, v, now]) => `<tr class="${now ? 'now' : ''}"><td>${l}</td><td>${fmt(v)}</td></tr>`).join('')}</table>
         <div class="kv"><span>سعر البيت/الفندق</span><b>${fmt(t.houseCost)}</b></div>
-        <div class="kv"><span>الدولة</span><b style="direction:rtl;display:flex;align-items:center;gap:6px">${flag(t.country, 'sm')} ${esc(t.countryName)}</b></div>`;
+        <div class="kv"><span>الدولة</span><b style="direction:rtl;display:flex;align-items:center;gap:6px">${mark(t, 'sm')} ${esc(t.countryName)}</b></div>`;
     } else if (t.type === 'port') {
       body += `<table class="rent">${S.board.portRent.map((v, k) => `<tr><td>إذا عندك ${k + 1} ${k ? 'موانئ' : 'ميناء'}</td><td>${fmt(v)}</td></tr>`).join('')}</table>`;
     } else if (t.type === 'util') {
@@ -1277,7 +1373,7 @@
     const band = t.type === 'city' ? SET(t.set).color : '';
     const keepMin = $('#aucMin') ? $('#aucMin').value : '';
     const hadFocus = document.activeElement && document.activeElement.id === 'aucMin';
-    root.innerHTML = modalShell(`${t.type === 'city' ? flag(t.country, 'lg') : `<span class="head-icon">${ART.icon(iconName(t))}</span>`}${esc(t.name)}`, body, '', band);
+    root.innerHTML = modalShell(`${t.type === 'city' ? mark(t, 'lg') : `<span class="head-icon">${ART.icon(iconName(t))}</span>`}${esc(t.name)}`, body, '', band);
     bindModal(root);
     if ($('#aucMin')) { $('#aucMin').value = keepMin; if (hadFocus) $('#aucMin').focus(); }
     $$('[data-m]', root).forEach((b) => {
@@ -1301,7 +1397,7 @@
   function miniDeed(st, i, attrs = '', on = false, disabled = false) {
     const t = T(i), pr = st.game.props[i];
     const col = t.type === 'city' ? SET(t.set).color : '#4b5d73';
-    const art = t.type === 'city' ? flag(t.country, 'sm') : `<span class="mini-icon">${ART.icon(iconName(t))}</span>`;
+    const art = t.type === 'city' ? mark(t, 'sm') : `<span class="mini-icon">${ART.icon(iconName(t))}</span>`;
     const tags = (pr && pr.mortgaged ? '<i class="md-tag">مرهونة</i>' : '') + (disabled ? '<i class="md-tag warn">فيها أبنية</i>' : '');
     return `<button type="button" class="mdeed ${on ? 'on' : ''}" style="--sc:${col}" ${attrs} ${disabled ? 'disabled' : ''}>
       <span class="md-band"></span><span class="md-art">${art}</span><b>${esc(t.name)}</b><small>${t.type === 'city' ? esc(t.countryName) + ' · ' : ''}${fmt(t.price)}</small>${tags}</button>`;

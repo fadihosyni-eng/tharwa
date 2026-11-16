@@ -959,3 +959,134 @@ a { color: var(--cyan2); }
   .adm-body { grid-row: 2; }
   .grid3 { grid-template-columns: 1fr; }
 }
+
+/* ================================================================ round 7: icons, rent pill, deeds, maps, store */
+/* UI icons (ART.ui) — inherit the text colour */
+.ui-ico { width: 1.15em; height: 1.15em; display: inline-block; vertical-align: -0.2em; flex: 0 0 auto; }
+.ui-ico.em { margin: 0 .08em; }
+.btn .ui-ico { width: 1.2em; height: 1.2em; }
+.c-log .ui-ico { color: var(--cyan2); width: 1.05em; height: 1.05em; }
+.prow .icons .ui-ico { width: 15px; height: 15px; color: var(--gold); }
+
+/* rent: slim glass pill at the top of the board centre (never over the buttons) */
+#cNotice { inset: 10px 0 auto 0 !important; align-items: flex-start !important; }
+.rent-pill { pointer-events: none; display: flex; align-items: center; gap: 10px; min-width: 300px; max-width: min(420px, 92%); height: 52px; padding: 0 10px;
+  border-radius: 99px; background: rgba(6, 14, 34, .72); backdrop-filter: blur(10px) saturate(1.3); -webkit-backdrop-filter: blur(10px) saturate(1.3);
+  border: 1px solid rgba(47, 226, 255, .35); box-shadow: 0 10px 30px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .06);
+  animation: pillIn 3.2s cubic-bezier(.2, .8, .2, 1) forwards; }
+.rp-av { width: 34px; height: 34px; flex: 0 0 auto; box-shadow: 0 0 0 2px rgba(255, 255, 255, .85), 0 0 12px 2px var(--pc); }
+.rp-arrow { color: var(--cyan2); opacity: .7; display: inline-flex; }
+.rp-arrow .ui-ico { width: 16px; height: 16px; }
+.rp-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.rp-amt { font-size: 18px; font-weight: 900; color: var(--gold); direction: ltr; text-shadow: 0 0 12px rgba(255, 197, 61, .45); }
+.rp-mid small { font-size: 11.5px; color: #9fb4cf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+@keyframes pillIn { 0% { opacity: 0; transform: translateY(-10px) scale(.96); } 10% { opacity: 1; transform: none; } 78% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+
+/* bigger, readable deeds + matching auction box */
+.deed { width: 280px; border-radius: 14px; }
+.deed-head { padding: 12px 14px; gap: 12px; }
+.dh-text b { font-size: 21px; }
+.dh-text small { font-size: 14px; }
+.deed-head .flag.mid { --fs: 40px; }
+.dh-icon { width: 42px; height: 42px; }
+.deed-body { padding: 8px 15px 4px; font-size: 15px; }
+.drow { padding: 3px 0; }
+.deed-price { font-size: 28px; padding: 6px 0 10px; }
+.auction-wrap .auction { min-width: 240px; }
+.a-bid { font-size: 30px; transition: color .2s; }
+.a-bid.bump { animation: bidBump .45s ease-out; }
+@keyframes bidBump { 0% { transform: scale(1); } 35% { transform: scale(1.18); color: #fff; } 100% { transform: scale(1); } }
+.a-who { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 800; }
+.a-av { width: 22px; height: 22px; }
+.a-lots:empty, [data-live="min"]:empty { display: none; }
+.center.compact { gap: 5px; }
+.center.compact .dice3 { --d: clamp(22px, 3vh, 30px); }
+.center.compact .center-art { opacity: .05; }
+.center.compact .auction-wrap .auction { min-width: 230px; }
+@media (max-width: 820px) {
+  .deed { width: 132px; }
+  .dh-text b { font-size: 12.5px; }
+  .dh-text small { font-size: 10px; }
+  .deed-body { font-size: 10px; padding: 3px 6px 0; }
+  .deed-price { font-size: 14px; padding: 2px 0 4px; }
+  .a-bid { font-size: 18px; }
+  .rent-pill { min-width: 0; height: 40px; gap: 6px; }
+  .rp-av { width: 24px; height: 24px; }
+  .rp-amt { font-size: 14px; }
+  .rp-mid small { font-size: 9.5px; }
+}
+
+/* game end: points per account */
+.pts-res { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; min-width: 240px; }
+.pts-line { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 12px; background: rgba(6, 14, 34, .6); border: 1px solid var(--line2); font-size: 15px; }
+.pts-line .tk { width: 26px; height: 26px; }
+.pts-line b { flex: 1; text-align: start; color: var(--text); }
+.pts-d { font-weight: 900; direction: ltr; display: inline-flex; align-items: center; gap: 4px; }
+.pts-line.up .pts-d { color: var(--ok); }
+.pts-line.down .pts-d { color: var(--danger); }
+
+/* new buildings: taller hotel */
+.bld svg.house { filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .55)); }
+.bld svg.hotel { width: clamp(14px, 2.2vh, 22px) !important; height: clamp(17px, 2.75vh, 27px) !important; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); }
+@media (max-width: 820px) { .bld svg.hotel { width: 11px !important; height: 14px !important; } }
+
+/* emblem (maps without flags) */
+.flag.emblem { display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 35% 30%, #fff 0, var(--ec) 35%, color-mix(in srgb, var(--ec) 40%, #000) 100%);
+  box-shadow: 0 0 10px var(--ec), inset 0 0 0 1.5px rgba(255, 255, 255, .7); }
+.flag.emblem i { width: 42%; height: 42%; border: 1.5px solid #fff; transform: rotate(45deg); border-radius: 2px; }
+
+/* lobby map picker */
+.map-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.map-pick { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px; border-radius: 12px; text-align: start;
+  background: linear-gradient(135deg, var(--b), #050b1c); border: 1px solid var(--line2); color: var(--text); cursor: pointer; font-family: inherit; }
+.map-pick.on { border-color: var(--a); box-shadow: 0 0 0 1px var(--a), 0 0 16px color-mix(in srgb, var(--a) 40%, transparent); }
+.map-pick.locked { opacity: .65; cursor: default; }
+.mp-sw { display: flex; gap: 2px; }
+.mp-sw i { width: 10px; height: 10px; border-radius: 3px; }
+.map-pick b { font-size: 13px; }
+.map-pick small { font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px; }
+.m-on { color: var(--ok); }
+.m-price { color: var(--gold); }
+.map-pick .m-lock { position: absolute; top: 8px; left: 8px; width: 15px; height: 15px; color: var(--muted); }
+
+/* themed rooms (non-classic maps) */
+.room.themed .board { background: var(--m-board); border-color: var(--m-line); box-shadow: 0 0 0 1px var(--m-line), 0 0 60px color-mix(in srgb, var(--m-accent) 22%, transparent), 0 30px 80px rgba(0, 0, 0, .5); }
+.room.themed .tile { border-color: var(--m-line); color: var(--m-text); }
+.room.themed .tile .tname { color: var(--m-text); }
+.room.themed .band .bprice { color: var(--m-accent2); }
+.room.themed .tile.corner { background: var(--tile2); }
+.room.themed .center { background: var(--m-center); }
+.room.themed .center::after { display: none; }
+.room.themed .center::before { content: ''; position: absolute; inset: 0; background: var(--m-bg) center / cover no-repeat; opacity: .55; pointer-events: none; }
+.room.themed .center-art { opacity: .05; }
+.room.themed .brand, .room.themed .turn b { color: var(--m-accent); }
+.room.themed .c-log .ui-ico { color: var(--m-accent2); }
+.room.themed .tile:hover { border-color: var(--m-accent); box-shadow: 0 0 14px color-mix(in srgb, var(--m-accent) 45%, transparent); }
+
+/* store + leaders */
+.store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.map-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line2); }
+.map-card.owned { border-color: rgba(40, 211, 145, .5); }
+.mini-board { position: relative; display: grid; grid-template-columns: 1.4fr repeat(9, 1fr) 1.4fr; grid-template-rows: 1.4fr repeat(9, 1fr) 1.4fr; gap: 2px; padding: 3px;
+  aspect-ratio: 1.22 / 1; border-radius: 12px; overflow: hidden; background: var(--mb-board, #071330); box-shadow: inset 0 0 0 1px var(--mb-line, rgba(47, 226, 255, .3)); direction: ltr; }
+.mini-board i { border-radius: 2px; background: var(--mb-tile, #0b1834); }
+.mini-board i.c { box-shadow: inset 0 3px 0 var(--sc); }
+.mini-board .mb-center { grid-row: 2 / 11; grid-column: 2 / 11; border-radius: 6px; background: var(--mb-center, #0c1520); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+.mini-board .mb-center::before { content: ''; position: absolute; inset: 0; background: var(--mb-bg) center / cover no-repeat; opacity: .7; }
+.mini-board .mb-center b { position: relative; font-size: 22px; font-weight: 900; color: var(--mb-accent, var(--gold)); text-shadow: 0 2px 10px rgba(0, 0, 0, .7); }
+.map-card h3 { margin: 0; display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.map-card p { margin: 0; color: var(--muted); line-height: 1.6; font-size: 13.5px; }
+.map-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.price { color: var(--gold); font-weight: 900; font-size: 18px; display: inline-flex; align-items: center; gap: 4px; direction: ltr; }
+.store-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.my-pts { display: inline-flex; align-items: center; gap: 6px; font-weight: 900; color: var(--gold); background: rgba(255, 197, 61, .1); border: 1px solid rgba(255, 197, 61, .35); padding: 6px 14px; border-radius: 99px; }
+.lead-row { display: grid; grid-template-columns: 44px auto 1fr auto auto; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; background: var(--panel2); margin-bottom: 6px; text-decoration: none; color: var(--text); }
+.lead-row:hover { box-shadow: 0 0 0 1px var(--cyan); }
+.lead-rank { font-size: 18px; font-weight: 900; color: var(--muted); text-align: center; }
+.lead-row.top1 .lead-rank { color: #ffd34d; } .lead-row.top2 .lead-rank { color: #d9e4f0; } .lead-row.top3 .lead-rank { color: #e0a06a; }
+.lead-row small { color: var(--muted); display: block; }
+.lead-pts { font-weight: 900; color: var(--gold); display: inline-flex; align-items: center; gap: 4px; direction: ltr; }
+.topnav { display: flex; gap: 4px; margin-inline-start: 18px; flex: 1; }
+.topnav a { color: var(--muted); text-decoration: none; font-weight: 800; padding: 6px 12px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; }
+.topnav a:hover, .topnav a.on { color: var(--text); background: var(--panel2); }
+@media (max-width: 820px) { .topnav a span { display: none; } .lead-row { grid-template-columns: 30px auto 1fr auto; } .lead-row .lead-games { display: none; } }
