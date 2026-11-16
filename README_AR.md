@@ -114,6 +114,36 @@ node tharwa-game/server.js
 | `ADMIN_USERS` | أسماء مستخدمين بيصيروا أدمن وقت التسجيل (مفصولين بفاصلة). |
 | `COOKIE_SECRET` | اختياري — بيدخل بتشفير رموز الجلسات. |
 | `DATA_FILE` | للتجربة المحلية بس — مكان ملف JSON بدل `data/local.json`. |
+| `GOOGLE_CLIENT_ID` | معرّف تطبيق Google (إذا مو موجود، زر Google ما بيظهر). |
+| `GOOGLE_CLIENT_SECRET` | السر تبع تطبيق Google (**سرّي**). |
+| `PUBLIC_URL` | اختياري — عنوان الموقع، مثلاً `https://tharwa.onrender.com` (إذا ما حطيته بيتحسب من الطلب). |
+
+### الإيميل واسم المستخدم
+- الحسابات الجديدة بكلمة سر لازم يكون إلها **إيميل** (ما بيظهر لحدا). الدخول بـ **اسم المستخدم أو الإيميل**.
+- الحسابات القديمة بلا إيميل بتضل شغّالة، والإعدادات بتذكّر صاحبها يضيف إيميل.
+- اسم المستخدم بيتغيّر من الإعدادات **مرة كل 30 يوم** (مش الأسماء المحجوزة). الأدمن بيقدر يغيّر أي اسم من لوحة التحكم، حتى للأسماء المحجوزة (مثل `serva`)،
+  وكمان أي اسم محجوز موجود بـ `ADMIN_USERS` بينقبل وقت التسجيل.
+
+### الدخول بحساب Google (خطوة بخطوة، مرة وحدة)
+1. ادخل على https://console.cloud.google.com واعمل **مشروع جديد** (New Project) باسم «ثروة».
+2. من القائمة: **APIs & Services ← OAuth consent screen**:
+   - اختار **External** واضغط Create.
+   - App name: **ثروة** · User support email: إيميلك · Developer contact: إيميلك.
+   - Scopes: خليها الافتراضية (`openid`, `email`, `profile`) — كمّل وحفظ.
+   - بعد ما تجرّب، اضغط **Publish app** ليقدر أي حدا يدخل (مش بس حسابات التجربة).
+3. **APIs & Services ← Credentials ← Create Credentials ← OAuth client ID**:
+   - Application type: **Web application** · Name: ثروة.
+   - **Authorized redirect URIs** ← Add URI:
+     - `https://tharwa.onrender.com/api/auth/google/callback`
+     - (لما نشتري الدومين) `https://الدومين-تبعنا/api/auth/google/callback`
+   - اضغط Create وانسخ **Client ID** و **Client secret**.
+4. بـ Render: خدمة **tharwa** ← **Environment**:
+   - `GOOGLE_CLIENT_ID` = الـ Client ID
+   - `GOOGLE_CLIENT_SECRET` = الـ Client secret (**سرّي**)
+   - (اختياري) `PUBLIC_URL` = `https://tharwa.onrender.com`
+5. احفظ ← Render بيعيد النشر، وبيطلع زر «المتابعة بحساب Google» بصفحة الدخول والتسجيل.
+- كيف بيشتغل: إذا حساب Google مربوط ← بيدخل. إذا في حساب بنفس الإيميل المؤكَّد ← بينربط وبيدخل. إذا جديد ← بيختار اسم مستخدم بس (الإيميل والاسم والصورة من Google).
+- الحسابات الموقوفة ما بتقدر تدخل بـ Google كمان.
 
 ## الاختبارات
 - `node tharwa-game/test/run-all.js` — كل الاختبارات على سيرفر مؤقت (بورت 8701) بدون ما يلمس لعبتك على 8700.
@@ -121,6 +151,7 @@ node tharwa-game/server.js
 - `node tharwa-game/test/sim.js 300` — 300 لعبة بوتات كاملة (مع قروض ومزادات لاعبين) وفحص القواعد بكل خطوة.
 - `node tharwa-game/test/api.js` — لاعبين حقيقيين عبر السيرفر (لازم السيرفر يكون شغّال).
 - `node tharwa-game/test/auth.js` — الحسابات والبروفايل ولوحة التحكم والإيقاف والنقاط (run-all بيشغّله على ملف بيانات مؤقت).
+- `node tharwa-game/test/google.js` — الدخول بـ Google بدون إنترنت (Google مزيّف): حساب جديد، ربط بالإيميل، ربط من الإعدادات، موقوف، محاولات غلط.
 
 ## لسا مو موجود
 - متجر نقاط (بيع وشرا)، وضع الفرق، ألعاب تانية (القائمة جاهزة بلوحة التحكم).

@@ -46,15 +46,21 @@ async function snapshot(code) {
   const boss = client(), sami = client(), guest = client(), rana = client();
 
   // register: first account is admin, the next is a normal user
-  let r = await boss.req('/api/auth/register', { username: 'Boss', displayName: 'المدير', password: 'secret1' });
+  assert.strictEqual((await guest.req('/api/site')).body.googleEnabled, false, 'Google button hidden without GOOGLE_CLIENT_ID');
+  assert.strictEqual((await guest.req('/api/auth/register', { username: 'nomail', password: 'pass123' })).status, 400, 'email is required');
+  assert.strictEqual((await guest.req('/api/auth/register', { username: 'badmail', email: 'not-an-email', password: 'pass123' })).status, 400, 'email must look valid');
+  let r = await boss.req('/api/auth/register', { username: 'Boss', displayName: 'المدير', email: 'Boss@Example.com ', password: 'secret1' });
   assert.strictEqual(r.status, 200, 'register boss'); assert.strictEqual(r.body.user.role, 'admin', 'first user is admin');
   assert.strictEqual(r.body.user.username, 'boss', 'username lower-cased');
   assert(/HttpOnly/i.test(r.setCookie[0]) && /SameSite=Lax/i.test(r.setCookie[0]), 'session cookie is HttpOnly + SameSite=Lax');
-  r = await sami.req('/api/auth/register', { username: 'sami_1', displayName: 'سامي', password: 'pass123' });
+  assert.strictEqual(r.body.user.email, 'boss@example.com', 'email trimmed + lower-cased');
+  r = await sami.req('/api/auth/register', { username: 'sami_1', displayName: 'سامي', email: 'sami@example.com', password: 'pass123' });
   assert.strictEqual(r.status, 200); assert.strictEqual(r.body.user.role, 'user', 'second user is not admin');
   assert.strictEqual((await guest.req('/api/auth/register', { username: 'ab', password: 'pass123' })).status, 400, 'too short username');
   assert.strictEqual((await guest.req('/api/auth/register', { username: 'admin', password: 'pass123' })).status, 400, 'reserved username');
-  assert.strictEqual((await guest.req('/api/auth/register', { username: 'sami_1', password: 'pass123' })).status, 409, 'duplicate username');
+  assert.strictEqual((await guest.req('/api/auth/register', { username: 'sami_1', email: 'x1@example.com', password: 'pass123' })).status, 409, 'duplicate username');
+  r = await guest.req('/api/auth/register', { username: 'sami_2', email: 'SAMI@example.com', password: 'pass123' });
+  assert.deepStrictEqual([r.status, r.body.error], [409, 'هالإيميل مستعمل'], 'duplicate email');
 
   // me / logout / login
   assert.strictEqual((await sami.req('/api/auth/me')).body.user.username, 'sami_1');
@@ -62,6 +68,15 @@ async function snapshot(code) {
   assert.strictEqual((await sami.req('/api/auth/me')).body.user, null, 'logged out');
   assert.strictEqual((await sami.req('/api/auth/login', { username: 'sami_1', password: 'wrong!!' })).status, 401, 'wrong password');
   assert.strictEqual((await sami.req('/api/auth/login', { username: 'SAMI_1', password: 'pass123' })).status, 200, 'login');
+  await sami.req('/api/auth/logout', {});
+  assert.strictEqual((await sami.req('/api/auth/login', { username: 'Sami@Example.com', password: 'pass123' })).status, 200, 'login by email');
+  // change email: needs the current password; the new one is unverified
+  assert.strictEqual((await sami.req('/api/me/update', { email: 'sami2@example.com', password: 'nope!!' })).status, 400, 'email change needs the password');
+  assert.strictEqual((await sami.req('/api/me/update', { email: 'boss@example.com', password: 'pass123' })).status, 409, 'cannot take another account\'s email');
+  assert.strictEqual((await sami.req('/api/me/update', { email: 'sami2@example.com', password: 'pass123' })).status, 200);
+  r = (await sami.req('/api/auth/me')).body.user;
+  assert.deepStrictEqual([r.email, r.emailVerified, r.hasPassword, r.google], ['sami2@example.com', false, true, false]);
+  assert.strictEqual((await guest.req('/api/u/sami_1')).body.user.email, undefined, 'email is never public');
 
   // profile pages
   assert.strictEqual((await guest.req('/u/sami_1')).status, 200, 'profile page');
@@ -89,6 +104,10 @@ async function snapshot(code) {
   assert.strictEqual((await guest.req('/api/site')).body.announcement, '', 'announcement off');
 
   // points adjust
+  const byMail = (await boss.req('/api/admin/users?q=sami2@example')).body.users;
+  assert.strictEqual(byMail.length, 1, 'admin search by email');
+  assert.strictEqual(byMail[0].email, 'sa***@example.com', 'email masked in the list');
+  assert.strictEqual((await boss.req('/api/admin/user?id=' + byMail[0].id)).body.email, 'sami2@example.com', 'full email in the details view');
   const users = (await boss.req('/api/admin/users?q=sami')).body.users;
   const samiId = users.find((u) => u.username === 'sami_1').id;
   r = await boss.req('/api/admin/user', { id: samiId, action: 'points', amount: 25, reason: 'هدية' });
@@ -110,7 +129,7 @@ async function snapshot(code) {
   assert.strictEqual(r.body.recent.length, 1); assert.strictEqual(r.body.recent[0].won, true);
 
   // stake transfer between two accounts: rana (100 pts) beats sami (75 pts) -> sami pays 20, rana gets 20 + 50
-  r = await rana.req('/api/auth/register', { username: 'rana', displayName: 'رنا', password: 'pass123' });
+  r = await rana.req('/api/auth/register', { username: 'rana', displayName: 'رنا', email: 'rana@example.com', password: 'pass123' });
   const ranaId = (await boss.req('/api/admin/users?q=rana')).body.users[0].id;
   await boss.req('/api/admin/user', { id: ranaId, action: 'points', amount: 100, reason: 'رصيد' });
   const g2 = (await rana.req('/api/create', { name: 'x', isPrivate: true })).body;
@@ -153,5 +172,16 @@ async function snapshot(code) {
 
   const log = (await boss.req('/api/admin/audit')).body;
   assert(['ban', 'points', 'closeRoom', 'settings'].every((a) => log.some((e) => e.action === a)), 'admin actions are in the audit log');
+  // usernames: admins may rename to reserved names; users rename themselves (not reserved, once per 30 days)
+  assert.strictEqual((await boss.req('/api/admin/user', { id: ranaId, action: 'rename', username: 'boss' })).status, 409, 'rename to a taken name');
+  assert.strictEqual((await boss.req('/api/admin/user', { id: ranaId, action: 'rename', username: 'Bad Name!' })).status, 400, 'rename validates the format');
+  assert.strictEqual((await boss.req('/api/admin/user', { id: ranaId, action: 'rename', username: 'Serva' })).status, 200, 'admin may use a reserved name');
+  assert.strictEqual((await guest.req('/u/serva')).status, 200, 'profile URL follows the new name');
+  assert.strictEqual((await guest.req('/api/u/rana')).status, 404, 'old profile URL is gone');
+  assert((await boss.req('/api/admin/audit')).body.some((e) => e.action === 'rename' && e.detail && e.detail.to === 'serva'), 'rename audited');
+  assert.strictEqual((await rana.req('/api/me/username', { username: 'admin' })).status, 400, 'users cannot take reserved names');
+  assert.strictEqual((await rana.req('/api/me/username', { username: 'rana_x' })).status, 200, 'self rename');
+  assert.strictEqual((await rana.req('/api/auth/me')).body.user.username, 'rana_x');
+  assert.strictEqual((await rana.req('/api/me/username', { username: 'rana_y' })).status, 429, 'once per 30 days');
   console.log('AUTH OK — accounts, profiles, admin, results, bans');
 })().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });

@@ -19,8 +19,9 @@ function run(file, args = []) {
 
 (async () => {
   run('cards.js');
+  run('maps.js');
   run('sim.js', ['150']);
-  const srv = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env: { ...process.env, PORT, DATA_FILE, DATABASE_URL: '', ADMIN_USERS: '' }, stdio: 'ignore' });
+  const srv = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env: { ...process.env, PORT, DATA_FILE, DATABASE_URL: '', ADMIN_USERS: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '' }, stdio: 'ignore' });
   try {
     for (let k = 0; k < 40; k++) {
       try { const r = await fetch(BASE + '/api/board'); if (r.ok) break; } catch (e) { /* not up yet */ }
@@ -31,6 +32,7 @@ function run(file, args = []) {
     if (!Array.isArray(net)) throw new Error('/api/net did not return a list');
     run('api.js', [BASE]);
     run('auth.js', [BASE]);
+    run('google.js');
     // spam protection: one IP cannot create rooms without limit
     let limited = false;
     for (let k = 0; k < 14; k++) {

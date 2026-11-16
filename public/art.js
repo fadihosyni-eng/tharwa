@@ -173,6 +173,7 @@
     store: `<path d="M4 9 L5.5 3.5 H18.5 L20 9" ${F}/><path d="M4 9 Q4 11.5 6.7 11.5 Q9.3 11.5 9.3 9 Q9.3 11.5 12 11.5 Q14.7 11.5 14.7 9 Q14.7 11.5 17.3 11.5 Q20 11.5 20 9 M5.5 11.5 V20.5 H18.5 V11.5 M10 20.5 V15.5 H14 V20.5"/>`,
     play: `<path d="M7 4.5 L19 12 L7 19.5 Z" fill="currentColor" fill-opacity=".3"/>`,
     coins: `<ellipse cx="9" cy="7" rx="5.5" ry="2.5" ${F}/><path d="M3.5 7 V11 Q3.5 13.5 9 13.5 Q14.5 13.5 14.5 11 V7"/><ellipse cx="15" cy="14" rx="5.5" ry="2.5" ${F}/><path d="M9.5 14 V17.5 Q9.5 20 15 20 Q20.5 20 20.5 17.5 V14"/>`,
+    mail: `<rect x="3" y="5.5" width="18" height="13" rx="2.5" ${F}/><path d="M3.8 7 L12 13 L20.2 7"/>`,
     medal: `<path d="M8 3.5 L12 10 L16 3.5" /><circle cx="12" cy="15" r="5.5" ${F}/><path d="M12 12.5 L12.8 14.3 L14.7 14.5 L13.3 15.8 L13.7 17.7 L12 16.8 L10.3 17.7 L10.7 15.8 L9.3 14.5 L11.2 14.3 Z" fill="currentColor"/>`,
   };
   const ui = (name, cls = '') => `<svg class="ui-ico ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${UI[name] || UI.sparkle}</svg>`;
@@ -188,7 +189,7 @@
     '📈': 'chartUp', '🙏': 'hand', '👀': 'eye', '👁': 'eye', '🏖': 'beach', '⚖': 'scale', '⚙': 'gear', '🛡': 'shield', '👋': 'wave',
     '🔑': 'key', '📊': 'chart', '📜': 'scroll', '🚪': 'logout', '✨': 'sparkle', '📅': 'calendar', '✏': 'pencil', '🗑': 'trash',
     '🎉': 'party', '🚓': 'siren', '🧾': 'receipt', '🎴': 'cards', '🧰': 'chest', '➡': 'arrow', '⚓': 'anchor', '🏷': 'tag', '⛔': 'xmark',
-    '🛒': 'store', '🪙': 'coins', '🥇': 'medal', '🙂': 'user', '🎁': 'party', '▶': 'play',
+    '🛒': 'store', '🪙': 'coins', '🥇': 'medal', '🙂': 'user', '🎁': 'party', '▶': 'play', '📧': 'mail', '✉': 'mail',
   };
   const EMOJI_RE = new RegExp('(' + Object.keys(EMOJI).map((e) => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')️?', 'gu');
   const RAW_SEL = '.chat-msg, .bio, [data-raw], textarea, input, script, style, svg, title, option';

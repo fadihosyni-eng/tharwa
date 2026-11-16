@@ -13,8 +13,9 @@ const path = require('path');
 
 // ---------------------------------------------------------------- shared helpers
 const USER_FIELDS = ['id', 'username', 'displayName', 'passHash', 'role', 'bio', 'avatar', 'color', 'piece',
-  'points', 'games', 'wins', 'banned', 'createdAt', 'lastSeen'];
-function dupErr() { const e = new Error('username taken'); e.code = 'dup'; return e; }
+  'points', 'games', 'wins', 'banned', 'createdAt', 'lastSeen', 'email', 'emailVerified', 'googleSub', 'usernameChangedAt'];
+// `field` says which unique value clashed: 'username', 'email' or 'google'.
+function dupErr(field = 'username') { const e = new Error(field + ' taken'); e.code = 'dup'; e.field = field; return e; }
 function dayKey(ms) { return new Date(ms).toISOString().slice(0, 10); }
 function bucketDays(times, days) {
   const out = [];
@@ -48,13 +49,20 @@ function jsonStore(file) {
     },
     // users
     async createUser(u) {
-      if (db.users.some((x) => x.username === u.username)) throw dupErr();
-      db.users.push(clone(u)); save(); return clone(u);
+      if (db.users.some((x) => x.username === u.username)) throw dupErr('username');
+      if (u.email && db.users.some((x) => x.email === u.email)) throw dupErr('email');
+      if (u.googleSub && db.users.some((x) => x.googleSub === u.googleSub)) throw dupErr('google');
+      db.users.push(clone({ email: null, emailVerified: false, googleSub: null, ...u })); save(); return clone(findUser(u.id));
     },
     async getUser(id) { return clone(findUser(id)); },
     async getUserByName(username) { return clone(db.users.find((u) => u.username === username)); },
+    async getUserByEmail(email) { return email ? clone(db.users.find((u) => u.email === email)) : null; },
+    async getUserByGoogle(sub) { return sub ? clone(db.users.find((u) => u.googleSub === sub)) : null; },
     async updateUser(id, patch) {
       const u = findUser(id); if (!u) return null;
+      if (patch.username && db.users.some((x) => x.id !== id && x.username === patch.username)) throw dupErr('username');
+      if (patch.email && db.users.some((x) => x.id !== id && x.email === patch.email)) throw dupErr('email');
+      if (patch.googleSub && db.users.some((x) => x.id !== id && x.googleSub === patch.googleSub)) throw dupErr('google');
       for (const k of Object.keys(patch)) if (USER_FIELDS.includes(k) && k !== 'id') u[k] = patch[k];
       save(); return clone(u);
     },
@@ -78,7 +86,7 @@ function jsonStore(file) {
     },
     async listUsers({ q = '', limit = 50, offset = 0 } = {}) {
       const s = q.toLowerCase();
-      const all = db.users.filter((u) => !s || u.username.includes(s) || u.displayName.toLowerCase().includes(s))
+      const all = db.users.filter((u) => !s || u.username.includes(s) || u.displayName.toLowerCase().includes(s) || (u.email || '').includes(s))
         .sort((a, b) => b.createdAt - a.createdAt);
       return { total: all.length, users: all.slice(offset, offset + limit).map(clone) };
     },
@@ -139,8 +147,13 @@ function pgStore(url) {
     id: r.id, username: r.username, displayName: r.display_name, passHash: r.pass_hash, role: r.role, bio: r.bio,
     avatar: r.avatar, color: r.color, piece: r.piece, points: r.points, games: r.games, wins: r.wins, banned: r.banned,
     createdAt: Number(r.created_at), lastSeen: Number(r.last_seen),
+    email: r.email || null, emailVerified: !!r.email_verified, googleSub: r.google_sub || null,
+    usernameChangedAt: r.username_changed_at ? Number(r.username_changed_at) : null,
   } : null);
-  const COL = { displayName: 'display_name', passHash: 'pass_hash', createdAt: 'created_at', lastSeen: 'last_seen' };
+  const COL = { displayName: 'display_name', passHash: 'pass_hash', createdAt: 'created_at', lastSeen: 'last_seen',
+    emailVerified: 'email_verified', googleSub: 'google_sub', usernameChangedAt: 'username_changed_at' };
+  // Postgres unique-violation -> which field clashed.
+  const dupFrom = (e) => dupErr(/email/.test(e.constraint || '') ? 'email' : /google/.test(e.constraint || '') ? 'google' : 'username');
   const toResult = (r) => ({
     id: r.id, roomCode: r.room_code, game: r.game, players: r.players, userIds: r.user_ids, winner: r.winner,
     rounds: r.rounds, durationMs: Number(r.duration_ms), createdAt: Number(r.created_at),
@@ -170,22 +183,36 @@ function pgStore(url) {
           user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, map_id TEXT NOT NULL, at BIGINT NOT NULL,
           PRIMARY KEY (user_id, map_id));
         CREATE INDEX IF NOT EXISTS users_points ON users (points DESC);`);
+      // Round 8 (additive, safe on existing production tables): email + Google sign-in.
+      await q(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS username_changed_at BIGINT;
+        ALTER TABLE users ALTER COLUMN pass_hash DROP NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS users_email_uq ON users (email) WHERE email IS NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS users_google_uq ON users (google_sub) WHERE google_sub IS NOT NULL;`);
     },
     async createUser(u) {
       try {
-        const r = await q(`INSERT INTO users (id, username, display_name, pass_hash, role, bio, avatar, color, piece, points, games, wins, banned, created_at, last_seen)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-        [u.id, u.username, u.displayName, u.passHash, u.role, u.bio, u.avatar, u.color, u.piece, u.points, u.games, u.wins, u.banned, u.createdAt, u.lastSeen]);
+        const r = await q(`INSERT INTO users (id, username, display_name, pass_hash, role, bio, avatar, color, piece, points, games, wins, banned, created_at, last_seen, email, email_verified, google_sub)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+        [u.id, u.username, u.displayName, u.passHash, u.role, u.bio, u.avatar, u.color, u.piece, u.points, u.games, u.wins, u.banned, u.createdAt, u.lastSeen,
+          u.email || null, !!u.emailVerified, u.googleSub || null]);
         return toUser(r.rows[0]);
-      } catch (e) { if (e.code === '23505') throw dupErr(); throw e; }
+      } catch (e) { if (e.code === '23505') throw dupFrom(e); throw e; }
     },
     async getUser(id) { return toUser((await q('SELECT * FROM users WHERE id=$1', [id])).rows[0]); },
     async getUserByName(username) { return toUser((await q('SELECT * FROM users WHERE username=$1', [username])).rows[0]); },
+    async getUserByEmail(email) { return email ? toUser((await q('SELECT * FROM users WHERE email=$1', [email])).rows[0]) : null; },
+    async getUserByGoogle(sub) { return sub ? toUser((await q('SELECT * FROM users WHERE google_sub=$1', [sub])).rows[0]) : null; },
     async updateUser(id, patch) {
       const keys = Object.keys(patch).filter((k) => USER_FIELDS.includes(k) && k !== 'id');
       if (!keys.length) return this.getUser(id);
       const sets = keys.map((k, i) => `${COL[k] || k}=$${i + 2}`).join(', ');
-      return toUser((await q(`UPDATE users SET ${sets} WHERE id=$1 RETURNING *`, [id, ...keys.map((k) => patch[k])])).rows[0]);
+      try {
+        return toUser((await q(`UPDATE users SET ${sets} WHERE id=$1 RETURNING *`, [id, ...keys.map((k) => patch[k])])).rows[0]);
+      } catch (e) { if (e.code === '23505') throw dupFrom(e); throw e; }
     },
     async addUserStats(id, dPoints, dGames, dWins) {
       return toUser((await q('UPDATE users SET points=points+$2, games=games+$3, wins=wins+$4 WHERE id=$1 RETURNING *', [id, dPoints, dGames, dWins])).rows[0]);
@@ -200,7 +227,7 @@ function pgStore(url) {
     },
     async listUsers({ q: s = '', limit = 50, offset = 0 } = {}) {
       const like = '%' + String(s).toLowerCase().replace(/[%_\\]/g, '\\$&') + '%';
-      const where = s ? 'WHERE username LIKE $1 OR LOWER(display_name) LIKE $1' : '';
+      const where = s ? 'WHERE username LIKE $1 OR LOWER(display_name) LIKE $1 OR email LIKE $1' : '';
       const args = s ? [like] : [];
       const total = Number((await q(`SELECT COUNT(*) FROM users ${where}`, args)).rows[0].count);
       const rows = (await q(`SELECT * FROM users ${where} ORDER BY created_at DESC LIMIT ${Number(limit) | 0} OFFSET ${Number(offset) | 0}`, args)).rows;

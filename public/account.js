@@ -36,6 +36,7 @@
   // ---------------------------------------------------------------- avatar
   function avatarHTML(key, size = 40, color) {
     const k = String(key || 'a1');
+    if (/^https:\/\/lh3\.googleusercontent\.com\//.test(k)) return `<span class="ava" style="--s:${size}px"><img src="${esc(k)}" alt="" referrerpolicy="no-referrer" loading="lazy"></span>`;
     if (k.startsWith('piece:')) return `<span class="ava piece" style="--s:${size}px;--pc:${color || '#00b4ff'}"><span class="tk">${ART.piece(k.slice(6))}</span></span>`;
     return `<span class="ava" style="--s:${size}px">${ART.avatar(k)}</span>`;
   }
@@ -100,19 +101,37 @@
   }
 
   // ---------------------------------------------------------------- login / register
+  const EMAIL_RE = /^[a-z0-9._%+-]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/;
+  // Google's «G» (official colours) for the sign-in button.
+  const G_LOGO = '<svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+  const GOOGLE_ERRORS = {
+    off: 'الدخول بـ Google مو مفعّل هلق.', cancel: 'لغيت الدخول بـ Google.', state: 'انتهت صلاحية المحاولة — جرّب مرة تانية.',
+    google: 'ما قدرنا نتأكد من حساب Google — جرّب مرة تانية.', unverified: 'إيميل حساب Google مو مؤكَّد.',
+    banned: 'حسابك موقوف — تواصل مع الإدارة.', rate: 'كتير محاولات — استنى دقيقة وجرّب.',
+  };
+  const googleBtn = () => (ACC.site.googleEnabled
+    ? `<a class="btn-google" href="/api/auth/google/start">${G_LOGO}<span>المتابعة بحساب Google</span></a><div class="or-sep"><span>أو</span></div>` : '');
   function renderAuth(mode) {
     if (ACC.me) { location.href = '/'; return; }
+    const qs = new URLSearchParams(location.search);
+    if (mode === 'register' && qs.get('google') === '1') { renderGoogleFinish(); return; }
     document.title = (mode === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب') + ' — ثروة';
-    const next = new URLSearchParams(location.search).get('next');
+    const next = qs.get('next');
+    const gErr = qs.get('err') && (GOOGLE_ERRORS[qs.get('err')] || 'صار خطأ بالدخول بـ Google.');
     const closed = mode === 'register' && !ACC.site.registrationOpen;
     shell(`<div class="auth-card panel">
       <div class="auth-tabs"><a href="/login" class="${mode === 'login' ? 'on' : ''}">تسجيل الدخول</a><a href="/register" class="${mode === 'register' ? 'on' : ''}">إنشاء حساب</a></div>
       <h2>${mode === 'login' ? 'أهلين فيك من جديد 👋' : 'اعمل حسابك ببلاش ✨'}</h2>
       <p class="hint">${mode === 'login' ? 'ادخل لتجمع نقاط وتحفظ نتايجك.' : 'حسابك بيحفظ اسمك وصورتك ونقاطك وكل ألعابك.'}</p>
       ${closed ? '<div class="form-err show">التسجيل مسكّر هلق من الإدارة.</div>' : ''}
+      ${gErr ? `<div class="form-err show">${esc(gErr)}</div>` : ''}
+      ${closed ? '' : googleBtn()}
       <form id="authForm" novalidate>
-        <label class="field"><span>اسم المستخدم</span><input name="username" autocomplete="username" dir="ltr" maxlength="20" placeholder="مثلاً: sami_99" required><small class="fhint">${mode === 'register' ? '3–20: أحرف إنكليزية صغيرة، أرقام، أو _' : ''}</small></label>
-        ${mode === 'register' ? '<label class="field"><span>اسمك الظاهر</span><input name="displayName" maxlength="24" placeholder="مثلاً: سامي"><small class="fhint">هيك رح يشوفك اللاعبين (فيك تغيّره بعدين)</small></label>' : ''}
+        ${mode === 'login'
+    ? '<label class="field"><span>اسم المستخدم أو الإيميل</span><input name="username" autocomplete="username" dir="ltr" maxlength="254" placeholder="sami_99 أو name@gmail.com" required><small class="fhint"></small></label>'
+    : `<label class="field"><span>اسم المستخدم</span><input name="username" autocomplete="username" dir="ltr" maxlength="20" placeholder="مثلاً: sami_99" required><small class="fhint">3–20: أحرف إنكليزية صغيرة، أرقام، أو _ — بيصير رابط بروفايلك</small></label>
+        <label class="field"><span>الإيميل</span><input name="email" type="email" autocomplete="email" dir="ltr" maxlength="254" placeholder="name@gmail.com" required><small class="fhint">لحماية حسابك — ما بيظهر لحدا</small></label>
+        <label class="field"><span>اسمك الظاهر</span><input name="displayName" maxlength="24" placeholder="مثلاً: سامي"><small class="fhint">هيك رح يشوفك اللاعبين (فيك تغيّره بعدين)</small></label>`}
         <label class="field"><span>كلمة السر</span><div class="pw"><input name="password" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" dir="ltr" required><button type="button" class="pw-eye" title="إظهار">👁</button></div><small class="fhint">${mode === 'register' ? '6 أحرف على الأقل' : ''}</small></label>
         ${mode === 'register' ? '<label class="field"><span>أكّد كلمة السر</span><input name="password2" type="password" autocomplete="new-password" dir="ltr"></label>' : ''}
         <div class="form-err" id="authErr"></div>
@@ -120,33 +139,77 @@
       </form></div>`, 'auth');
     const f = $('#authForm'), errBox = $('#authErr'), go = $('#authGo');
     $('.pw-eye').onclick = () => { const i = f.password; i.type = i.type === 'password' ? 'text' : 'password'; };
-    const setErr = (name, msg) => {
+    const setErr = (name, msg, hint) => {
       const field = f[name] && f[name].closest('.field');
-      if (field) { field.classList.toggle('bad', !!msg); const h = field.querySelector('.fhint'); if (h && msg) h.textContent = msg; }
+      if (!field) return;
+      field.classList.toggle('bad', !!msg);
+      const h = field.querySelector('.fhint');
+      if (h) { if (!h.dataset.hint) h.dataset.hint = h.textContent; h.textContent = msg || hint || h.dataset.hint; }
     };
     f.username.addEventListener('input', () => {
       f.username.value = f.username.value.toLowerCase().replace(/\s/g, '');
       if (mode === 'register') setErr('username', f.username.value && !USER_RE.test(f.username.value) ? 'بس أحرف إنكليزية صغيرة وأرقام و _ (3–20)' : '');
     });
+    if (f.email) {
+      f.email.addEventListener('input', () => { f.email.value = f.email.value.replace(/\s/g, ''); setErr('email', ''); });
+      f.email.addEventListener('blur', () => { const v = f.email.value.toLowerCase(); setErr('email', v && !EMAIL_RE.test(v) ? 'الإيميل مو صحيح — مثلاً: name@gmail.com' : ''); });
+    }
     f.onsubmit = async (e) => {
       e.preventDefault();
       errBox.classList.remove('show');
       const v = Object.fromEntries(new FormData(f));
+      const email = String(v.email || '').trim().toLowerCase();
       let bad = '';
-      if (!USER_RE.test(v.username || '')) bad = 'اسم المستخدم لازم يكون 3–20 حرف إنكليزي صغير أو رقم أو _';
+      if (mode === 'login' && !(v.username || '').trim()) bad = 'اكتب اسم المستخدم أو الإيميل';
+      else if (mode === 'register' && !USER_RE.test(v.username || '')) bad = 'اسم المستخدم لازم يكون 3–20 حرف إنكليزي صغير أو رقم أو _';
+      else if (mode === 'register' && !EMAIL_RE.test(email)) { bad = 'الإيميل مو صحيح — مثلاً: name@gmail.com'; setErr('email', bad); }
       else if ((v.password || '').length < 6) bad = 'كلمة السر لازم تكون 6 أحرف على الأقل';
       else if (mode === 'register' && v.password !== v.password2) bad = 'كلمتين السر مو متطابقين';
       if (bad) { errBox.textContent = bad; errBox.classList.add('show'); return; }
       go.disabled = true; go.classList.add('loading'); const label = go.textContent; go.textContent = 'لحظة…';
       try {
-        const r = await api('/api/auth/' + mode, { username: v.username, password: v.password, displayName: v.displayName });
+        const r = await api('/api/auth/' + mode, { username: v.username, email, password: v.password, displayName: v.displayName });
         ACC.me = r.user;
         toast(mode === 'login' ? `أهلين ${r.user.displayName} 👋` : 'انعمل حسابك ✔', 'ok');
         location.href = next && /^\/[a-z0-9/_-]*$/i.test(next) ? next : '/';
       } catch (er) {
+        if (/الإيميل/.test(er.message)) setErr('email', er.message);
+        if (/اسم المستخدم مأخود|محجوز/.test(er.message)) setErr('username', er.message);
         errBox.textContent = er.message; errBox.classList.add('show');
         go.disabled = false; go.classList.remove('loading'); go.textContent = label;
       }
+    };
+    f.username.focus();
+  }
+  // New Google sign-up: Google already gave the email (verified), name and photo — only the username is left.
+  async function renderGoogleFinish() {
+    document.title = 'كمّل حسابك — ثروة';
+    const pend = await api('/api/auth/google/pending').catch(() => null);
+    if (!pend) { location.href = '/login?err=state'; return; }
+    shell(`<div class="auth-card panel">
+      <div class="g-who">${pend.picture ? avatarHTML(pend.picture, 56) : G_LOGO}<div><b>${esc(pend.name || 'أهلين!')}</b><small dir="ltr">${esc(pend.email)}</small></div></div>
+      <h2>آخر خطوة: اختار اسم مستخدم</h2>
+      <p class="hint">إيميلك مؤكَّد من Google. اختار اسم بيصير رابط بروفايلك.</p>
+      <form id="gForm" novalidate>
+        <label class="field"><span>اسم المستخدم</span><input name="username" dir="ltr" maxlength="20" placeholder="مثلاً: sami_99" required><small class="fhint">3–20: أحرف إنكليزية صغيرة، أرقام، أو _</small></label>
+        <label class="field"><span>اسمك الظاهر</span><input name="displayName" maxlength="24" value="${esc(pend.name || '')}"></label>
+        <div class="form-err" id="gErr"></div>
+        <button class="btn gold big block" id="gGo">إنشاء الحساب</button>
+      </form></div>`, 'auth');
+    const f = $('#gForm'), er = $('#gErr'), go = $('#gGo');
+    f.username.addEventListener('input', () => {
+      f.username.value = f.username.value.toLowerCase().replace(/\s/g, '');
+      f.username.closest('.field').classList.toggle('bad', !!f.username.value && !USER_RE.test(f.username.value));
+    });
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      er.classList.remove('show');
+      if (!USER_RE.test(f.username.value)) { er.textContent = 'اسم المستخدم لازم يكون 3–20 حرف إنكليزي صغير أو رقم أو _'; er.classList.add('show'); return; }
+      go.disabled = true; go.textContent = 'لحظة…';
+      try {
+        await api('/api/auth/google/complete', { username: f.username.value, displayName: f.displayName.value });
+        toast('انعمل حسابك ✔', 'ok'); location.href = '/';
+      } catch (x) { er.textContent = x.message; er.classList.add('show'); go.disabled = false; go.textContent = 'إنشاء الحساب'; }
     };
     f.username.focus();
   }
@@ -240,6 +303,10 @@
     const me = ACC.me;
     document.title = 'الإعدادات — ثروة';
     const avatars = [...ART.AVATAR_KEYS, ...ART.PIECE_KEYS.map((k) => 'piece:' + k)];
+    if (/^https:/.test(me.avatar)) avatars.unshift(me.avatar); // Google photo stays selectable
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('glinked')) { toast('انربط حسابك بـ Google ✔', 'ok'); history.replaceState(null, '', '/settings'); }
+    if (qs.get('gerr')) { toast('حساب Google هاد مربوط بحساب تاني'); history.replaceState(null, '', '/settings'); }
     shell(`<div class="settings">
       <h1>⚙️ إعدادات الحساب</h1>
       <form class="panel set-sec" id="fProfile">
@@ -253,17 +320,39 @@
         <div class="form-err" id="profErr"></div>
         <button class="btn gold" id="profSave">حفظ التغييرات</button>
       </form>
+      <form class="panel set-sec" id="fEmail">
+        <h3>📧 الإيميل ${me.email ? (me.emailVerified ? '<span class="badge green">مؤكَّد</span>' : '<span class="badge">مو مؤكَّد</span>') : ''}</h3>
+        ${me.email ? '' : '<div class="nudge">ضيف إيميلك لحماية حسابك — بيساعدك ترجع لحسابك وتربطه بـ Google.</div>'}
+        <label class="field"><span>الإيميل</span><input name="email" type="email" dir="ltr" maxlength="254" value="${esc(me.email || '')}" placeholder="name@gmail.com"></label>
+        ${me.hasPassword ? '<label class="field"><span>كلمة السر الحالية (للتأكيد)</span><input name="password" type="password" autocomplete="current-password" dir="ltr"></label>' : ''}
+        <div class="form-err" id="emailErr"></div>
+        <button class="btn">${me.email ? 'غيّر الإيميل' : 'ضيف الإيميل'}</button>
+      </form>
+      <form class="panel set-sec" id="fUser">
+        <h3>🏷️ اسم المستخدم</h3>
+        <p class="hint">رابط بروفايلك: <b dir="ltr">/u/${esc(me.username)}</b> — فيك تغيّره مرة كل 30 يوم.</p>
+        <label class="field"><span>اسم المستخدم الجديد</span><input name="username" dir="ltr" maxlength="20" value="${esc(me.username)}"></label>
+        <div class="form-err" id="userErr"></div>
+        <button class="btn">غيّر اسم المستخدم</button>
+      </form>
+      <section class="panel set-sec">
+        <h3>${G_LOGO} حساب Google</h3>
+        ${me.google ? '<p class="g-linked">مربوط بـ Google ✓ — فيك تدخل بكبسة وحدة.</p>'
+    : ACC.site.googleEnabled ? '<p class="hint">اربط حسابك بـ Google لتدخل بكبسة وحدة بدون كلمة سر.</p><a class="btn-google" href="/api/auth/google/start?link=1">' + G_LOGO + '<span>ربط حساب Google</span></a>'
+      : '<p class="hint">الدخول بـ Google مو مفعّل هلق.</p>'}
+      </section>
       <form class="panel set-sec" id="fPass">
-        <h3>🔑 تغيير كلمة السر</h3>
-        <label class="field"><span>كلمة السر الحالية</span><input name="current" type="password" autocomplete="current-password" dir="ltr"></label>
+        <h3>🔑 ${me.hasPassword ? 'تغيير كلمة السر' : 'حط كلمة سر'}</h3>
+        ${me.hasPassword ? '<label class="field"><span>كلمة السر الحالية</span><input name="current" type="password" autocomplete="current-password" dir="ltr"></label>'
+    : '<p class="hint">حسابك بيدخل بـ Google بس. إذا حطيت كلمة سر، بتقدر تدخل كمان بالإيميل أو اسم المستخدم.</p>'}
         <label class="field"><span>كلمة السر الجديدة</span><input name="next" type="password" autocomplete="new-password" dir="ltr"><small class="fhint">6 أحرف على الأقل</small></label>
         <div class="form-err" id="passErr"></div>
-        <button class="btn">غيّر كلمة السر</button>
+        <button class="btn">${me.hasPassword ? 'غيّر كلمة السر' : 'حط كلمة السر'}</button>
       </form>
       <form class="panel set-sec danger-zone" id="fDel">
         <h3>🗑️ حذف الحساب</h3>
         <p class="hint">رح ينمسح حسابك ونقاطك نهائياً. ما في رجعة.</p>
-        <label class="field"><span>اكتب كلمة السر للتأكيد</span><input name="password" type="password" dir="ltr"></label>
+        <label class="field"><span>${me.hasPassword ? 'اكتب كلمة السر للتأكيد' : 'اكتب اسم المستخدم تبعك للتأكيد'}</span><input name="password" type="${me.hasPassword ? 'password' : 'text'}" dir="ltr"></label>
         <div class="form-err" id="delErr"></div>
         <button class="btn danger">احذف حسابي نهائياً</button>
       </form>
@@ -291,7 +380,24 @@
       e.preventDefault();
       const f = e.target; showErr('#passErr', '');
       if (f.next.value.length < 6) { showErr('#passErr', 'كلمة السر الجديدة لازم تكون 6 أحرف على الأقل'); return; }
-      try { await api('/api/me/password', { current: f.current.value, next: f.next.value }); f.reset(); toast('تغيّرت كلمة السر ✔', 'ok'); } catch (er) { showErr('#passErr', er.message); }
+      try {
+        await api('/api/me/password', { current: f.current ? f.current.value : '', next: f.next.value });
+        toast(me.hasPassword ? 'تغيّرت كلمة السر ✔' : 'صار عندك كلمة سر ✔', 'ok');
+        ACC.me = (await api('/api/auth/me')).user; renderSettings();
+      } catch (er) { showErr('#passErr', er.message); }
+    };
+    $('#fEmail').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = e.target, email = f.email.value.trim().toLowerCase(); showErr('#emailErr', '');
+      if (!EMAIL_RE.test(email)) { showErr('#emailErr', 'الإيميل مو صحيح — مثلاً: name@gmail.com'); return; }
+      try { const r = await api('/api/me/update', { email, password: f.password ? f.password.value : '' }); ACC.me = r.user; toast('انحفظ الإيميل ✔', 'ok'); renderSettings(); } catch (er) { showErr('#emailErr', er.message); }
+    };
+    $('#fUser').onsubmit = async (e) => {
+      e.preventDefault();
+      const v = e.target.username.value.trim().toLowerCase(); showErr('#userErr', '');
+      if (!USER_RE.test(v)) { showErr('#userErr', 'اسم المستخدم لازم يكون 3–20 حرف إنكليزي صغير أو رقم أو _'); return; }
+      if (!(await confirmBox(`رابط بروفايلك رح يصير /u/${v} والرابط القديم بيبطل. متأكد؟`, 'غيّر'))) return;
+      try { const r = await api('/api/me/username', { username: v }); ACC.me = r.user; toast('تغيّر اسم المستخدم ✔', 'ok'); renderSettings(); } catch (er) { showErr('#userErr', er.message); }
     };
     $('#fDel').onsubmit = async (e) => {
       e.preventDefault();
@@ -364,14 +470,16 @@
       async function draw() {
         const d = await api('/api/admin/users?q=' + encodeURIComponent(TABS.q || ''));
         $('#uTotal').textContent = `${d.total} مستخدم`;
-        $('#uTbl').innerHTML = `<table class="tbl"><thead><tr><th>المستخدم</th><th>الدور</th><th>نقاط</th><th>ألعاب</th><th>فوز</th><th>الحالة</th><th>انضم</th><th>آخر ظهور</th><th></th></tr></thead><tbody>${d.users.map((u) => `
+        $('#uTbl').innerHTML = `<table class="tbl"><thead><tr><th>المستخدم</th><th>الإيميل</th><th>الدور</th><th>نقاط</th><th>ألعاب</th><th>فوز</th><th>الحالة</th><th>انضم</th><th>آخر ظهور</th><th></th></tr></thead><tbody>${d.users.map((u) => `
           <tr data-id="${u.id}"><td><a href="/u/${esc(u.username)}" target="_blank" class="u-cell">${avatarHTML(u.avatar, 28, u.color)}<span><b>${esc(u.displayName)}</b><small dir="ltr">@${esc(u.username)}</small></span></a></td>
+          <td dir="ltr" class="mail">${u.email ? esc(u.email) + (u.emailVerified ? ' ✔' : '') : '<span class="hint">—</span>'}${u.google ? ' <span class="badge">G</span>' : ''}</td>
           <td>${u.role === 'admin' ? '<span class="badge">🛡️ أدمن</span>' : 'مستخدم'}</td><td>⭐ ${fmtN(u.points)}</td><td>${u.games}</td><td>${u.wins}</td>
           <td>${u.banned ? '<span class="badge red">موقوف</span>' : '<span class="badge green">فعّال</span>'}</td><td>${dateAr(u.createdAt)}</td><td>${timeAgo(u.lastSeen)}</td>
           <td class="acts"><button class="btn sm" data-a="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'فك الإيقاف' : 'إيقاف'}</button>
             <button class="btn sm" data-a="points">${ART.ui('star')} +/− نقاط</button>
             <button class="btn sm" data-a="${u.role === 'admin' ? 'unadmin' : 'admin'}">${ART.ui('shield')} ${u.role === 'admin' ? 'شيل لوحة التحكم' : 'أعطيه لوحة التحكم'}</button><button class="btn sm" data-a="resetPassword">كلمة سر مؤقتة</button>
-            <button class="btn sm danger" data-a="delete">حذف</button></td></tr>`).join('') || '<tr><td colspan="9" class="hint">ما في نتايج</td></tr>'}</tbody></table>`;
+            <button class="btn sm" data-a="details">تفاصيل</button><button class="btn sm" data-a="rename">غيّر اسم المستخدم</button>
+            <button class="btn sm danger" data-a="delete">حذف</button></td></tr>`).join('') || '<tr><td colspan="10" class="hint">ما في نتايج</td></tr>'}</tbody></table>`;
         $$('#uTbl [data-a]').forEach((b) => { b.onclick = () => userAction(b.closest('tr').dataset.id, b.dataset.a, draw); });
       }
       await draw();
@@ -497,7 +605,7 @@
     async audit(body) {
       const list = await api('/api/admin/audit');
       const names = { ban: 'إيقاف', unban: 'فك إيقاف', admin: 'تعيين أدمن', unadmin: 'شيل أدمن', resetPassword: 'كلمة سر مؤقتة', points: 'تعديل نقاط',
-        delete: 'حذف مستخدم', closeRoom: 'تسكير غرفة', settings: 'تعديل الإعدادات', ad: 'تعديل إعلان', game: 'تعديل لعبة', map: 'تعديل خريطة', grantMap: 'إهداء خريطة' };
+        delete: 'حذف مستخدم', rename: 'تغيير اسم مستخدم', closeRoom: 'تسكير غرفة', settings: 'تعديل الإعدادات', ad: 'تعديل إعلان', game: 'تعديل لعبة', map: 'تعديل خريطة', grantMap: 'إهداء خريطة' };
       body.innerHTML = `<h2>📜 سجل الإدارة</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>الوقت</th><th>الأدمن</th><th>العملية</th><th>على</th><th>تفاصيل</th></tr></thead><tbody>
         ${list.map((e) => `<tr><td>${new Date(e.at).toLocaleString('ar-SY-u-nu-latn')}</td><td dir="ltr">@${esc(e.adminName)}</td><td>${names[e.action] || esc(e.action)}</td><td dir="ltr">${esc(e.target || '—')}</td>
           <td><code dir="ltr">${e.detail ? esc(JSON.stringify(e.detail)).slice(0, 140) : ''}</code></td></tr>`).join('') || '<tr><td colspan="5" class="hint">لسا ما في شي</td></tr>'}</tbody></table></div>`;
@@ -505,6 +613,24 @@
   };
   async function userAction(id, action, redraw) {
     try {
+      if (action === 'details') {
+        const u = await api('/api/admin/user?id=' + encodeURIComponent(id));
+        modal('تفاصيل المستخدم', `<div class="u-cell">${avatarHTML(u.avatar, 48, u.color)}<span><b>${esc(u.displayName)}</b><small dir="ltr">@${esc(u.username)}</small></span></div>
+          <div class="kv"><span>الإيميل</span><b dir="ltr">${u.email ? esc(u.email) : '—'}</b></div>
+          <div class="kv"><span>الإيميل مؤكَّد</span><b>${u.emailVerified ? 'إي' : 'لا'}</b></div>
+          <div class="kv"><span>Google</span><b>${u.google ? 'مربوط' : 'لا'}</b></div><div class="kv"><span>كلمة سر</span><b>${u.hasPassword ? 'إي' : 'لا (Google بس)'}</b></div>
+          <div class="kv"><span>النقاط</span><b>${fmtN(u.points)}</b></div><div class="kv"><span>انضم</span><b>${dateAr(u.createdAt)}</b></div>`);
+        return;
+      }
+      if (action === 'rename') {
+        const m = modal('غيّر اسم المستخدم', `<p class="hint">الأدمن بيقدر يستعمل الأسماء المحجوزة (مثل serva). رابط البروفايل رح يتغيّر.</p>
+          <label class="field"><span>الاسم الجديد</span><input id="rnName" dir="ltr" maxlength="20" placeholder="serva"></label><div class="form-err" id="rnErr"></div><div class="row"><button class="btn gold" id="rnGo">غيّر</button></div>`);
+        $('#rnGo', m.root).onclick = async () => {
+          try { await api('/api/admin/user', { id, action, username: $('#rnName', m.root).value.trim().toLowerCase() }); m.close(); toast('تغيّر اسم المستخدم ✔', 'ok'); redraw(); } catch (e) { const er = $('#rnErr', m.root); er.textContent = e.message; er.classList.add('show'); }
+        };
+        $('#rnName', m.root).focus();
+        return;
+      }
       if (action === 'points') {
         const m = modal('± تعديل النقاط', `<label class="field"><span>العدد (موجب بيزيد، سالب بينقّص)</span><input id="pAmt" type="number" dir="ltr" placeholder="مثلاً 100 أو -50"></label>
           <label class="field"><span>السبب</span><input id="pWhy" maxlength="120" placeholder="مثلاً: جائزة بطولة"></label><div class="form-err" id="pErr"></div><div class="row"><button class="btn gold" id="pGo">تطبيق</button></div>`);
