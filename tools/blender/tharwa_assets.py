@@ -75,17 +75,38 @@ def studio(scale=1.0, target=(0, 0, 0.8)):
     s = scale
     area((4 * s, -4 * s, 6 * s), target, 700 * s * s, (0.92, 0.97, 1.0), 4 * s)      # key (cool white)
     area((-5 * s, -1.5 * s, 2.5 * s), target, 420 * s * s, (0.15, 0.6, 1.0), 3 * s)   # fill (Serva cyan)
-    area((1 * s, 5 * s, 4 * s), target, 900 * s * s, (0.35, 0.85, 1.0), 2.5 * s)     # rim
+    area((1 * s, 5 * s, 4 * s), target, 1400 * s * s, (0.35, 0.85, 1.0), 2.5 * s)    # rim (crisp cyan edge)
     area((0, -6 * s, 0.6 * s), target, 160 * s * s, (0.6, 0.8, 1.0), 6 * s)           # low front strip (chrome streak)
 
 
-def shadow_floor(size=30):
-    bpy.ops.mesh.primitive_plane_add(size=size, location=(0, 0, 0))
-    p = bpy.context.active_object
-    p.is_shadow_catcher = True
-    # what glass refracts / chrome reflects: the dark navy board, not a white floor
-    p.data.materials.append(mat('floor', base=(0.006, 0.014, 0.04), rough=0.35))
+def contact_shadow(rx=1.3, ry=1.05, strength=0.75, z=0.002):
+    """Soft elliptical contact shadow baked into the sprite: black with a radial alpha falloff (no plane, no box)."""
+    bpy.ops.mesh.primitive_plane_add(size=2, location=(0, 0, z))
+    p = bpy.context.active_object; p.scale = (rx, ry, 1)
+    m = bpy.data.materials.new("cshadow"); m.use_nodes = True
+    nt = m.node_tree; n = nt.nodes; l = nt.links; n.clear()
+    tc = n.new("ShaderNodeTexCoord"); gr = n.new("ShaderNodeTexGradient"); gr.gradient_type = "SPHERICAL"
+    l.new(tc.outputs["Object"], gr.inputs["Vector"])
+    pw = n.new("ShaderNodeMath"); pw.operation = "POWER"; pw.inputs[1].default_value = 1.7
+    l.new(gr.outputs["Fac"], pw.inputs[0])
+    mul = n.new("ShaderNodeMath"); mul.operation = "MULTIPLY"; mul.inputs[1].default_value = strength
+    l.new(pw.outputs[0], mul.inputs[0])
+    tr = n.new("ShaderNodeBsdfTransparent"); em = n.new("ShaderNodeEmission"); em.inputs["Color"].default_value = (0, 0, 0, 1)
+    mix = n.new("ShaderNodeMixShader")
+    l.new(mul.outputs[0], mix.inputs[0]); l.new(tr.outputs[0], mix.inputs[1]); l.new(em.outputs[0], mix.inputs[2])
+    out = n.new("ShaderNodeOutputMaterial"); l.new(mix.outputs[0], out.inputs["Surface"])
+    p.data.materials.append(m)
+    for attr in ("visible_glossy", "visible_transmission", "visible_diffuse", "visible_shadow", "visible_volume_scatter"):
+        setattr(p, attr, False)
     return p
+
+
+def token_base():
+    """The common chrome token base every piece stands on (glowing cyan inlay)."""
+    cyl(0.84, 0.14, (0, 0, 0.07), M["chrome"], 0.05, verts=72, seg=4)
+    cyl(0.7, 0.03, (0, 0, 0.14), M["navy"], 0.0, verts=72)
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.76, minor_radius=0.03, location=(0, 0, 0.145), major_segments=72)
+    finish(bpy.context.active_object, M["glow"], 0)
 
 
 def camera(elev=28, azim=-32, target=(0, 0, 0.85), ortho=3.6, dist=14):
@@ -152,6 +173,7 @@ def materials():
     M["glass"] = mat("glass", base=(0.05, 0.38, 1.0), rough=0.02, trans=1.0, ior=1.5, coat=1.0, emit=(0.0, 0.38, 1.0), estr=0.7)
     M["crystal"] = mat("crystal", base=(0.62, 0.86, 1.0), rough=0.0, trans=1.0, ior=2.2, emit=(0.1, 0.55, 1.0), estr=0.35)
     M["paint"] = mat("paint", base=(0.0, 0.42, 1.0), metal=0.45, rough=0.28, coat=1.0, emit=(0.0, 0.3, 1.0), estr=0.45)
+    M["candy"] = mat("candy", base=(0.0, 0.2, 0.9), metal=0.4, rough=0.2, coat=1.0, emit=(0.0, 0.22, 1.0), estr=0.3)
     M["navy"] = mat("navy", base=(0.015, 0.05, 0.16), metal=0.3, rough=0.2, coat=1.0)
     M["glow"] = mat("glow", base=(0.05, 0.45, 0.8), emit=(0.1, 0.75, 1.0), estr=3.2)
     M["gglow"] = mat("gglow", base=(1.0, 0.7, 0.25), emit=(1.0, 0.66, 0.16), estr=3.0)
@@ -252,15 +274,16 @@ def normalize(objs, span=2.0, height=2.3, lift=0.0):
     bpy.context.view_layer.update()
 
 
-def render(name, sizes, w_over_h=1.0, quality=88):
+def render(name, sizes, w_over_h=1.0, quality=88, fmt="PNG"):
     sc = bpy.context.scene
-    sc.render.image_settings.file_format = "WEBP"
+    sc.render.image_settings.file_format = fmt
     sc.render.image_settings.color_mode = "RGBA"
-    sc.render.image_settings.quality = quality
+    if fmt == "PNG": sc.render.image_settings.compression = 100
+    else: sc.render.image_settings.quality = quality
     for s in sizes:
         sc.render.resolution_x = int(round(s * w_over_h)); sc.render.resolution_y = s
         sc.render.resolution_percentage = 100
-        path = os.path.join(OUT, f"{name}-{s}.webp")
+        path = os.path.join(OUT, f"{name}-{s}." + ("png" if fmt == "PNG" else "webp"))
         sc.render.filepath = path
         bpy.ops.render.render(write_still=True)
         print("wrote", path, os.path.getsize(path))
@@ -271,91 +294,88 @@ def objs_now(before):
 
 
 # ---------------------------------------------------------------- the 8 player pieces
+# Toy-like, chunky silhouettes (big bevels, readable at 30 px), each standing on the same chrome token base.
 def piece_car():
-    def hood(o):
-        for v in o.data.vertices:
-            if v.co.x > 0 and v.co.z > 0: v.co.z -= 0.08
-    shaped((2.0, 0.92, 0.38), (0, 0, 0.4), M['chrome'], 0.15, hood, seg=5)
-    def cabin(o):
-        for v in o.data.vertices:
-            if v.co.z > 0: v.co.x = v.co.x * 0.66 - 0.06
-    shaped((1.1, 0.8, 0.4), (-0.12, 0, 0.78), M['glass'], 0.1, cabin, seg=4)
-    box((0.62, 0.84, 0.05), (-0.16, 0, 0.99), M['chrome'], 0.02)
-    for x in (0.62, -0.62):
-        for y in (0.47, -0.47):
-            cyl(0.24, 0.16, (x, y, 0.25), M['dchrome'], 0.04, rot=(math.pi / 2, 0, 0))
-            cyl(0.11, 0.18, (x, y, 0.25), M['glow'], 0.0, rot=(math.pi / 2, 0, 0))
-    for y in (0.28, -0.28):
-        sphere(0.075, (1.0, y, 0.44), M['glow'], (0.6, 1, 1))
-    box((2.03, 0.95, 0.045), (0, 0, 0.44), M['gold'], 0.015)
+    shaped((2.0, 1.0, 0.5), (0, 0, 0.42), M["candy"], 0.22, lambda o: None, seg=6)
+    sphere(0.62, (-0.12, 0, 0.66), M["glass"], (1.05, 0.72, 0.62))
+    box((2.04, 1.04, 0.05), (0, 0, 0.44), M["chrome"], 0.02)
+    for x in (0.6, -0.62):
+        for y in (0.5, -0.5):
+            cyl(0.27, 0.2, (x, y, 0.27), M["dchrome"], 0.08, rot=(math.pi / 2, 0, 0), seg=4)
+            cyl(0.12, 0.22, (x, y, 0.27), M["chrome"], 0.03, rot=(math.pi / 2, 0, 0))
+    for y in (0.3, -0.3):
+        sphere(0.09, (0.98, y, 0.5), M["glow"], (0.5, 1, 1))
+    box((0.1, 0.5, 0.12), (1.0, 0, 0.32), M["chrome"], 0.04)
 
 
 def piece_plane():
-    sphere(1.0, (0, 0, 1.05), M["chrome"], (1.05, 0.2, 0.2))
-    sphere(0.3, (0.55, 0, 1.14), M["glass"], (0.9, 0.42, 0.38))
-    box((0.5, 2.1, 0.07), (0.05, 0, 1.0), M["chrome"], 0.03)
-    box((0.28, 0.75, 0.05), (-0.88, 0, 1.08), M["chrome"], 0.02)
-    box((0.3, 0.05, 0.38), (-0.9, 0, 1.3), M["glass"], 0.02)
-    for y in (0.55, -0.55):
-        cyl(0.08, 0.32, (0.1, y, 0.92), M["dchrome"], 0.02, rot=(0, math.pi / 2, 0))
-        sphere(0.06, (0.27, y, 0.92), M["glow"])
-    cyl(0.05, 0.85, (0, 0, 0.5), M["chrome"], 0.0)
-    cyl(0.5, 0.1, (0, 0, 0.05), M["chrome"], 0.03)
-    cyl(0.42, 0.11, (0, 0, 0.06), M["glow"], 0.0)
+    sphere(1.0, (0, 0, 1.0), M["chrome"], (1.0, 0.3, 0.3))
+    sphere(0.34, (0.42, 0, 1.18), M["glass"], (1.0, 0.55, 0.5))
+    box((0.6, 2.2, 0.12), (0.05, 0, 0.98), M["candy"], 0.06, seg=4)
+    box((0.32, 0.9, 0.09), (-0.82, 0, 1.06), M["candy"], 0.04)
+    box((0.34, 0.09, 0.5), (-0.84, 0, 1.3), M["candy"], 0.04)
+    for y in (0.6, -0.6):
+        cyl(0.13, 0.42, (0.15, y, 0.88), M["chrome"], 0.04, rot=(0, math.pi / 2, 0))
+        cyl(0.09, 0.44, (0.15, y, 0.88), M["glow"], 0.0, rot=(0, math.pi / 2, 0))
+    sphere(0.12, (1.0, 0, 1.0), M["gold"])
+    cyl(0.07, 0.75, (0, 0, 0.4), M["chrome"], 0.02)
 
 
 def piece_ship():
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.32))
-    hull = bpy.context.active_object; hull.scale = (2.1, 0.8, 0.5)
-    bpy.ops.object.transform_apply(scale=True)
-    for v in hull.data.vertices:
-        if v.co.z < 0: v.co.y *= 0.55; v.co.x *= 0.82
-        if v.co.x > 0: v.co.y *= 0.25; v.co.x += 0.18
-    finish(hull, M["chrome"], 0.08, seg=4)
-    box((2.0, 0.7, 0.05), (0.02, 0, 0.47), M["gold"], 0.02)
-    box((0.9, 0.56, 0.3), (-0.25, 0, 0.72), M["glass"], 0.06)
-    box((0.5, 0.46, 0.22), (-0.3, 0, 0.98), M["glass"], 0.05)
-    cyl(0.13, 0.5, (-0.62, 0, 1.12), M["chrome"], 0.02)
-    cyl(0.135, 0.1, (-0.62, 0, 1.27), M["glow"], 0.0)
-    cyl(0.025, 0.5, (0.3, 0, 0.95), M["chrome"], 0.0)
+    def hull_shape(o):
+        for v in o.data.vertices:
+            if v.co.z < 0: v.co.y *= 0.6; v.co.x *= 0.85
+            if v.co.x > 0.5: v.co.y *= 0.35; v.co.x += 0.15
+    shaped((2.1, 0.95, 0.55), (0, 0, 0.35), M["candy"], 0.16, hull_shape, seg=5)
+    box((1.95, 0.85, 0.06), (0.0, 0, 0.62), M["chrome"], 0.03)
+    box((0.95, 0.7, 0.42), (-0.25, 0, 0.88), M["glass"], 0.14, seg=4)
+    box((0.55, 0.55, 0.3), (-0.3, 0, 1.2), M["glass"], 0.1, seg=4)
+    cyl(0.17, 0.55, (-0.68, 0, 1.25), M["gold"], 0.05)
+    cyl(0.18, 0.1, (-0.68, 0, 1.42), M["glow"], 0.0)
+    cyl(0.035, 0.6, (0.35, 0, 1.0), M["chrome"], 0.0)
+    sphere(0.07, (0.35, 0, 1.32), M["glow"])
+    for x in (0.45, 0.0, -0.45):
+        sphere(0.08, (x, -0.48, 0.42), M["glow"], (1, 0.4, 1))
 
 
 def piece_crown():
-    bpy.ops.mesh.primitive_cylinder_add(radius=0.9, depth=0.62, location=(0, 0, 0.36), vertices=64)
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.9, depth=0.6, location=(0, 0, 0.36), vertices=64)
     band = bpy.context.active_object
     bm = bmesh.new(); bm.from_mesh(band.data)
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if abs(f.normal.z) > 0.9], context="FACES_ONLY")
     bm.to_mesh(band.data); bm.free()
-    sol = band.modifiers.new("s", "SOLIDIFY"); sol.thickness = 0.12
+    sol = band.modifiers.new("s", "SOLIDIFY"); sol.thickness = 0.14
     bpy.context.view_layer.objects.active = band; bpy.ops.object.modifier_apply(modifier=sol.name)
-    finish(band, M["gold"], 0.03)
+    finish(band, M["gold"], 0.04)
     for k in range(5):
         a = math.radians(-90 + k * 72)
-        x, y = math.cos(a) * 0.86, math.sin(a) * 0.86
-        cyl(0.24, 0.72, (x, y, 0.98), M["gold"], 0.02, r2=0.04, verts=32)
-        sphere(0.11, (x * 1.0, y * 1.0, 1.36), M["crystal"])
-        sphere(0.12, (math.cos(a + 0.63) * 0.95, math.sin(a + 0.63) * 0.95, 0.38), M["glass"], (1, 1, 1.2))
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.92, minor_radius=0.07, location=(0, 0, 0.07))
+        x, y = math.cos(a) * 0.84, math.sin(a) * 0.84
+        cyl(0.28, 0.72, (x, y, 0.98), M["gold"], 0.04, r2=0.06, verts=32)
+        sphere(0.14, (x, y, 1.38), M["crystal"])
+        sphere(0.13, (math.cos(a + 0.63) * 0.96, math.sin(a + 0.63) * 0.96, 0.38), M["glass"], (1, 0.7, 1.2))
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.9, minor_radius=0.09, location=(0, 0, 0.08))
     finish(bpy.context.active_object, M["chrome"], 0)
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.92, minor_radius=0.05, location=(0, 0, 0.66))
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.9, minor_radius=0.06, location=(0, 0, 0.66))
     finish(bpy.context.active_object, M["chrome"], 0)
+    sphere(0.36, (0, 0, 0.55), M["glow"], (1, 1, 0.5))
 
 
 def piece_rocket():
-    cyl(0.36, 1.25, (0, 0, 0.95), M["chrome"], 0.03)
-    cyl(0.36, 0.72, (0, 0, 1.935), M["glass"], 0.02, r2=0.0)
-    cyl(0.3, 0.3, (0, 0, 0.2), M["dchrome"], 0.02, r2=0.36)
-    cyl(0.2, 0.1, (0, 0, 0.04), M["glow"], 0.0)
-    cyl(0.375, 0.07, (0, 0, 1.55), M["gold"], 0.01)
-    cyl(0.375, 0.07, (0, 0, 0.4), M["gold"], 0.01)
-    sphere(0.16, (0, -0.33, 1.15), M["glow"], (1, 0.45, 1))
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.16, minor_radius=0.035, location=(0, -0.355, 1.15), rotation=(math.pi / 2, 0, 0))
+    cyl(0.44, 1.15, (0, 0, 0.95), M["chrome"], 0.05)
+    sphere(0.44, (0, 0, 1.52), M["candy"], (1, 1, 1.5))
+    cyl(0.34, 0.3, (0, 0, 0.24), M["dchrome"], 0.05, r2=0.44)
+    cyl(0.25, 0.12, (0, 0, 0.08), M["glow"], 0.0)
+    cyl(0.455, 0.08, (0, 0, 1.45), M["gold"], 0.02)
+    cyl(0.455, 0.08, (0, 0, 0.45), M["gold"], 0.02)
+    sphere(0.19, (0, -0.4, 1.1), M["glow"], (1, 0.45, 1))
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.19, minor_radius=0.045, location=(0, -0.43, 1.1), rotation=(math.pi / 2, 0, 0))
     finish(bpy.context.active_object, M["gold"], 0)
     for k in range(3):
         a = math.radians(90 + k * 120)
-        fin = prism([(0, 0), (0.55, 0), (0.5, 0.25), (0, 0.85)], 0.07, M["glass"], 0.02)
-        fin.location = (math.cos(a) * 0.3, math.sin(a) * 0.3, 0.05)
+        fin = prism([(0, 0), (0.6, 0), (0.55, 0.3), (0, 0.9)], 0.12, M["candy"], 0.05)
+        fin.location = (math.cos(a) * 0.36, math.sin(a) * 0.36, 0.0)
         fin.rotation_euler = (0, 0, a)
+
 
 
 def piece_diamond():
@@ -380,30 +400,26 @@ def piece_diamond():
     finish(gem, M["crystal"], 0, smooth=False)
     bpy.ops.mesh.primitive_torus_add(major_radius=0.28, minor_radius=0.06, location=(0, 0, 0.42))
     finish(bpy.context.active_object, M["chrome"], 0)
-    cyl(0.07, 0.3, (0, 0, 0.22), M["chrome"], 0.0)
-    cyl(0.55, 0.1, (0, 0, 0.05), M["chrome"], 0.03)
-    cyl(0.47, 0.11, (0, 0, 0.06), M["glow"], 0.0)
+    cyl(0.09, 0.3, (0, 0, 0.22), M["chrome"], 0.0)
 
 
 def piece_star():
-    pts = [(x, z + 1.12) for x, z in star_pts(1.0, 0.46)]
-    prism(pts, 0.36, M["gold"], 0.07, axis="Y")
-    pts2 = [(x * 0.55, z * 0.55 + 1.12) for x, z in star_pts(1.0, 0.46)]
-    prism(pts2, 0.42, M["glass"], 0.04, axis="Y")
-    cyl(0.62, 0.12, (0, 0, 0.06), M["chrome"], 0.04)
-    cyl(0.54, 0.13, (0, 0, 0.07), M["glow"], 0.0)
-    cyl(0.09, 0.3, (0, 0, 0.2), M["chrome"], 0.0)
+    pts = [(x, z + 1.08) for x, z in star_pts(1.0, 0.5)]
+    prism(pts, 0.44, M["gold"], 0.13, axis="Y", seg=5)
+    pts2 = [(x * 0.52, z * 0.52 + 1.08) for x, z in star_pts(1.0, 0.5)]
+    prism(pts2, 0.5, M["glass"], 0.06, axis="Y", seg=4)
+    cyl(0.12, 0.35, (0, 0, 0.2), M["chrome"], 0.03)
 
 
 def piece_hat():
-    cyl(0.95, 0.08, (0, 0, 0.1), M["navy"], 0.04, verts=64)
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.95, minor_radius=0.05, location=(0, 0, 0.12), major_segments=64)
+    cyl(0.98, 0.1, (0, 0, 0.1), M["navy"], 0.05, verts=64)
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.98, minor_radius=0.06, location=(0, 0, 0.12), major_segments=64)
     finish(bpy.context.active_object, M["chrome"], 0)
-    cyl(0.56, 1.1, (0, 0, 0.7), M["navy"], 0.06, r2=0.62, verts=64)
-    cyl(0.575, 0.2, (0, 0, 0.3), M["glow"], 0.0, r2=0.585, verts=64)
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.6, minor_radius=0.035, location=(0, 0, 0.42), major_segments=64)
+    cyl(0.58, 1.05, (0, 0, 0.68), M["navy"], 0.1, r2=0.64, verts=64, seg=4)
+    cyl(0.6, 0.22, (0, 0, 0.3), M["glow"], 0.0, r2=0.61, verts=64)
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.62, minor_radius=0.04, location=(0, 0, 0.43), major_segments=64)
     finish(bpy.context.active_object, M["gold"], 0)
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.6, minor_radius=0.035, location=(0, 0, 1.25), major_segments=64)
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.64, minor_radius=0.045, location=(0, 0, 1.2), major_segments=64)
     finish(bpy.context.active_object, M["chrome"], 0)
 
 
@@ -412,17 +428,18 @@ PIECES = {"car": piece_car, "plane": piece_plane, "ship": piece_ship, "crown": p
 
 
 def do_piece(key):
-    reset(128); materials()
+    reset(48); materials()
     before = {o.name for o in bpy.context.scene.objects}
     PIECES[key]()
-    normalize(objs_now(before), span=2.1, height=2.15)
-    shadow_floor(); studio(); camera(elev=26, azim=-34, target=(0, 0, 0.98), ortho=2.85)
+    normalize(objs_now(before), span=1.95, height=1.95, lift=0.14)
+    token_base(); contact_shadow(1.2, 1.0)
+    studio(); camera(elev=24, azim=-32, target=(0, 0, 1.0), ortho=2.55)
     render("piece-" + key, [128, 256])
 
 
 # ---------------------------------------------------------------- buildings
 def do_house():
-    reset(128); materials()
+    reset(48); materials()
     before = {o.name for o in bpy.context.scene.objects}
     box((1.5, 1.5, 0.12), (0, 0, 0.06), M["chrome"], 0.04)
     box((1.24, 1.24, 0.95), (0, 0, 0.6), window_mat("hw", cols=2.2, rows=2.4, strength=7.0, zmin=0.25), 0.03)
@@ -436,12 +453,12 @@ def do_house():
     box((0.3, 0.06, 0.45), (0.2, -0.63, 0.35), M["gglow"], 0.01)
     box((0.22, 0.22, 0.5), (0.4, 0.3, 1.6), M["chrome"], 0.02)
     normalize(objs_now(before), span=2.0, height=2.1)
-    shadow_floor(); studio(); camera(elev=30, azim=-36, target=(0, 0, 0.9), ortho=3.1)
+    contact_shadow(); studio(); camera(elev=30, azim=-36, target=(0, 0, 0.9), ortho=3.1)
     render("house", [64, 128])
 
 
 def do_hotel():
-    reset(128); materials()
+    reset(48); materials()
     before = {o.name for o in bpy.context.scene.objects}
     box((2.2, 1.5, 0.14), (0, 0, 0.07), M["chrome"], 0.04)
     box((1.9, 1.2, 2.3), (0, 0, 1.29), window_mat("tw", cols=2.6, rows=3.2, strength=6.0, zmin=0.35), 0.03)
@@ -453,13 +470,13 @@ def do_hotel():
     cyl(0.05, 0.6, (0.5, 0.2, 3.2), M["chrome"], 0.0)
     sphere(0.09, (0.5, 0.2, 3.52), M["gglow"])
     normalize(objs_now(before), span=2.0, height=2.9)
-    shadow_floor(); studio(); camera(elev=24, azim=-36, target=(0, 0, 1.35), ortho=3.6)
+    contact_shadow(); studio(); camera(elev=24, azim=-36, target=(0, 0, 1.35), ortho=3.6)
     render("hotel", [64, 128])
 
 
 # ---------------------------------------------------------------- money
 def do_coin():
-    reset(96); materials()
+    reset(48); materials()
     cyl(1.0, 0.2, (0, 0, 0), M["gold"], 0.05, verts=96)
     bpy.ops.mesh.primitive_torus_add(major_radius=0.86, minor_radius=0.04, location=(0, 0, 0.1), major_segments=96)
     finish(bpy.context.active_object, M["gold"], 0)
@@ -469,7 +486,7 @@ def do_coin():
 
 
 def do_bill():
-    reset(96); materials()
+    reset(48); materials()
     before = {o.name for o in bpy.context.scene.objects}
     box((2.4, 1.15, 0.03), (0, 0, 0), M["note"], 0.01)
     for (sx, sy, x, y) in [(2.2, 0.05, 0, 0.47), (2.2, 0.05, 0, -0.47), (0.05, 0.94, 1.08, 0), (0.05, 0.94, -1.08, 0)]:
@@ -490,18 +507,18 @@ def do_bill():
 
 # ---------------------------------------------------------------- corner icons
 def do_start():
-    reset(128); materials()
+    reset(48); materials()
     before = {o.name for o in bpy.context.scene.objects}
     pts = [(1.2, -0.32), (0.05, -0.32), (0.05, -0.8), (-1.2, 0.0), (0.05, 0.8), (0.05, 0.32), (1.2, 0.32)]
     prism(pts, 0.34, M["gold"], 0.08, axis="Z", loc=(0, 0, 0.3))
     prism([(x * 0.8 - 0.06, y * 0.62) for x, y in pts], 0.38, M["glass"], 0.04, axis="Z", loc=(0, 0, 0.32))
     normalize(objs_now(before), span=2.2, height=1.2)
-    shadow_floor(); studio(); camera(elev=38, azim=-20, target=(0, 0, 0.3), ortho=3.0)
+    contact_shadow(); studio(); camera(elev=38, azim=-20, target=(0, 0, 0.3), ortho=3.0)
     render("corner-start", [128, 256])
 
 
 def do_jail():
-    reset(128); materials()
+    reset(48); materials()
     before = {o.name for o in bpy.context.scene.objects}
     box((1.7, 1.7, 0.14), (0, 0, 0.07), M["chrome"], 0.04)
     box((1.4, 1.4, 1.4), (0, 0, 0.84), M["glass"], 0.06)
@@ -514,12 +531,12 @@ def do_jail():
     box((0.08, 1.6, 0.08), (-0.74, 0, 1.2), M["chrome"], 0.02)
     sphere(0.16, (0, 0, 1.78), M["gglow"])
     normalize(objs_now(before), span=2.0, height=2.0)
-    shadow_floor(); studio(); camera(elev=26, azim=-45, target=(0, 0, 0.95), ortho=3.1)
+    contact_shadow(); studio(); camera(elev=26, azim=-45, target=(0, 0, 0.95), ortho=3.1)
     render("corner-jail", [128, 256])
 
 
 def do_vacation():
-    reset(128); materials()
+    reset(48); materials()
     before = {o.name for o in bpy.context.scene.objects}
     cyl(1.15, 0.14, (0, 0, 0.07), M["gold"], 0.05, verts=64)
     cyl(1.0, 0.15, (0, 0, 0.08), M["glow"], 0.0, verts=64)
@@ -539,12 +556,12 @@ def do_vacation():
     for x in (0.7, 0.0):
         cyl(0.025, 0.36, (x, -0.45, 0.25), M["chrome"], 0.0)
     normalize(objs_now(before), span=2.2, height=2.2)
-    shadow_floor(); studio(); camera(elev=24, azim=-30, target=(0, 0, 1.0), ortho=3.1)
+    contact_shadow(); studio(); camera(elev=24, azim=-30, target=(0, 0, 1.0), ortho=3.1)
     render("corner-vacation", [128, 256])
 
 
 def do_gotojail():
-    reset(128); materials()
+    reset(48); materials()
     before = {o.name for o in bpy.context.scene.objects}
     shield = [(0, -1.1), (0.55, -0.75), (0.85, -0.25), (0.9, 0.75), (0.45, 0.9), (0, 1.05), (-0.45, 0.9), (-0.9, 0.75), (-0.85, -0.25), (-0.55, -0.75)]
     prism([(x, z + 1.15) for x, z in shield], 0.26, M["chrome"], 0.08, axis="Y")
@@ -553,13 +570,13 @@ def do_gotojail():
     cyl(0.55, 0.12, (0, 0, 0.06), M["chrome"], 0.04)
     cyl(0.47, 0.13, (0, 0, 0.07), M["glow"], 0.0)
     normalize(objs_now(before), span=2.0, height=2.3)
-    shadow_floor(); studio(); camera(elev=18, azim=-24, target=(0, 0, 1.1), ortho=2.9)
+    contact_shadow(); studio(); camera(elev=18, azim=-24, target=(0, 0, 1.1), ortho=2.9)
     render("corner-gotojail", [128, 256])
 
 
 # ---------------------------------------------------------------- centre hero: glass skyline + gold coins
 def do_hero():
-    reset(160); materials()
+    reset(64); materials()
     import random
     rnd = random.Random(7)
     towers = [(-3.4, 1.4, 0.7, 2.2), (-2.6, 0.8, 0.8, 3.4), (-1.7, 1.6, 0.7, 2.6), (-0.9, 0.9, 0.9, 4.6), (0.0, 1.8, 1.0, 5.6),
@@ -579,10 +596,9 @@ def do_hero():
         for k in range(n):
             cyl(0.46, 0.13, (x + rnd.uniform(-0.03, 0.03), y + rnd.uniform(-0.03, 0.03), 0.07 + k * 0.135), M["gold"], 0.03, verts=64)
     c = cyl(0.46, 0.13, (0.9, -3.2, 0.42), M["gold"], 0.03, verts=64); c.rotation_euler = (math.radians(68), 0, math.radians(-25))
-    shadow_floor(60)
     studio(2.0, (0, 0, 1.5))
     camera(elev=12, azim=0, target=(0, 0, 3.0), ortho=12.6, dist=30)
-    render("hero", [300, 600], w_over_h=1.6, quality=80)
+    render("hero", [300, 600], w_over_h=1.6, quality=80, fmt="WEBP")
 
 
 JOBS = {**{k: (lambda k=k: do_piece(k)) for k in PIECES}, "house": do_house, "hotel": do_hotel, "coin": do_coin, "bill": do_bill,
