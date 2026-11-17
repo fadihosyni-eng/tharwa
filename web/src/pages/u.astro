@@ -49,9 +49,12 @@ import Base from '../layouts/Base.astro';
 
 <script>
   import { $, esc, fmtN, ui, api, avatarHTML, loadSession, session, dateAr, timeAgo, ApiError, stateHTML } from '../lib/client';
+  import { BY_SLUG } from '../components/games/catalog';
+  // what a game's `rounds` counts: moves in أربعة بخط, dice rolls in لودو, rounds/hands everywhere else
+  const UNIT: Record<string, string> = { connect4: 'حركة', ludo: 'رمية' };
   type P = {
     user: { username: string; displayName: string; avatar: string; bio: string; role: string; points: number; games: number; wins: number; createdAt: number; color: string | null };
-    recent: { at: number; rounds: number; durationMs: number; players: number; won: boolean; winner: string }[];
+    recent: { at: number; game?: string; rounds: number; durationMs: number; players: number; won: boolean; winner: string }[];
   };
   const box = $('#profile')!;
   const notFound = (msg: string) => {
@@ -76,7 +79,7 @@ import Base from '../layouts/Base.astro';
     const rate = u.games ? Math.round((u.wins / u.games) * 100) : 0;
     const games = d.recent.length
       ? d.recent.map((g) => `<div class="game-row ${g.won ? 'won' : ''}"><span class="g-res">${ui(g.won ? 'trophy' : 'dice')}${g.won ? 'ربح' : 'لعب'}</span>
-          <span>${g.players} لاعبين · ${g.rounds} جولة · ${Math.max(1, Math.round(g.durationMs / 60000))} د</span><small>${g.won ? '' : 'الفائز: ' + esc(g.winner) + ' · '}${timeAgo(g.at)}</small></div>`).join('')
+          <span><b>${esc((BY_SLUG[g.game || 'tharwa'] || BY_SLUG.tharwa || { name: '' }).name)}</b> · ${g.players} لاعبين · ${g.rounds} ${UNIT[g.game || ''] || 'جولة'} · ${Math.max(1, Math.round(g.durationMs / 60000))} د</span><small>${g.won ? '' : g.winner ? 'الفائز: ' + esc(g.winner) + ' · ' : 'تعادل · '}${timeAgo(g.at)}</small></div>`).join('')
       : stateHTML('empty', 'لسا ما لعب ولا لعبة.');
     box.innerHTML = `
       <section class="panel prof-card">

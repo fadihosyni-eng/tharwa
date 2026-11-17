@@ -116,10 +116,13 @@ function roomPage(code: string) {
   let hideResult = false;      // the viewer closed the result card to look at the board
   let lastTurnPid: string | null = null;
   let endedSeqSounded = -1;
+  let drawing: Room | null = null; // the state being drawn right now (newer than `cur` until paint() runs)
+  let pointsSeen = -1;            // seq whose points were already pushed to the header
 
   const ctx: Ctx = {
     me: () => (cur && cur.me) || null,
-    player: (pid) => (cur ? cur.players.find((p) => p.id === pid) : undefined),
+    // Boards ask for names while they draw, before `cur` is updated (on the first state after a refresh `cur` is still null).
+    player: (pid) => { const src = drawing || cur; return src ? src.players.find((p) => p.id === pid) : undefined; },
     sound,
     async act(type, data = {}) {
       if (!creds) return false;
@@ -177,7 +180,8 @@ function roomPage(code: string) {
         const animate = !!cur && fresh && r.seq === lastSeq + 1 && !restart && queue.length < 3 && !document.hidden && !!cur.state && !!r.state;
         if (!board && r.state) board = makeBoard();
         if (board && r.state) {
-          try { await board.render(r, animate); } catch (e) { console.error(e); }
+          drawing = r;
+          try { await board.render(r, animate); } catch (e) { console.error(e); } finally { drawing = null; }
         }
         if (restart && fresh) hideResult = false;
         cur = r;
@@ -254,7 +258,7 @@ function roomPage(code: string) {
       return `<li class="mg-player${turn ? ' turn' : ''}${p.left ? ' left' : ''}" style="--c:${p.color}">
         ${avatar(p, 38)}
         <span class="mg-pl-txt"><span class="mg-pl-name">${mark(r, p)}<b>${esc(p.name)}</b></span><span class="mg-pl-tags">${tags}</span></span>
-        ${pts !== null ? `<span class="mg-pts ${pts >= 0 ? 'up' : 'down'}">${pts >= 0 ? '+' : ''}${pts}</span>` : p.points !== null ? `<span class="mg-pts">${ui('star')}${p.points}</span>` : ''}
+        ${pts !== null ? `<span class="mg-pts ${pts >= 0 ? 'up' : 'down'}" dir="ltr">${pts >= 0 ? '+' : '−'}${Math.abs(pts)}</span>` : p.points !== null ? `<span class="mg-pts">${ui('star')}${p.points}</span>` : ''}
         ${kick}
       </li>`;
     }).join('');
@@ -290,6 +294,11 @@ function roomPage(code: string) {
     }
     if (r.status === 'ended' && hideResult && !under.querySelector('.mg-result-chip')) showResultChip();
     if (r.status !== 'ended') under.querySelector('.mg-result-chip')?.remove();
+    // the header's points chip: reload the account once this game's points are in
+    if (r.status === 'ended' && session.me && r.me && r.result && r.result.points && r.me in r.result.points && pointsSeen !== r.seq) {
+      pointsSeen = r.seq;
+      loadSession(true);
+    }
     if (r.status === 'ended' && endedSeqSounded !== r.seq) {
       endedSeqSounded = r.seq;
       if (r.result && r.me && isWinner(r, r.me)) { sound('win'); try { (window.FX as any).confetti(); } catch { /* no canvas */ } }
@@ -397,7 +406,7 @@ function roomPage(code: string) {
     return `<div class="mg-ov-card result ${won ? 'won' : ''}">
       <span class="mg-res-ico">${ui(res.draw ? 'handshake' : won ? 'trophy' : 'medal')}</span>
       <h2>${title}</h2>
-      ${r.game === 'xo' && r.state && r.state.bestOf > 1 ? `<p class="muted">النتيجة ${r.state.score[0]} : ${r.state.score[1]}</p>` : ''}
+      ${r.game === 'xo' && r.state && r.state.bestOf > 1 ? `<p class="muted">النتيجة: ${[0, 1].map((k) => `<bdi>${esc((ctx.player(r.state.seats[k]) || { name: k ? 'O' : 'X' }).name)}: <b>${r.state.score[k]}</b></bdi>`).join(' · ')}</p>` : ''}
       ${rank}${pts}
       ${voted && waiting.length ? `<p class="muted mg-small">ناطرين: ${esc(waiting.join('، '))}</p>` : ''}
       <div class="mg-ov-btns">${again}<button type="button" class="btn" data-look>${ui('eye')}شوف اللوح</button><a class="btn btn-ghost" href="/games">${ui('gamepad')}ألعاب تانية</a></div>

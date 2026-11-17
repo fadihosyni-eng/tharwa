@@ -31,9 +31,42 @@
     });
   }
   const calm = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+  // Board dice (#dice): real 3D crystal dice (three + cannon-es, /tharwa/dice3d.js, loaded on demand).
+  // The CSS dice below stay as the fallback (no WebGL, script failed, or `?dice2d` in the URL).
+  let d3Load = null;
+  function want3D() {
+    if (/[?&]dice2d\b/.test(location.search)) return false;
+    try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
+  }
+  function attach3D(root) {
+    if (root._d3tried) return;
+    root._d3tried = true;
+    if (!want3D()) return;
+    d3Load = d3Load || new Promise((ok, fail) => {
+      const s = document.createElement('script');
+      s.src = '/tharwa/dice3d.js'; s.async = true;
+      s.onload = () => (window.TharwaDice3D ? ok(window.TharwaDice3D) : fail(new Error('no dice')));
+      s.onerror = fail;
+      document.head.appendChild(s);
+    });
+    d3Load.then((M) => {
+      if (!root.isConnected) return;
+      const d = M.mount(root);
+      if (!d) return;
+      root._d3 = d;
+      root.classList.add('d3');
+      d.show(root._vals || [0, 0]);
+    }).catch(() => { /* keep the CSS dice */ });
+  }
+
   let spins = 0;
   function setDice(root, values, animate) {
     if (!root) return;
+    if (root.id === 'dice') {
+      root._vals = values.map(val);
+      attach3D(root);
+      if (root._d3) { if (animate) root._d3.roll(root._vals); else root._d3.show(root._vals); return; }
+    }
     if (animate && calm()) animate = false;
     if (animate) spins++;
     const cubes = root.querySelectorAll('.cube');

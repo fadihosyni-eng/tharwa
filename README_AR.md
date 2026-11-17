@@ -43,6 +43,15 @@ node tharwa-game/server.js
   شارة «لعبة من Serva» بالصفحة الرئيسية وصفحة الدخول، دائرة اللوغو أعلى الغرفة، لوغو باهت بوسط اللوح،
   وأيقونة التبويب. كلهن رابط لـ serva-s.com. المصدر: `product-video-studio/skills/serva-promo-ad/assets/serva-logo-disc.png`.
 
+## لودو ثلاثي الأبعاد (Three.js)
+- لوح لودو 3D حقيقي: لوح كحلي لمّاع بإطار كروم، خانات مينا ملوّنة، نجوم ذهب بارزة، لوغو Serva بالنص (من `public/brand/serva-logo-512.webp`)،
+  قطع زجاج بقاعدة كروم، ونرد كريستال بينرمى بفيزياء حقيقية (cannon-es). الكود بـ `web/src/games/ludo3d/`.
+- **قاعدة النرد:** كل وجوه النرد فاضية وهو عم يتدحرج، وبس يوقف بينطبع رقم السيرفر على الوجه يلي لفوق — ما بيبيّن أي رقم غلط أبداً.
+- مكتبات Three.js/cannon/GSAP بتنحمّل بس بصفحة لودو (ملف منفصل). إذا المتصفح ما بيدعم WebGL بيرجع اللوح القديم 2D لحاله،
+  ولتجربته يدوياً: زيد `?ludo2d` عالرابط.
+- الأصوات من حزم **Kenney** (CC0 — مجانية للاستعمال التجاري، الذكر اختياري): casino-audio، impact-sounds، interface-sounds، music-jingles.
+  محوّلة لـ mp3 صغيرة بـ `web/public/ludo3d/sfx/`، وبتسكت مع زر الصوت (`tharwa_sound`).
+
 ## 🌍 الموقع الأساسي: https://serva-g.com (Cloudflare)
 
 كل التطوير والرفع صار على Cloudflare. `game.serva-g.com` و`www.serva-g.com` بيحوّلوا لـ serva-g.com.

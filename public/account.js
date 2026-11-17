@@ -456,7 +456,7 @@
         <div class="cards">
           <div class="card"><span>المستخدمين</span><b>${fmtN(d.users)}</b></div>
           <div class="card"><span>متصلين هلق</span><b>${fmtN(d.online)}</b></div>
-          <div class="card"><span>غرف شغالة</span><b>${fmtN(d.roomsLive)}</b><small>${d.roomsPlaying} عم يلعبوا</small></div>
+          <div class="card"><span>غرف شغالة</span><b>${fmtN(d.roomsLive)}</b><small>${d.roomsPlaying} عم يلعبوا</small>${(d.perGame || []).length ? `<small class="per-game">${d.perGame.map((g) => `${esc(g.name)}: ${g.rooms}${g.playing ? ` (${g.playing} عم يلعبوا)` : ''}`).join(' · ')}</small>` : ''}</div>
           <div class="card"><span>ألعاب اليوم</span><b>${fmtN(d.gamesToday)}</b></div>
           <div class="card"><span>كل الألعاب</span><b>${fmtN(d.gamesTotal)}</b></div>
         </div>

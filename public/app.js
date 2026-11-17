@@ -282,10 +282,12 @@
           const bld = el.querySelector('.bld'); if (bld) delete bld.dataset.h;
           const bown = el.querySelector('.bown'); if (bown) delete bown.dataset.k;
         });
+        fitNames();
       }
     }
     if (!S.built) buildLayout();
     applyTheme();
+    fitNames(); // owner bands / houses change the room a name has
     document.title = (st.status === 'playing' ? '● ' : '') + 'ثروة — غرفة ' + st.code;
     processMoves(st);
     updateBoard(st);
@@ -405,9 +407,11 @@
     $('#chatClose').onclick = () => toggleChat(false);
     $('#sideB').addEventListener('click', onSideClick);
     $('#sideB').addEventListener('change', onSideChange);
-    window.addEventListener('resize', () => layoutTokens());
+    window.addEventListener('resize', () => { layoutTokens(); dockChat(); });
     // The landscape board can change size without a window resize (e.g. emulated viewports, side panel growth).
-    if (window.ResizeObserver) new ResizeObserver(() => layoutTokens()).observe($('#board'));
+    if (window.ResizeObserver) new ResizeObserver(() => { layoutTokens(); fitNames(); }).observe($('#board'));
+    dockChat();
+    fitNames();
     setInterval(tick, 250);
   }
 
@@ -447,7 +451,7 @@
   }
   const tileIcon = (t) => `<div class="ticon">${ART.icon(iconName(t))}</div>`;
   function tileInner(t, i) {
-    if (i % 10 === 0) return `${tileIcon(t)}<div class="tname">${esc(t.name)}</div>${t.type === 'vacation' ? '<div class="pot" data-pot></div>' : ''}${t.type === 'start' ? `<div class="pot">+${fmt(S.board.goSalary)}</div>` : ''}${t.type === 'jail' ? '<div class="visit">زيارة</div>' : ''}`;
+    if (i % 10 === 0) return `<div class="ticon">${ART.cornerIcon(iconName(t))}</div><div class="tname">${esc(t.name)}</div>${t.type === 'vacation' ? '<div class="pot" data-pot></div>' : ''}${t.type === 'start' ? `<div class="pot">+${fmt(S.board.goSalary)}</div>` : ''}${t.type === 'jail' ? '<div class="visit">زيارة</div>' : ''}`;
     // Property strip: transparent with the price while for sale; filled with the
     // owner's colour (and their piece + buildings) once someone buys it.
     const band = `<div class="band"><span class="bprice">${fmt(t.price)}</span><span class="bown"></span><span class="bld"></span></div>`;
@@ -565,6 +569,38 @@
     if (!tk) return;
     tk.classList.remove('hop'); void tk.offsetWidth; tk.classList.add('hop');
   }
+  // Phones: tile names break only between words (CSS keep-all). A word that is still wider than its tile,
+  // or a name that needs more than 2 lines, gets a smaller font on that tile only — never split inside a word.
+  const PHONE = '(max-width: 820px)';
+  let fitQueued = false;
+  function fitNames() {
+    if (fitQueued) return;
+    fitQueued = true;
+    requestAnimationFrame(() => {
+      fitQueued = false;
+      const phone = matchMedia(PHONE).matches;
+      for (const n of $$('#board .tile .tname')) {
+        n.style.fontSize = '';
+        if (!phone || !n.clientWidth) continue;
+        const tile = n.closest('.tile');
+        const cut = () => n.getBoundingClientRect().bottom > tile.getBoundingClientRect().bottom + 0.5; // pushed out of its tile
+        let fs = parseFloat(getComputedStyle(n).fontSize);
+        while (fs > 4.1 && (n.scrollWidth > n.clientWidth + 0.5 || n.scrollHeight > n.clientHeight + 0.5 || cut())) {
+          fs -= 0.25;
+          n.style.fontSize = fs + 'px';
+        }
+      }
+    });
+  }
+  // Phones: the chat button sits in the top bar (next to sound/account) instead of floating over the controls.
+  function dockChat() {
+    const fab = $('#chatFab'), bar = $('.col-a .top-row');
+    if (!fab || !bar) return;
+    const phone = matchMedia(PHONE).matches;
+    if (phone && fab.parentNode !== bar) bar.appendChild(fab);
+    else if (!phone && fab.parentNode === bar) $('#chatDrawer').before(fab);
+  }
+
   function layoutTokens() {
     const board = $('#board'), layer = $('#tokens');
     if (!board || !layer || !S.room) return;
@@ -628,11 +664,17 @@
     const card = g.card;
     setTimeout(() => {
       const deck = card.deck, title = deck === 'chance' ? 'بطاقة حظ' : 'بطاقة خزنة';
-      // One face only (no 3D back/front), so the details always show.
-      $('#cCard').innerHTML = `<div class="card2 ${deck}" title="اضغط لتسكير">
-          <div class="c2-head"><span class="c2-icon">${ART.icon(deck)}</span><b>${title}</b><small>${esc(who ? who.name : '')}</small></div>
-          <div class="c2-text">${esc(card.text)}</div>
-          ${card.effect ? `<div class="c2-effect">${esc(card.effect)}</div>` : ''}
+      // Dark-glass card in the style of the blue playing cards: it lands face down (Serva back) and flips over.
+      // The front stays in normal flow (it sizes the card) and ends facing the player, so the text always shows.
+      $('#cCard').innerHTML = `<div class="card2 flip3 ${deck}" title="اضغط لتسكير">
+          <div class="c3-inner">
+            <div class="c3-front">
+              <div class="c2-head"><span class="c2-icon">${ART.icon(deck)}</span><b>${title}</b><small>${esc(who ? who.name : '')}</small></div>
+              <div class="c2-text">${esc(card.text)}</div>
+              ${card.effect ? `<div class="c2-effect">${esc(card.effect)}</div>` : ''}
+            </div>
+            <div class="c3-back" aria-hidden="true"><img src="/tharwa/card-back.webp" alt="" draggable="false"></div>
+          </div>
         </div>`;
       FX.Sound.play('card');
       clearTimeout(S.cardTimer);
@@ -687,7 +729,7 @@
     for (let k = 0; k < N; k++) {
       const el = document.createElement('div');
       el.className = 'cash-fly ' + (k % 2 ? 'coin' : 'bill');
-      el.innerHTML = k % 2 ? ART.icon('coin') : ART.BILL;
+      el.innerHTML = k % 2 ? ART.COIN : ART.BILL; // rendered coin / banknote sprites
       document.body.appendChild(el);
       const jitter = (k - (N - 1) / 2) * 7;
       const frames = [];

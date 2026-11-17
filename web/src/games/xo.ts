@@ -46,9 +46,10 @@ export function createXO(el: HTMLElement, under: HTMLElement, ctx: Ctx): Board {
   function paintScore(r: Room) {
     const s = r.state;
     if (!s || s.bestOf <= 1) { score.hidden = true; return; }
-    const px = ctx.player(s.seats[0]), po = ctx.player(s.seats[1]);
+    const px = r.players.find((p) => p.id === s.seats[0]), po = r.players.find((p) => p.id === s.seats[1]);
     score.hidden = false;
-    score.innerHTML = `<span class="x">X ${esc(px ? px.name : '')}</span><b>${s.score[0]} : ${s.score[1]}</b><span class="o">${esc(po ? po.name : '')} O</span><small>الجولة ${Math.min(s.round, s.bestOf)} من ${s.bestOf}</small>`;
+    // RTL row: X and its score on the right, O and its score on the left (each number sits next to its own name)
+    score.innerHTML = `<span class="x">X ${esc(px ? px.name : '')}</span><b><span class="x">${s.score[0]}</span><i>:</i><span class="o">${s.score[1]}</span></b><span class="o">${esc(po ? po.name : '')} O</span><small>الجولة ${Math.min(s.round, s.bestOf)} من ${s.bestOf}</small>`;
   }
 
   return {

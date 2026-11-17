@@ -304,10 +304,26 @@
     return svg(`<circle cx="24" cy="24" r="23" fill="${c.bg}"/><g clip-path="circle(23px at 24px 24px)">${AV_DRAW[k](c)}</g><circle cx="24" cy="24" r="22.5" fill="none" stroke="${c.ring}" stroke-width="1.6" opacity=".9"/>`, '0 0 48 48', 'avatar-svg');
   }
 
+  // ---------------------------------------------------------------- Blender renders (public/tharwa/img, tools/blender/tharwa_assets.py)
+  // Chrome / crystal miniatures with a soft contact shadow; 2 sizes each (srcset), WebP, lazy decoded.
+  const IMG = '/tharwa/img/';
+  const RENDERS = typeof window !== 'undefined' && !!window.THARWA_RENDERS;
+  const rimg = (name, s1, s2, cls, alt = '') => `<img class="${cls}" src="${IMG}${name}-${s1}.webp" srcset="${IMG}${name}-${s1}.webp 1x, ${IMG}${name}-${s2}.webp 2x" alt="${alt}" draggable="false" decoding="async">`;
+  const RENDER_ICONS = { start: 'corner-start', jail: 'corner-jail', vacation: 'corner-vacation', gotojail: 'corner-gotojail' };
+  const HOUSE_IMG = rimg('house', 64, 128, 'house bimg');
+  const HOTEL_IMG = rimg('hotel', 64, 128, 'hotel bimg');
+  const COIN_IMG = rimg('coin', 64, 128, 'money-img');
+  const BILL_IMG = rimg('bill', 64, 128, 'money-img');
+
   window.ART = {
     icon: (name) => svg(ICONS[name] || ICONS.coin),
-    piece: (key) => svg((PIECES[key] || PIECES.star).art, '0 0 24 24', 'piece-svg'),
+    // corner tiles (GO, jail, rest, go-to-jail): rendered 3D icons; any other name keeps its SVG
+    cornerIcon: (name) => (RENDER_ICONS[name] ? rimg(RENDER_ICONS[name], 128, 256, 'corner-img') : svg(ICONS[name] || ICONS.coin)),
+    // The game room (public/index.html sets window.THARWA_RENDERS) shows the rendered miniatures; the Astro pages keep the SVG.
+    piece: (key) => (RENDERS ? rimg('piece-' + (PIECES[key] ? key : 'star'), 128, 256, 'piece-img', (PIECES[key] || PIECES.star).label)
+      : svg((PIECES[key] || PIECES.star).art, '0 0 24 24', 'piece-svg')),
+    pieceSvg: (key) => svg((PIECES[key] || PIECES.star).art, '0 0 24 24', 'piece-svg'),
     pieceLabel: (key) => (PIECES[key] || PIECES.star).label,
-    PIECE_KEYS, HOUSE, HOTEL, GLOBE, BILL, avatar, AVATAR_KEYS, ui, UI_KEYS: Object.keys(UI), iconize: iconizeNode, autoIconize,
+    PIECE_KEYS, HOUSE: HOUSE_IMG, HOTEL: HOTEL_IMG, HOUSE_SVG: HOUSE, HOTEL_SVG: HOTEL, GLOBE, BILL: BILL_IMG, BILL_SVG: BILL, COIN: COIN_IMG, avatar, AVATAR_KEYS, ui, UI_KEYS: Object.keys(UI), iconize: iconizeNode, autoIconize,
   };
 })();
