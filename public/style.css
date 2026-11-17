@@ -1164,3 +1164,96 @@ a { color: var(--cyan2); }
   .offer2 .offer-side .hint { font-size: 11.5px; line-height: 1.3; }
   .offer2 .offer-side .btn { padding: 6px 8px; font-size: 13.5px; white-space: normal; line-height: 1.2; }
 }
+
+/* ================================================================ ثروة pro graphics (Blender renders + 3D dice)
+   Assets: public/tharwa/img (tools/blender/tharwa_assets.py), public/tharwa/dice3d.js (web/scripts/build-tharwa-dice.mjs). */
+
+/* --- player pieces: rendered chrome/crystal miniatures. Round chips (player list, picker…) keep a colour disc. */
+.tk img.piece-img { width: 92%; height: 92%; object-fit: contain; display: block; pointer-events: none;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .55)); }
+.tk:has(img.piece-img) { background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--pc) 45%, #0b1d45), #050d24 75%);
+  border-color: color-mix(in srgb, var(--pc) 75%, #fff); }
+.band .bown img.piece-img { width: 135%; height: 135%; object-fit: contain; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6)); }
+/* on the board: a miniature standing on a glowing ring in the player's colour (no disc) */
+.token .tk { position: relative; background: none; border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+.token .tk::before { content: ''; position: absolute; left: 4%; right: 4%; bottom: 2%; height: 34%; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--pc) 55%, transparent), transparent);
+  box-shadow: 0 0 0 2px var(--pc), 0 0 10px 3px var(--pc), inset 0 0 6px 1px var(--pc); opacity: .95; }
+.token .tk img.piece-img { position: absolute; left: -24%; top: -46%; width: 148%; height: 148%; max-width: none;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .55)); }
+.token.current .tk { animation: none; }
+.token.current .tk::before { animation: ringPulse 1.3s ease-in-out infinite; }
+.token.current .tk.hop { animation: hop .2s ease-out; }
+@keyframes ringPulse { 0%, 100% { box-shadow: 0 0 0 2px var(--pc), 0 0 8px 2px var(--pc), inset 0 0 6px 1px var(--pc); }
+  50% { box-shadow: 0 0 0 2px #fff, 0 0 18px 7px var(--pc), inset 0 0 8px 2px var(--pc); } }
+.tk.cash-glow img.piece-img { filter: drop-shadow(0 0 6px #ffd34d) drop-shadow(0 0 12px rgba(255, 197, 61, .8)); }
+
+/* --- houses / hotels on the property strip */
+.bld img.house { width: clamp(12px, 2vh, 20px); height: clamp(12px, 2vh, 20px); object-fit: contain; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5)); }
+.bld img.hotel { width: clamp(18px, 3vh, 30px); height: clamp(18px, 3vh, 30px); object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55)) drop-shadow(0 0 4px rgba(255, 197, 61, .45)); }
+.side-l .bld, .side-r .bld { max-width: calc(2 * clamp(12px, 2vh, 20px) + 3px); }
+.bld img.pop { animation: bldPop .55s cubic-bezier(.2, .9, .3, 1.4); }
+@keyframes bldPop { 0% { transform: translateY(-60%) scale(.3); opacity: 0; } 60% { transform: translateY(6%) scale(1.15); opacity: 1; } 100% { transform: none; } }
+
+/* --- tiles: glass surface, embossed price strip, owner glow */
+.tile { background: linear-gradient(160deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, 0) 42%), linear-gradient(160deg, var(--tile2), var(--tile));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 -8px 14px rgba(0, 0, 0, .22); }
+.tile .band .bprice { text-shadow: 0 1px 0 rgba(0, 0, 0, .7), 0 -1px 0 rgba(255, 255, 255, .12); }
+.side-b .band, .side-t .band, .side-l .band, .side-r .band { background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(0, 0, 0, .18)); }
+.tile.owned { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--owner) 70%, transparent), inset 0 0 16px color-mix(in srgb, var(--owner) 28%, transparent), 0 0 10px color-mix(in srgb, var(--owner) 30%, transparent); }
+.tile.owned .band { background: linear-gradient(180deg, color-mix(in srgb, var(--owner) 85%, #fff), var(--owner) 55%, color-mix(in srgb, var(--owner) 70%, #000));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -1px 0 rgba(0, 0, 0, .35); }
+.tile.mortgaged .band { background: repeating-linear-gradient(45deg, var(--owner) 0 5px, rgba(0, 0, 0, .5) 5px 10px); }
+.tile.focus { box-shadow: inset 0 0 0 2px rgba(47, 226, 255, .85), 0 0 16px rgba(0, 180, 255, .45); }
+/* corner tiles: rendered 3D icons */
+.tile.corner .ticon { width: clamp(38px, 8.4vh, 84px); height: clamp(38px, 8.4vh, 84px); margin-bottom: -4px; flex: 0 1 auto; min-height: 20px; }
+.tile.corner .ticon img.corner-img { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .5)); }
+
+/* --- board centre: rendered glass skyline + gold coins (instead of the flat skyline drawing) */
+.center::after { background: url('/tharwa/img/hero-300.webp') center bottom / auto 100% no-repeat; height: 46%; opacity: .5;
+  -webkit-mask-image: linear-gradient(0deg, #000 55%, transparent); mask-image: linear-gradient(0deg, #000 55%, transparent); }
+@media (min-width: 821px) and (min-height: 700px) { .center::after { background-image: url('/tharwa/img/hero-600.webp'); } }
+
+/* --- 3D dice: the canvas covers the centre area; the CSS dice keep their slot (and stay as the fallback) */
+.dice3d-canvas { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; }
+.dice3.d3 { height: calc(var(--d) * 1.7); align-items: center; filter: none; }
+.dice3.d3 .die3d { visibility: hidden; }
+
+/* --- money fly-out: rendered coin + banknote */
+.cash-fly img.money-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.cash-fly.bill { width: 40px; height: 40px; }
+.cash-fly.coin { width: 28px; height: 28px; }
+
+/* --- «حظ» / «خزنة»: dark glass card with a neon frame (same family as the blue playing cards); it flips over */
+.card2.flip3 { background: none; border: 0; box-shadow: none; padding: 0; display: block; color: #eaf6ff; perspective: 900px;
+  width: min(330px, 80%); animation: card3In .45s cubic-bezier(.2, .9, .3, 1.1) both; }
+.card2.flip3 .c3-inner { position: relative; transform-style: preserve-3d; animation: card3Flip .9s .35s cubic-bezier(.3, .7, .25, 1.15) both; }
+.card2.flip3 .c3-front, .card2.flip3 .c3-back { backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 16px; }
+.card2.flip3 .c3-front { position: relative; display: flex; flex-direction: column; align-items: center; gap: 9px; text-align: center; padding: 16px 16px 18px; min-height: 170px; justify-content: center;
+  background: radial-gradient(120% 70% at 50% 0%, rgba(0, 180, 255, .22), transparent 60%), linear-gradient(170deg, #0b1a3d 0%, #050b1e 70%, #030816 100%);
+  border: 1.5px solid #2fe2ff; box-shadow: 0 0 0 1px rgba(0, 180, 255, .35), 0 0 22px rgba(0, 180, 255, .55), inset 0 0 22px rgba(0, 180, 255, .25), 0 24px 50px rgba(0, 0, 0, .65); }
+.card2.flip3 .c3-front::before { content: ''; position: absolute; inset: 7px; border-radius: 11px; border: 1px solid rgba(47, 226, 255, .35); pointer-events: none; }
+.card2.flip3 .c3-back { position: absolute; inset: 0; transform: rotateY(180deg); overflow: hidden; background: #030816;
+  border: 1.5px solid #2fe2ff; box-shadow: 0 0 22px rgba(0, 180, 255, .55), 0 24px 50px rgba(0, 0, 0, .65); }
+.card2.flip3 .c3-back img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card2.flip3 .c2-head b { font-size: 20px; font-weight: 900; letter-spacing: .3px; color: transparent;
+  background: linear-gradient(180deg, #ffffff 0%, #c9d6e6 45%, #7f93ad 55%, #eef4fb 100%); -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 0 6px rgba(47, 226, 255, .55)); }
+.card2.flip3.chest .c2-head b { background-image: linear-gradient(180deg, #fff6d8 0%, #ffd36b 45%, #b8860b 55%, #ffe7a3 100%); filter: drop-shadow(0 0 6px rgba(255, 197, 61, .5)); }
+.card2.flip3 .c2-icon { width: 36px; height: 36px; filter: drop-shadow(0 0 8px rgba(47, 226, 255, .6)); }
+.card2.flip3 .c2-head small { color: #8fb3d9; opacity: 1; }
+.card2.flip3 .c2-text { color: #f2f8ff; font-size: 17px; text-shadow: 0 1px 2px rgba(0, 0, 0, .8); }
+.card2.flip3 .c2-effect { background: rgba(0, 180, 255, .12); border: 1px solid rgba(47, 226, 255, .55); color: #9feaff; box-shadow: 0 0 12px rgba(0, 180, 255, .3) inset; }
+.card2.flip3.chest .c3-front { border-color: #ffc53d; box-shadow: 0 0 0 1px rgba(255, 197, 61, .3), 0 0 22px rgba(255, 197, 61, .35), inset 0 0 22px rgba(0, 180, 255, .2), 0 24px 50px rgba(0, 0, 0, .65); }
+.card2.flip3.chest .c3-front::before { border-color: rgba(255, 197, 61, .35); }
+@keyframes card3In { 0% { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(.75); } 100% { opacity: 1; transform: translateX(-50%) scale(1); } }
+@keyframes card3Flip { 0% { transform: rotateY(180deg); } 100% { transform: rotateY(0deg); } }
+@media (max-width: 820px) {
+  .card2.flip3 .c3-front { min-height: 120px; padding: 12px 12px 14px; gap: 6px; }
+  .card2.flip3 .c2-text { font-size: 13px; }
+  .card2.flip3 .c2-head b { font-size: 15px; }
+  .tile.corner .ticon { width: 22px; height: 22px; flex: 0 0 auto; margin-bottom: -2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card2.flip3, .card2.flip3 .c3-inner, .token.current .tk::before, .bld img.pop { animation: none; }
+}
