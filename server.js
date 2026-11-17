@@ -562,7 +562,7 @@ function start(opts = {}) {
   MG.init({ httpErr, json, readBody, rateLimit });
   started = A.init({
     store, rooms,
-    helpers: { httpErr, json, readBody, rateLimit, closeRoom, broadcast, log: E.log, cash: B.CASH_OPTIONS, timers: TIMER_OPTIONS, liveCount: MG.liveCount },
+    helpers: { httpErr, json, readBody, rateLimit, closeRoom, broadcast, log: E.log, cash: B.CASH_OPTIONS, timers: TIMER_OPTIONS, liveCount: MG.liveCount, roomStats: MG.roomStats },
   }).then(() => new Promise((resolve) => {
     setInterval(tick, 1000);
     MG.start();

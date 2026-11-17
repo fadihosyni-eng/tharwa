@@ -230,7 +230,11 @@ export function createCardGame(slug: string, el: HTMLElement, under: HTMLElement
       const t = meSeat() >= 0 ? meSeat() % 2 : 0;
       const sum = (x: number) => st.scores[x] + st.scores[x + 2];
       const total = st.bids.filter((b: number | null) => b !== null).reduce((a: number, b: number) => a + b, 0);
-      hud.innerHTML = `<div class="ct-hud-score"><span class="a">${teamName(t)} <b>${sum(t)}</b></span><span class="b">${teamName(1 - t)} <b>${sum(1 - t)}</b></span><small>للـ${st.target}</small></div>
+      // each team's total plus every player's own score: the win rule is per player (one partner reaches the target)
+      const who = (x: number) => esc(x === meSeat() ? 'إنت' : (nameOf(x).split(' ').filter((w) => w && w !== 'بوت')[0] || nameOf(x)));
+      const own = (x: number) => `<i class="${st.scores[x] < 0 ? 'neg' : ''}">${who(x)} <bdi>${st.scores[x]}</bdi></i>`;
+      const team = (k: number, cls: string) => `<span class="${cls}">${teamName(k)} <b>${sum(k)}</b><em>${own(k)}${own(k + 2)}</em></span>`;
+      hud.innerHTML = `<div class="ct-hud-score fh">${team(t, 'a')}${team(1 - t, 'b')}<small class="ct-rule">بيربح الفريق لما واحد منّو يوصل ${st.target} وشريكه فوق الصفر</small></div>
         <div class="ct-hud-row"><span>الطرنيب</span><span class="ct-trump">${suitIcon('H', 22)}</span><span>الطلبات</span><b>${total}</b></div>`;
     } else {
       const contract = st.contract ? `<div class="ct-hud-row"><span class="ct-hud-ico">${ui(CONTRACT_ICO[st.contract])}</span><b>${CONTRACT_AR[st.contract]}</b></div>` : '';

@@ -262,6 +262,25 @@ function testRoomLayer() {
   assert.deepStrictEqual(st.tokens[k].slice(0, 2), [5, 11], 'piece 1 moved through the room layer');
   MG.rooms.delete(room.code);
   console.log('room layer passes moves through OK');
+
+  // إكس أو: the finished round stays on screen for 1.5 s, so the next player's clock starts after it
+  // (it used to start at once: the bot moved under the old board and a human lost 1.5 s of their turn).
+  const XO = GAMES.xo;
+  const xr = T.newRoom(XO, { isPrivate: true, max: 2, opts: { bestOf: 3 } });
+  const x1 = T.addPlayer(xr, 'أ', false), x2 = T.addPlayer(xr, 'ب', false);
+  T.startGame(xr);
+  const xs = xr.state;
+  const px = xr.players.find((p) => p.id === xs.seats[0]), po = xr.players.find((p) => p.id === xs.seats[1]);
+  for (const [p, cell] of [[px, 0], [po, 3], [px, 1], [po, 4], [px, 2]]) T.roomAct(xr, p, { type: 'place', cell });
+  assert.strictEqual(xs.round, 2, 'round 2 started');
+  assert.ok(xr.ev.some((e) => e.t === 'round'), 'round event sent');
+  assert.ok(xr.deadline - Date.now() >= XO.turnMs + 1400, 'turn clock waits for the round-end pause');
+  MG.rooms.delete(xr.code);
+  void x1; void x2;
+  // card games: a swept trick and a new deal take time on screen, so bots wait for them
+  assert.ok(T.animMs({ ev: [{ t: 'play' }, { t: 'trick' }] }) >= 1300, 'trick sweep counted');
+  assert.ok(T.animMs({ ev: [{ t: 'hand' }, { t: 'deal' }] }) >= 2000, 'hand summary + deal counted');
+  console.log('round / trick pauses delay the next turn OK');
 }
 
 function testBotsAllGames() {

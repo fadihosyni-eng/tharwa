@@ -282,10 +282,12 @@
           const bld = el.querySelector('.bld'); if (bld) delete bld.dataset.h;
           const bown = el.querySelector('.bown'); if (bown) delete bown.dataset.k;
         });
+        fitNames();
       }
     }
     if (!S.built) buildLayout();
     applyTheme();
+    fitNames(); // owner bands / houses change the room a name has
     document.title = (st.status === 'playing' ? '● ' : '') + 'ثروة — غرفة ' + st.code;
     processMoves(st);
     updateBoard(st);
@@ -405,9 +407,11 @@
     $('#chatClose').onclick = () => toggleChat(false);
     $('#sideB').addEventListener('click', onSideClick);
     $('#sideB').addEventListener('change', onSideChange);
-    window.addEventListener('resize', () => layoutTokens());
+    window.addEventListener('resize', () => { layoutTokens(); dockChat(); });
     // The landscape board can change size without a window resize (e.g. emulated viewports, side panel growth).
-    if (window.ResizeObserver) new ResizeObserver(() => layoutTokens()).observe($('#board'));
+    if (window.ResizeObserver) new ResizeObserver(() => { layoutTokens(); fitNames(); }).observe($('#board'));
+    dockChat();
+    fitNames();
     setInterval(tick, 250);
   }
 
@@ -565,6 +569,38 @@
     if (!tk) return;
     tk.classList.remove('hop'); void tk.offsetWidth; tk.classList.add('hop');
   }
+  // Phones: tile names break only between words (CSS keep-all). A word that is still wider than its tile,
+  // or a name that needs more than 2 lines, gets a smaller font on that tile only — never split inside a word.
+  const PHONE = '(max-width: 820px)';
+  let fitQueued = false;
+  function fitNames() {
+    if (fitQueued) return;
+    fitQueued = true;
+    requestAnimationFrame(() => {
+      fitQueued = false;
+      const phone = matchMedia(PHONE).matches;
+      for (const n of $$('#board .tile .tname')) {
+        n.style.fontSize = '';
+        if (!phone || !n.clientWidth) continue;
+        const tile = n.closest('.tile');
+        const cut = () => n.getBoundingClientRect().bottom > tile.getBoundingClientRect().bottom + 0.5; // pushed out of its tile
+        let fs = parseFloat(getComputedStyle(n).fontSize);
+        while (fs > 4.1 && (n.scrollWidth > n.clientWidth + 0.5 || n.scrollHeight > n.clientHeight + 0.5 || cut())) {
+          fs -= 0.25;
+          n.style.fontSize = fs + 'px';
+        }
+      }
+    });
+  }
+  // Phones: the chat button sits in the top bar (next to sound/account) instead of floating over the controls.
+  function dockChat() {
+    const fab = $('#chatFab'), bar = $('.col-a .top-row');
+    if (!fab || !bar) return;
+    const phone = matchMedia(PHONE).matches;
+    if (phone && fab.parentNode !== bar) bar.appendChild(fab);
+    else if (!phone && fab.parentNode === bar) $('#chatDrawer').before(fab);
+  }
+
   function layoutTokens() {
     const board = $('#board'), layer = $('#tokens');
     if (!board || !layer || !S.room) return;

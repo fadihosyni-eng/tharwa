@@ -8,3 +8,4 @@ data/local.json.tmp
 .wrangler/
 .dev.vars
 .dev.vars.*
+showcase/

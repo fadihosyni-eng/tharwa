@@ -80,14 +80,18 @@ function jsonStore(file) {
       db.sessions = db.sessions.filter((s) => s.userId !== id);
       db.userMaps = (db.userMaps || []).filter((m) => m.userId !== id); save();
     },
+    // Leaders: most wins, then fewer games played (better win rate), then the older account. Only players who played.
     async topUsers(limit = 50) {
-      return db.users.filter((u) => !u.banned).sort((a, b) => b.points - a.points || b.wins - a.wins || a.createdAt - b.createdAt).slice(0, limit).map(clone);
+      return db.users.filter((u) => !u.banned && u.games > 0).sort((a, b) => b.wins - a.wins || a.games - b.games || a.createdAt - b.createdAt).slice(0, limit).map(clone);
     },
     // maps owned by a user (bought in the store or granted by an admin)
     async listUserMaps(userId) { return (db.userMaps || []).filter((m) => m.userId === userId).map((m) => m.mapId); },
     async addUserMap(userId, mapId) {
       db.userMaps = db.userMaps || [];
       if (!db.userMaps.some((m) => m.userId === userId && m.mapId === mapId)) { db.userMaps.push({ userId, mapId, at: Date.now() }); save(); }
+    },
+    async removeUserMap(userId, mapId) {
+      db.userMaps = (db.userMaps || []).filter((m) => !(m.userId === userId && m.mapId === mapId)); save();
     },
     async listUsers({ q = '', limit = 50, offset = 0 } = {}) {
       const s = q.toLowerCase();
@@ -224,12 +228,13 @@ function pgStore(url) {
     },
     async deleteUser(id) { await q('DELETE FROM users WHERE id=$1', [id]); },
     async topUsers(limit = 50) {
-      return (await q('SELECT * FROM users WHERE banned = FALSE ORDER BY points DESC, wins DESC, created_at ASC LIMIT $1', [limit])).rows.map(toUser);
+      return (await q('SELECT * FROM users WHERE banned = FALSE AND games > 0 ORDER BY wins DESC, games ASC, created_at ASC LIMIT $1', [limit])).rows.map(toUser);
     },
     async listUserMaps(userId) { return (await q('SELECT map_id FROM user_maps WHERE user_id=$1', [userId])).rows.map((r) => r.map_id); },
     async addUserMap(userId, mapId) {
       await q('INSERT INTO user_maps (user_id, map_id, at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [userId, mapId, Date.now()]);
     },
+    async removeUserMap(userId, mapId) { await q('DELETE FROM user_maps WHERE user_id=$1 AND map_id=$2', [userId, mapId]); },
     async listUsers({ q: s = '', limit = 50, offset = 0 } = {}) {
       const like = '%' + String(s).toLowerCase().replace(/[%_\\]/g, '\\$&') + '%';
       const where = s ? 'WHERE username LIKE $1 OR LOWER(display_name) LIKE $1 OR email LIKE $1' : '';

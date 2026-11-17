@@ -1,49 +1,16 @@
-// «لودو» board: SVG 15×15 board, 3D dice (same cube as «ثروة»), tokens that walk square by square.
-// Geometry must match games/ludo.js: 52-square track clockwise, corner k starts at track index START[k],
-// progress -1 = base, 0..50 track, 51..55 home column, 56 = home.
+// «لودو» board. createLudo() shows the 3D board (Three.js, loaded on demand from ./ludo3d) when WebGL works,
+// and falls back to createLudo2D() (SVG board + CSS die) otherwise, or if the 3D board fails / loses its context.
+// Geometry (shared with the 3D board) lives in ./ludo3d/geom and must match games/ludo.js.
 import { esc } from '../lib/client';
 import type { Board, Ctx, Room } from './types';
+import { START, STARS, CORNER_NAMES, BASE_ORIGIN, TRACK, HOME_COL, ARROW_ROT, cellPos, type Cell } from './ludo3d/geom';
 
 const C = 40;                         // cell size in SVG units (board = 600)
-const START = [0, 13, 26, 39];
-const STARS = [8, 21, 34, 47];
 const CORNER_COLORS = ['#f0585e', '#38c172', '#ffc53d', '#4f9df7'];
-const CORNER_NAMES = ['الأحمر', 'الأخضر', 'الأصفر', 'الأزرق'];
-const BASE_ORIGIN: [number, number][] = [[0, 0], [9, 0], [9, 9], [0, 9]];
-
-// the 52 shared squares, clockwise, starting at corner 0's start square (cell coordinates)
-const TRACK: [number, number][] = [
-  [1, 6], [2, 6], [3, 6], [4, 6], [5, 6],
-  [6, 5], [6, 4], [6, 3], [6, 2], [6, 1], [6, 0],
-  [7, 0],
-  [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5],
-  [9, 6], [10, 6], [11, 6], [12, 6], [13, 6], [14, 6],
-  [14, 7],
-  [14, 8], [13, 8], [12, 8], [11, 8], [10, 8], [9, 8],
-  [8, 9], [8, 10], [8, 11], [8, 12], [8, 13], [8, 14],
-  [7, 14],
-  [6, 14], [6, 13], [6, 12], [6, 11], [6, 10], [6, 9],
-  [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
-  [0, 7],
-  [0, 6],
-];
-const HOME_COL: [number, number][][] = [
-  [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7]],
-  [[7, 1], [7, 2], [7, 3], [7, 4], [7, 5]],
-  [[13, 7], [12, 7], [11, 7], [10, 7], [9, 7]],
-  [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9]],
-];
-const HOME_SPOT: [number, number][] = [[6.55, 7.5], [7.5, 6.55], [8.45, 7.5], [7.5, 8.45]];
-const ARROW_ROT = [0, 90, 180, 270]; // start-square arrow: corner 0 moves right, 1 down, 2 left, 3 up
-
-const center = ([x, y]: [number, number]): [number, number] => [(x + 0.5) * C, (y + 0.5) * C];
+const center = ([x, y]: Cell): [number, number] => [(x + 0.5) * C, (y + 0.5) * C];
 function posOf(corner: number, prog: number, i: number): [number, number] {
-  if (prog < 0) { const [ox, oy] = BASE_ORIGIN[corner]; return [(ox + (i % 2 ? 4 : 2)) * C, (oy + (i < 2 ? 2 : 4)) * C]; }
-  if (prog <= 50) return center(TRACK[(START[corner] + prog) % 52]);
-  if (prog <= 55) return center(HOME_COL[corner][prog - 51]);
-  const [hx, hy] = HOME_SPOT[corner];
-  const off = [[-7, -7], [7, -7], [-7, 7], [7, 7]][i];
-  return [hx * C + off[0] * (corner % 2 ? 1.3 : 0.6), hy * C + off[1] * (corner % 2 ? 0.6 : 1.3)];
+  const [x, y] = cellPos(corner, prog, i);
+  return [x * C, y * C];
 }
 const starSVG = (cx: number, cy: number, r: number) => {
   const pts = Array.from({ length: 10 }, (_, k) => {
@@ -107,7 +74,7 @@ const PIPS: Record<number, number[]> = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0,
 const pipsHTML = (v: number) => Array.from({ length: 9 }, (_, k) => `<span class="${(PIPS[v] || []).includes(k) ? 'on' : ''}"></span>`).join('');
 const dieHTML = () => `<div class="mg-die"><div class="tilt"><div class="cube">${['front', 'back', 'right', 'left', 'top', 'bottom'].map((p) => `<div class="face ${p}">${pipsHTML(0)}</div>`).join('')}</div></div></div>`;
 
-export function createLudo(el: HTMLElement, under: HTMLElement, ctx: Ctx): Board {
+export function createLudo2D(el: HTMLElement, under: HTMLElement, ctx: Ctx): Board {
   el.innerHTML = `<div class="mg-ludo"><svg viewBox="0 0 ${15 * C} ${15 * C}" class="mg-ludo-svg" role="img" aria-label="لوح لودو">${boardSVG()}<g class="tokens"></g></svg></div>`;
   under.innerHTML = `<div class="mg-ludo-ctrl">
     <button type="button" class="mg-dice-btn" aria-label="ارمي النرد" disabled>${dieHTML()}</button>
@@ -301,6 +268,41 @@ export function createLudo(el: HTMLElement, under: HTMLElement, ctx: Ctx): Board
       room = r;
       layout(r, !animate);
       paintCtrl(r);
+    },
+  };
+}
+
+// ---------------------------------------------------------------- 3D (default) with 2D fallback
+function webglOK() {
+  try {
+    if (/[?&]ludo2d\b/.test(location.search)) return false;           // manual switch for testing / old devices
+    const c = document.createElement('canvas');
+    const gl = (c.getContext('webgl2') || c.getContext('webgl')) as WebGLRenderingContext | null;
+    if (!gl) return false;
+    const lose = gl.getExtension('WEBGL_lose_context');
+    if (lose) lose.loseContext();
+    return true;
+  } catch { return false; }
+}
+
+export function createLudo(el: HTMLElement, under: HTMLElement, ctx: Ctx): Board {
+  if (!webglOK()) return createLudo2D(el, under, ctx);
+  let impl: Board | null = null;
+  let last: Room | null = null;
+  const to2D = () => {
+    impl = createLudo2D(el, under, ctx);
+    if (last) Promise.resolve(impl.render(last, false)).catch(console.error);
+  };
+  el.innerHTML = '<div class="mg-l3 loading" aria-busy="true"><span class="mg-l3-spin"></span></div>';
+  const ready: Promise<Board> = import('./ludo3d/board3d')
+    .then((m) => m.createLudo3D(el, under, ctx, to2D))
+    .catch((e) => { console.warn('[ludo] 3D board unavailable, using 2D', e); return createLudo2D(el, under, ctx); });
+  return {
+    hint: (r) => (impl && impl.hint ? impl.hint(r) : r.state.phase === 'roll' ? 'اضغط النرد لترمي' : 'اختار قطعة لتحركها'),
+    async render(r, animate) {
+      if (!impl) { impl = await ready; animate = false; }
+      last = r;
+      await impl.render(r, animate);
     },
   };
 }
