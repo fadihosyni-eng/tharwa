@@ -35,6 +35,9 @@
   // The CSS dice below stay as the fallback (no WebGL, script failed, or `?dice2d` in the URL).
   let d3Load = null;
   function want3D() {
+    // Hotfix 2026-11-19: the 3D dice froze mid-air in real browsers, so they are OFF by default until fixed.
+    // Opt in for testing with `?dice3d` in the URL.
+    if (!/[?&]dice3d\b/.test(location.search)) return false;
     if (/[?&]dice2d\b/.test(location.search)) return false;
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
   }
