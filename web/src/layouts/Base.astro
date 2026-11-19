@@ -13,6 +13,8 @@ interface Props {
   noindex?: boolean;
   canonical?: boolean;
   bodyClass?: string;
+  /** the page brings its own header, <main> and footer (the homepage) */
+  bare?: boolean;
 }
 const {
   title,
@@ -21,6 +23,7 @@ const {
   noindex = false,
   canonical = true,
   bodyClass = '',
+  bare = false,
 } = Astro.props;
 const fullTitle = title ? `${title} — Serva Games` : 'Serva Games — منصة ألعاب أونلاين';
 const site = Astro.site ?? new URL('https://serva-g.com');
@@ -56,14 +59,19 @@ const ogUrl = new URL(ogImage, site).href;
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+    <slot name="head" />
   </head>
   <body class={bodyClass || undefined}>
     <a class="skip" href="#main">تخطّى للمحتوى</a>
-    <Header active={active} />
-    <main id="main" class="wrap page">
-      <slot />
-    </main>
-    <Footer />
+    {bare ? <slot /> : (
+      <Fragment>
+        <Header active={active} />
+        <main id="main" class="wrap page">
+          <slot />
+        </main>
+        <Footer />
+      </Fragment>
+    )}
     <div id="modal-root"></div>
     <div id="toasts" aria-live="polite"></div>
   </body>

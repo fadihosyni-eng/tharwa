@@ -1,340 +1,820 @@
 ---
+// Serva Games homepage — «مدينة Serva»: a floating night city in real-time 3D where every game is a landmark.
+// The page paints instantly with real text and a Blender render of the city (public/home/); the 3D world
+// (src/home/world.ts, three.js) is lazy-loaded after first paint and only when WebGL2 + motion are available.
+// Games, live counts and room actions all come from the live registry (/api/site) and the real play API.
 import Base from '../layouts/Base.astro';
-import { ui, diceHTML } from '../lib/art-build';
-import { icon } from '../components/icons';
 import { CATALOG } from '../components/games/catalog';
+import servaLogo from '../../../public/brand/serva-logo-160.webp?url';
 
-const hero = CATALOG[0];
-const side = CATALOG.slice(1, 3);
-const TRUST = [
-  { ico: icon('nodownload'), text: 'بلا تنزيل' },
-  { ico: icon('devices'), text: 'عالموبايل والكمبيوتر' },
-  { ico: icon('gift'), text: 'ببلاش' },
+/** which landmark (stop) shows which game; a game missing here still shows in the index and the search */
+const STOP_OF: Record<string, number> = { tharwa: 1, tarneeb: 2, '400': 2, trix: 2, konkan: 2, ludo: 3, xo: 4, connect4: 4 };
+const STOPS = [
+  { n: 1, id: 'stop-tharwa', kick: 'حي ثروة', label: 'برج ثروة', type: 'لعبة لوح', ico: 'board', img: 'fb-tharwa' },
+  { n: 2, id: 'stop-cards', kick: 'جناح ورق الشدة', label: 'جناح ورق الشدة', type: 'ورق الشدة', ico: 'cards', img: 'fb-cards' },
+  { n: 3, id: 'stop-ludo', kick: 'ساحة اللودو', label: 'ساحة اللودو', type: 'لعبة لوح', ico: 'board', img: 'fb-ludo' },
+  { n: 4, id: 'stop-arcade', kick: 'برج الألعاب السريعة', label: 'برج الألعاب السريعة', type: 'لعبة سريعة', ico: 'bolt', img: 'fb-arcade' },
 ];
-const STEPS = [
-  { ico: ui('gamepad'), title: 'اختار لعبة', text: 'من المكتبة — لعبة سريعة لتنين أو لعبة جماعية لكل الشلّة.' },
-  { ico: icon('link'), title: 'ابعت الرابط لصحابك', text: 'اعمل غرفة وابعت الرابط أو الكود، أو العب ضد الكمبيوتر.' },
-  { ico: ui('trophy'), title: 'العبوا', text: 'كل لعبة وكل فوز بيجمعلك نقاط لتطلع على قائمة المتصدرين.' },
-];
-const CATS = [
-  { key: 'duo', label: 'لتنين', ico: ui('users') },
-  { key: 'party', label: 'جماعية', ico: ui('party') },
-  { key: 'bots', label: 'ضد الكمبيوتر', ico: ui('robot') },
-  { key: 'cards', label: 'ورق الشدة', ico: ui('cards'), hidden: true },
-];
+const gamesOf = (n: number) => CATALOG.filter((g) => STOP_OF[g.slug] === n);
+const players = (min: number, max: number) => (min === max ? `${min}` : `${min}–${max}`);
+const dur = (d: string) => d.replace(/\s*د$/, '');
+const year = new Date().getFullYear();
+const icon = (n: string, cls = 'h-i') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 ---
-<Base active="home" description="Serva Games — منصة ألعاب أونلاين من Serva. العب مع صحابك من المتصفح بلا تنزيل: اعمل غرفة، ابعت الكود، أو العب ضد الكمبيوتر. اجمع نقاط وتصدّر القائمة.">
-  <div class="ad-wrap" data-ad="home_top" hidden></div>
+<Base bare bodyClass="hx" description="Serva Games — منصّة ألعاب أونلاين: ورق الشدة (طرنيب، أربعمية، تركس، كونكان)، ألعاب لوح (ثروة، لودو) وألعاب سريعة. العب مع صحابك من المتصفح، بلا تنزيل، عالموبايل والكمبيوتر، وببلاش.">
+  <Fragment slot="head">
+    <link rel="preload" href="/home/fallback-wide.webp" as="image" media="(min-width: 861px)" />
+    <link rel="preload" href="/home/fallback-tall.webp" as="image" media="(max-width: 860px)" />
+    <script is:inline>
+      (function () {
+        var d = document.documentElement, gl = false, rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        try { gl = !!document.createElement('canvas').getContext('webgl2'); } catch (e) {}
+        d.classList.add(/[?&]fallback\b/.test(location.search) || rm || !gl ? 'hfb' : 'h3d');
+      })();
+    </script>
+  </Fragment>
 
-  <!-- hero -->
-  <section class="hero" aria-labelledby="heroTitle">
-    <div class="hero-text">
-      <span class="eyebrow"><Fragment set:html={ui('sparkle')} />منصة ألعاب أونلاين من Serva</span>
-      <h1 id="heroTitle">العب مع صحابك<br /><span class="grad">بلا تنزيل</span></h1>
-      <p class="lead">ألعاب جماعية بتنلعب من المتصفح: اعمل غرفة وابعت الرابط لصحابك، أو تحدّى الكمبيوتر إذا ما حدا فاضي.</p>
-      <div class="hero-cta">
-        <a class="btn btn-gold big" href="/games"><Fragment set:html={ui('play')} />العب هلّق</a>
-        <button class="btn big btn-ghost" type="button" id="codeBtn"><Fragment set:html={ui('key')} />عندي كود غرفة</button>
-      </div>
-      <ul class="trust" aria-label="ليش Serva Games">
-        {TRUST.map((t) => <li><Fragment set:html={t.ico} />{t.text}</li>)}
-      </ul>
-      <p class="hero-live" id="heroLive" hidden><span class="live-dot"></span><span></span></p>
-    </div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M16.5 12 8 17V7z" fill="currentColor" stroke-width="1.4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><path d="M15.5 5.6a3 3 0 0 1 0 5.8M17.3 14.6c1.7.6 2.8 2 3.2 4.4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-nodl" viewBox="0 0 24 24"><path d="M12 4v9m-3.6-3.4L12 13l3.6-3.4M5 15v3.2c0 .9.7 1.6 1.6 1.6h10.8c.9 0 1.6-.7 1.6-1.6V15"/><path d="M3.5 3.5l17 17"/></symbol>
+    <symbol id="i-devices" viewBox="0 0 24 24"><rect x="2.8" y="5" width="13.4" height="9.6" rx="1.6"/><path d="M6.5 18.5h6"/><rect x="17.2" y="8.6" width="4.2" height="10.6" rx="1.1"/></symbol>
+    <symbol id="i-free" viewBox="0 0 24 24"><path d="M20.3 13.3 13.3 20.3a1.6 1.6 0 0 1-2.3 0L3.7 13V3.7H13l7.3 7.3a1.6 1.6 0 0 1 0 2.3z"/><circle cx="8" cy="8" r="1.3"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M19 12H5m5.5-5.5L5 12l5.5 5.5"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.2 4.2 0 0 0 6 0l3-3a4.2 4.2 0 0 0-6-6l-1 1"/><path d="M14 10a4.2 4.2 0 0 0-6 0l-3 3a4.2 4.2 0 0 0 6 6l1-1"/></symbol>
+    <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3.5" y="6" width="10" height="14" rx="1.8" transform="rotate(-10 8.5 13)"/><rect x="10.5" y="4" width="10" height="14" rx="1.8" transform="rotate(8 15.5 11)"/></symbol>
+    <symbol id="i-board" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><path d="M3.5 12h17M12 3.5v17"/><circle cx="7.8" cy="7.8" r="1.2" fill="currentColor"/><circle cx="16.2" cy="16.2" r="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2.8 5.5 13.2h5.6L10.6 21l7.9-10.6h-5.7z"/></symbol>
+    <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10m0-1.5a1.5 1.5 0 0 1 3 0V11m0-1a1.5 1.5 0 0 1 3 0v4.5c0 3.6-2.4 6-6 6-2.6 0-4.2-1.2-5.4-3.4L4.4 13c-.6-1.1.9-2.2 1.8-1.3L9 14.5"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16 7l2.5 2.5M14 9l2 2"/></symbol>
+    <symbol id="i-library" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></symbol>
+    <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.5 4h13L20 9.5M4 9.5h16M4 9.5c0 1.5 1.1 2.5 2.7 2.5S9.3 11 9.3 9.5c0 1.5 1.2 2.5 2.7 2.5s2.7-1 2.7-2.5c0 1.5 1 2.5 2.6 2.5S20 11 20 9.5M5.5 12v8h13v-8"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4.5c0 3 1.4 4.6 3.7 4.9M16 6h3.5c0 3-1.4 4.6-3.7 4.9M12 13v4m-3.5 3h7l-.8-3h-5.4z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></symbol>
+  </svg>
 
-    <div class="stage" aria-hidden="true">
-      <div class="stage-glow"></div>
-      {side.map((g, i) => (
-        <a class={`stage-side s${i}`} href={`/games/${g.slug}`} tabindex="-1" data-slug={g.slug} style={`--ac:${g.accent}`}>
-          <img src={g.art} alt="" width="480" height="300" decoding="async" />
-        </a>
-      ))}
-      <a class="stage-main" href={`/games/${hero.slug}`} tabindex="-1" data-slug={hero.slug} style={`--ac:${hero.accent}`}>
-        <img src={hero.art} alt="" width="480" height="300" decoding="async" fetchpriority="high" />
-        <span class="stage-tag"><Fragment set:html={ui('crown')} />{hero.name}</span>
+  <canvas id="hxWorld" aria-hidden="true"></canvas>
+  <picture id="hxPoster">
+    <source media="(max-width: 860px)" srcset="/home/fallback-tall.webp" />
+    <img src="/home/fallback-wide.webp" alt="مدينة Serva: جزيرة طايرة بالليل فيها برج ثروة وجناح ورق الشدة وساحة اللودو وبرج الألعاب السريعة" width="1920" height="1080" fetchpriority="high" decoding="async" />
+  </picture>
+  <div class="h-veil" aria-hidden="true"></div>
+  <div class="h-scrim" id="hxScrim" aria-hidden="true"></div>
+  <div class="h-grain" aria-hidden="true"></div>
+
+  <a class="skip" href="#main">تخطّى للمحتوى</a>
+  <header class="h-hdr" id="hxHdr">
+    <div class="h-hdr-row">
+      <a class="h-brand" href="/" aria-label="Serva Games، الصفحة الرئيسية">
+        <img src={servaLogo} alt="" width="42" height="42" decoding="async" />
+        <b dir="ltr"><span>Serva</span> Games</b>
       </a>
-      <div class="dice3 hero-dice" id="heroDice" title="ارمي النرد"><Fragment set:html={diceHTML()} /></div>
+      <nav class="h-nav" aria-label="أنواع الألعاب">
+        <a href="#stop-cards" data-fly="2" data-cat="0">ورق الشدة</a>
+        <span class="h-sep" aria-hidden="true"></span>
+        <a href="#stop-tharwa" data-fly="1" data-cat="1">ألعاب لوح</a>
+        <span class="h-sep" aria-hidden="true"></span>
+        <a href="#stop-arcade" data-fly="4" data-cat="2">ألعاب سريعة</a>
+      </nav>
+      <nav class="h-site" aria-label="القائمة الرئيسية">
+        <a href="/games"><Fragment set:html={icon('library')} />المكتبة</a>
+        <a href="/store"><Fragment set:html={icon('store')} />المتجر</a>
+        <a href="/leaders"><Fragment set:html={icon('trophy')} />المتصدرين</a>
+      </nav>
+      <button class="h-sbtn" id="hxOpenPal" type="button" aria-haspopup="dialog" aria-label="دوّر على لعبة">
+        <Fragment set:html={icon('search')} /><span class="h-lbl">دوّر على لعبة</span><span class="h-kbd" dir="ltr">Ctrl K</span>
+      </button>
+      <div class="acct" id="acct" aria-live="polite"><span class="acct-skel" aria-hidden="true"></span></div>
+      <details class="h-menu">
+        <summary aria-label="القائمة"><Fragment set:html={icon('menu')} /></summary>
+        <nav aria-label="روابط الموقع">
+          <a href="/games"><Fragment set:html={icon('library')} />مكتبة الألعاب</a>
+          <a href="/store"><Fragment set:html={icon('store')} />المتجر</a>
+          <a href="/leaders"><Fragment set:html={icon('trophy')} />المتصدرين</a>
+          <a href="/privacy"><Fragment set:html={icon('lock')} />الخصوصية</a>
+        </nav>
+      </details>
     </div>
-  </section>
+    <div class="banners h-banners" id="banners"></div>
+  </header>
 
-  <div id="myCard"></div>
+  <nav class="h-rail" id="hxRail" aria-label="خريطة المدينة">
+    {STOPS.map((s) => <button type="button" data-fly={s.n}><span>{s.label}</span></button>)}
+  </nav>
+  <div class="h-tag" id="hxTag" aria-hidden="true"><b></b><small>اضغط لتطير لهون</small></div>
 
-  <!-- continue where you left off (only when this browser still has a seat somewhere) -->
-  <section class="sec resume-sec" id="resumeBox" hidden aria-labelledby="resumeTitle">
-    <div class="sec-head"><h2 id="resumeTitle"><Fragment set:html={ui('refresh')} />كمّل من وين وقفت</h2></div>
-    <div class="resume-list" id="resumeList"></div>
-  </section>
+  <main id="main" class="h-main">
+    <section class="h-hero" id="hero" aria-labelledby="hxTitle">
+      <div class="h-hero-c">
+        <p class="h-eyebrow">منصّة ألعاب أونلاين من Serva</p>
+        <h1 class="h-h1" id="hxTitle"><span class="h-ln"><span>العب مع صحابك،</span></span><span class="h-ln"><span><em>من أي مكان.</em></span></span></h1>
+        <p class="h-lead">ورق الشدة وألعاب اللوح والألعاب السريعة، كلها بالمتصفح. افتح غرفة، ابعت الرابط، وابدأوا سوا.</p>
+        <ul class="h-feats" aria-label="ميزات المنصة">
+          <li><Fragment set:html={icon('nodl')} />بلا تنزيل</li>
+          <li><Fragment set:html={icon('devices')} />عالموبايل والكمبيوتر</li>
+          <li><Fragment set:html={icon('free')} />ببلاش</li>
+          <li><Fragment set:html={icon('lock')} />غرف خاصة لصحابك</li>
+        </ul>
+        <div class="h-ctas">
+          <a class="h-btn h-btn-gold" href="#stop-tharwa" data-fly="1">اختار لعبتك<Fragment set:html={icon('arrow')} /></a>
+          <button class="h-btn h-btn-ghost" type="button" id="codeBtn" aria-label="عندي كود غرفة"><Fragment set:html={icon('key')} /><span class="h-lbl">عندي كود غرفة</span></button>
+        </div>
+        <div class="h-resume" id="hxResume" hidden></div>
+      </div>
+      <div class="h-cue" aria-hidden="true"><i></i>مرّر لتتجوّل بالمدينة</div>
+    </section>
 
-  <!-- featured games -->
-  <section class="sec" aria-labelledby="featTitle">
-    <div class="sec-head">
-      <div><h2 id="featTitle"><Fragment set:html={ui('star')} />ألعاب مميّزة</h2><p>اختار وحدة وبلّش خلال ثواني.</p></div>
-      <a class="sec-link" href="/games">كل الألعاب<Fragment set:html={icon('chevron')} /></a>
-    </div>
-    <nav class="cat-row" aria-label="أنواع الألعاب">
-      {CATS.map((c) => (
-        <a class="cat" href={`/games?f=${c.key}`} data-cat={c.key} hidden={c.hidden}><Fragment set:html={c.ico} />{c.label}</a>
-      ))}
+    {STOPS.map((s) => {
+      const list = gamesOf(s.n), g = list[0];
+      return (
+        <section class="h-stop" id={s.id} data-stop={s.n} aria-label={s.label}>
+          <div class="h-stage">
+            <div class="h-fb-img"><img loading="lazy" decoding="async" src={`/home/${s.img}.webp`} alt={s.label} width="1280" height="800" /></div>
+            <div class="h-panel" data-stop={s.n} data-type={s.type} data-ico={s.ico}>
+              <div class="h-p-top"><span class="h-p-kick">{s.kick}</span><span class="h-p-line"></span><span class="h-p-idx" dir="ltr"><b>{`0${s.n}`}</b> / 04</span></div>
+              {list.length > 1 && (
+                <div class="h-tabs" role="tablist" aria-label={`ألعاب ${s.kick}`}>
+                  {list.map((x, i) => <button class="h-tab" type="button" role="tab" data-g={x.slug} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}>{x.name}</button>)}
+                </div>
+              )}
+              <div class="h-p-name-w"><h2 class="h-p-name">{g.name}</h2></div>
+              <p class="h-p-pitch">{g.description}</p>
+              <ul class="h-meta">
+                <li><Fragment set:html={icon('users')} /><span><bdi dir="ltr">{players(g.minPlayers, g.maxPlayers)}</bdi> لاعبين</span></li>
+                <li><Fragment set:html={icon('clock')} /><span><bdi dir="ltr">{dur(g.duration)}</bdi> دقيقة</span></li>
+                <li><Fragment set:html={icon(s.ico)} />{s.type}</li>
+              </ul>
+              <div class="h-liveline" hidden><i></i><span></span></div>
+              <div class="h-p-ctas">
+                <button class="h-btn h-btn-gold" type="button" data-act="quick" data-slug={g.slug}><Fragment set:html={icon('play')} />العب</button>
+                <button class="h-btn h-btn-ghost" type="button" data-act="private" data-slug={g.slug}><Fragment set:html={icon('users')} />غرفة مع صحابي</button>
+              </div>
+              <a class="h-p-more" href={`/games/${g.slug}`}>صفحة اللعبة وطرق اللعب<Fragment set:html={icon('arrow')} /></a>
+              <p class="h-p-off" hidden>هاللعبة مو متاحة هلق. <a href="/games">شوف باقي الألعاب</a></p>
+            </div>
+          </div>
+        </section>
+      );
+    })}
+
+    <section class="h-after" id="how" aria-labelledby="howh">
+      <div class="ad-wrap" data-ad="home_top" hidden></div>
+      <h2 class="h-sec-h" id="howh">كيف بتلعب</h2>
+      <p class="h-sec-s">تلات خطوات وبتكونوا عالطاولة.</p>
+      <ol class="h-steps">
+        <li><span class="h-n">01</span><span class="h-ic"><Fragment set:html={icon('pointer')} /></span><h3>اختار لعبة</h3><p>من جولة المدينة، من <a href="/games">مكتبة الألعاب</a>، أو دوّر عليها بالبحث.</p></li>
+        <li><span class="h-n">02</span><span class="h-ic"><Fragment set:html={icon('link')} /></span><h3>افتح غرفة وابعت الرابط</h3><p>اكبس «غرفة مع صحابي» وابعتلهم الرابط أو الكود، وبيفوتوا من أي جهاز.</p></li>
+        <li><span class="h-n">03</span><span class="h-ic"><Fragment set:html={icon('users')} /></span><h3>العبوا سوا</h3><p>كل حركة بتوصل للكل مباشرة، عالموبايل أو الكمبيوتر.</p></li>
+      </ol>
+
+      <div class="h-grid3">
+        <div class="h-index" id="hxIndex" aria-labelledby="idxh">
+          <div class="h-idx-h"><h3 id="idxh">دليل المدينة</h3><p>كل الألعاب بمكان واحد.</p></div>
+          <div class="h-idx-cols" id="hxIndexCols">
+            {['cards', 'board', 'quick'].map((cat) => {
+              const label = cat === 'cards' ? 'ورق الشدة' : cat === 'board' ? 'ألعاب لوح' : 'ألعاب سريعة';
+              const ico = cat === 'cards' ? 'cards' : cat === 'board' ? 'board' : 'bolt';
+              const list = CATALOG.filter((x) => (cat === 'cards' ? STOP_OF[x.slug] === 2 : cat === 'board' ? [1, 3].includes(STOP_OF[x.slug]) : STOP_OF[x.slug] === 4));
+              return (
+                <div class="h-cat" data-cat={cat}>
+                  <h4><Fragment set:html={icon(ico)} />{label}</h4>
+                  <ul>{list.map((x) => <li data-slug={x.slug}><a href={`/games/${x.slug}`}>{x.name}<small><bdi dir="ltr">{players(x.minPlayers, x.maxPlayers)}</bdi> لاعبين</small><Fragment set:html={icon('arrow', 'h-i h-ar')} /></a></li>)}</ul>
+                </div>
+              );
+            })}
+          </div>
+          <a class="h-btn h-btn-ghost h-libbtn" href="/games"><Fragment set:html={icon('library')} />تصفّح مكتبة الألعاب</a>
+        </div>
+        <div class="h-box" aria-labelledby="roomsh">
+          <div class="h-box-h"><h3 id="roomsh">غرف مفتوحة هلق</h3><span class="live-dot" title="بتتحدّث لحالها"></span></div>
+          <div id="roomList" class="room-list"><div class="state state-loading"><span class="spinner"></span><span>عم دوّر…</span></div></div>
+          <button class="h-btn h-btn-ghost h-codebtn" type="button" data-code><Fragment set:html={icon('key')} />عندي كود غرفة</button>
+        </div>
+        <div class="h-box" aria-labelledby="leadh">
+          <div class="h-box-h"><h3 id="leadh">المتصدرين</h3><a class="h-box-link" href="/leaders">الكل</a></div>
+          <ol class="mini-leaders" id="miniLeaders"><li class="state state-loading"><span class="spinner"></span><span>عم حمّل…</span></li></ol>
+        </div>
+      </div>
+      <div class="ad-wrap" data-ad="home_bottom" hidden></div>
+    </section>
+  </main>
+
+  <footer class="h-foot">
+    <a class="h-by" href="https://serva-s.com" target="_blank" rel="noopener" title="serva-s.com">
+      <img src={servaLogo} alt="Serva" width="40" height="40" loading="lazy" decoding="async" />
+      <span>لعبة من <bdi dir="ltr">Serva</bdi></span>
+    </a>
+    <small>ألعاب أونلاين ببلاش، بلا تنزيل · <bdi dir="ltr">© {year} Serva Games</bdi></small>
+    <nav aria-label="روابط">
+      <a href="/games">مكتبة الألعاب</a>
+      <a href="/store">المتجر</a>
+      <a href="/leaders">المتصدرين</a>
+      <a href="/privacy">الخصوصية</a>
     </nav>
-    <div class="game-cards feat-row" id="featGrid">{[0, 1, 2, 3].map(() => <div class="gcard skel" aria-hidden="true"></div>)}</div>
-  </section>
+  </footer>
 
-  <!-- live rooms + leaders -->
-  <section class="sec home-split">
-    <div class="panel rooms-panel" aria-labelledby="roomsTitle">
-      <div class="panel-head">
-        <h2 id="roomsTitle"><Fragment set:html={ui('users')} />غرف مفتوحة الآن</h2>
-        <span class="live-dot" title="بتتحدّث لحالها"></span>
-      </div>
-      <div id="roomList" class="room-list"><div class="state state-loading"><span class="spinner"></span><span>عم دوّر…</span></div></div>
+  <div class="h-pal" id="hxPal" role="dialog" aria-modal="true" aria-label="دوّر على لعبة">
+    <div class="h-pal-box">
+      <div class="h-pal-in"><Fragment set:html={icon('search')} /><input id="hxPalQ" type="text" placeholder="دوّر على لعبة، مثلاً طرنيب أو لودو" autocomplete="off" spellcheck="false" aria-controls="hxPalList" aria-autocomplete="list" /><span class="h-kbd" dir="ltr">Esc</span></div>
+      <ul class="h-pal-list" id="hxPalList" role="listbox" aria-label="الألعاب"></ul>
+      <div class="h-pal-foot"><span><span class="h-kbd" dir="ltr">↑ ↓</span> تنقّل</span><span><span class="h-kbd" dir="ltr">Enter</span> افتح اللعبة</span></div>
     </div>
-
-    <div class="panel leaders-panel" aria-labelledby="leadTitle">
-      <div class="panel-head">
-        <h2 id="leadTitle"><Fragment set:html={ui('trophy')} />المتصدرين</h2>
-        <a class="sec-link" href="/leaders">الكل<Fragment set:html={icon('chevron')} /></a>
-      </div>
-      <ol class="mini-leaders" id="miniLeaders"><li class="state state-loading"><span class="spinner"></span><span>عم حمّل…</span></li></ol>
-    </div>
-  </section>
-
-  <!-- how to play -->
-  <section class="sec how" aria-labelledby="howTitle">
-    <div class="sec-head"><div><h2 id="howTitle"><Fragment set:html={ui('sparkle')} />كيف بتلعب؟</h2><p>تلات خطوات وبتكونوا عم تلعبوا.</p></div></div>
-    <ol class="steps">
-      {STEPS.map((s, i) => (
-        <li class="step"><span class="step-n">{i + 1}</span><span class="step-ico"><Fragment set:html={s.ico} /></span><b>{s.title}</b><p>{s.text}</p></li>
-      ))}
-    </ol>
-    <div class="how-cta"><a class="btn btn-gold big" href="/games"><Fragment set:html={icon('library')} />تصفّح مكتبة الألعاب</a></div>
-  </section>
-
-  <div class="ad-wrap" data-ad="home_bottom" hidden></div>
+  </div>
 </Base>
 
 <style is:global>
-  /* ---------------------------------------------------------------- hero */
-  .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; padding: 30px 0 4px; }
-  .hero h1 { font-size: clamp(34px, 5.2vw, 60px); font-weight: 900; margin: 16px 0 14px; letter-spacing: -.5px; line-height: 1.15; }
-  .hero .grad { background: linear-gradient(90deg, var(--gold), #ffe08a 45%, var(--cyan2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .lead { color: #c3d3e6; font-size: 18px; line-height: 1.85; margin: 0 0 24px; max-width: 520px; }
-  .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; }
-  .hero-cta .btn { min-height: 52px; }
-  .trust { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
-  .trust li { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px 6px 11px; border-radius: 99px; font-weight: 800; font-size: 14px;
-    color: #d6e4f3; background: rgba(14, 28, 61, .55); border: 1px solid rgba(47, 226, 255, .18); }
-  .trust .ui-ico { color: var(--cyan2); }
-  .hero-live { display: flex; align-items: center; gap: 9px; margin: 14px 0 0; color: var(--muted); font-weight: 700; font-size: 14px; }
-  .hero-live b { color: var(--text); }
+:root{--h-bg:#030816;--h-ink:#eef4ff;--h-ink2:#c3d1ea;--h-muted:#8799ba;--h-line:rgba(170,205,255,.14);
+  --h-cyan:#2fe2ff;--h-cyan2:#7ff0ff;--h-gold:#ffc53d;--h-gold2:#ffe39a;--h-green:#3be39a;
+  --h-ease:cubic-bezier(.16,1,.3,1);--h-ease2:cubic-bezier(.65,0,.35,1);--h-pad:clamp(20px,4.2vw,72px);--h-hdr:76px}
+html.h3d,html.hfb{scroll-behavior:auto}
+body.hx{background:var(--h-bg);line-height:1.6}
+body.hx::before,body.hx::after{display:none}
+.hx bdi{unicode-bidi:isolate}
+:where(.hx) :where(button){appearance:none;background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer}
+.h-i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
+.hx a:hover{text-decoration:none}
+.hx .h-main a:not(.h-btn):not(.ml-row),.hx .h-foot a{color:inherit}
+/* ---------------------------------------------------------------- world layers */
+#hxWorld{position:fixed;inset:0;z-index:0;width:100%;height:100%;display:block;outline:none;opacity:0;transition:opacity 1.2s var(--h-ease)}
+.h-live #hxWorld{opacity:1}
+.h-veil{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:
+   radial-gradient(120% 90% at 50% 45%,transparent 55%,rgba(1,4,12,.55) 100%),
+   linear-gradient(180deg,rgba(2,6,17,.55) 0,transparent 18%,transparent 78%,rgba(2,6,17,.35) 100%)}
+.h-grain{position:fixed;inset:-50%;z-index:2;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* side scrim that follows the active panel (start side = right in RTL) */
+.h-scrim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .9s var(--h-ease);
+  background:linear-gradient(270deg,rgba(2,6,17,.9) 0,rgba(2,6,17,.74) 28%,rgba(2,6,17,.3) 46%,rgba(2,6,17,0) 60%)}
+.h-scrim.on{opacity:1}
+#hxPoster{display:none}
 
-  /* stage: the real game art, ثروة in front, with a pair of 3D dice */
-  .stage { position: relative; width: min(100%, 500px); aspect-ratio: 1.18; margin-inline: auto; }
-  .stage-glow { position: absolute; inset: 6% 4%; border-radius: 50%; pointer-events: none;
-    background: radial-gradient(closest-side, rgba(0, 180, 255, .34), rgba(0, 120, 255, .12) 55%, transparent); filter: blur(14px); }
-  .stage-main, .stage-side { position: absolute; display: block; border-radius: 20px; overflow: hidden; aspect-ratio: 8 / 5;
-    border: 1px solid color-mix(in srgb, var(--ac) 45%, transparent); background: #071436; }
-  .stage-main img, .stage-side img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .stage-main { width: 76%; left: 12%; top: 22%; z-index: 3;
-    box-shadow: 0 30px 60px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .04), 0 0 46px color-mix(in srgb, var(--ac) 22%, transparent);
-    animation: floaty 7s ease-in-out infinite; }
-  .stage-side { width: 50%; z-index: 1; opacity: .9; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
-  .stage-side.s0 { left: -2%; top: 4%; transform: rotate(-8deg); }
-  .stage-side.s1 { right: -2%; top: 2%; transform: rotate(7deg); }
-  .stage-tag { position: absolute; top: 12px; inset-inline-start: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 10px; border-radius: 99px;
-    font-size: 15px; font-weight: 900; color: #fff; background: rgba(3, 8, 22, .72); border: 1px solid rgba(255, 197, 61, .45); backdrop-filter: blur(4px); }
-  .stage-tag .ui-ico { color: var(--gold); width: 17px; height: 17px; }
-  .hero-dice { position: absolute; z-index: 4; inset-inline-end: 5%; bottom: 10%; --d: 54px; gap: 14px; padding: 8px; border: 0; background: none; cursor: pointer;
-    filter: drop-shadow(0 14px 18px rgba(0, 0, 0, .5)) drop-shadow(0 0 16px rgba(0, 180, 255, .25)); }
-  .hero-dice .die3d:nth-child(1) { margin-top: 16px; }
-  @keyframes floaty { 50% { translate: 0 -8px; } }
+/* ---------------------------------------------------------------- header */
+.h-hdr{position:fixed;inset:0 0 auto 0;z-index:30;padding:0 var(--h-pad);
+  background:linear-gradient(180deg,rgba(2,6,17,.72),rgba(2,6,17,0));transition:transform .6s var(--h-ease),opacity .6s var(--h-ease)}
+.h-brand{display:flex;align-items:center;gap:12px;flex:none}
+.h-brand img{width:42px;height:42px;filter:drop-shadow(0 0 14px rgba(47,160,255,.35))}
+.h-brand b{font-size:20px;font-weight:900;letter-spacing:.2px;white-space:nowrap}
+.h-brand b span{color:var(--h-cyan)}
+.h-nav{display:flex;align-items:center;gap:6px;margin-inline-start:auto}
+.h-nav a{position:relative;padding:8px 14px;border-radius:10px;font-size:15.5px;font-weight:700;color:var(--h-ink2);transition:color .3s}
+.h-nav a::after{content:"";position:absolute;inset-inline:14px;bottom:2px;height:1.5px;background:var(--h-gold);transform:scaleX(0);transform-origin:right;transition:transform .45s var(--h-ease)}
+.h-nav a:hover,.h-nav a.on{color:#fff}
+.h-nav a:hover::after,.h-nav a.on::after{transform:scaleX(1)}
+.h-nav .h-sep{width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.25)}
+.h-sbtn{display:flex;align-items:center;gap:10px;height:44px;padding:0 10px 0 16px;border-radius:999px;border:1px solid var(--h-line);background:rgba(6,16,40,.72);color:var(--h-ink2);font-size:15px;font-weight:700;transition:border-color .3s,color .3s,background .3s}
+.h-sbtn:hover{border-color:rgba(47,226,255,.5);color:#fff;background:rgba(10,26,60,.65)}
+.h-kbd{display:inline-flex;align-items:center;gap:3px;height:24px;padding:0 7px;border-radius:7px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);font:700 12px/1 Tajawal,system-ui,sans-serif;color:var(--h-muted)}
 
-  /* my card */
-  .my-card { margin-top: 30px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; text-decoration: none !important; color: var(--text);
-    background: linear-gradient(90deg, rgba(0, 180, 255, .12), rgba(255, 197, 61, .06)); border: 1px solid rgba(47, 226, 255, .3); border-radius: 20px; padding: 14px 18px; }
-  .my-card:hover { border-color: rgba(47, 226, 255, .6); }
-  .my-card .who { flex: 1; min-width: 160px; }
-  .my-card .who small { display: block; color: var(--muted); }
-  .my-stats { display: flex; gap: 8px; flex-wrap: wrap; }
-  .my-stats span { display: inline-flex; align-items: center; gap: 6px; background: rgba(3, 8, 22, .55); border: 1px solid var(--line2); border-radius: 12px; padding: 6px 12px; color: var(--muted); font-size: 13.5px; }
-  .my-stats b { color: var(--gold); font-size: 16px; }
-  .my-stats .ui-ico { color: var(--cyan2); }
+/* ---------------------------------------------------------------- page flow */
+.h-main{position:relative;z-index:5}
+.h-hero{position:relative;height:100vh;height:100svh;min-height:620px;display:flex;align-items:flex-end;padding:0 var(--h-pad) clamp(40px,8vh,96px)}
+.h-hero-c{width:min(800px,56vw)}
+.h-eyebrow{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:800;color:var(--h-gold2);margin:0 0 14px}
+.h-eyebrow::before{content:"";width:28px;height:1.5px;background:linear-gradient(270deg,var(--h-gold),transparent)}
+.h-h1{margin:0;font-size:clamp(48px,5.4vw,94px);line-height:1.04;font-weight:900;letter-spacing:0;text-wrap:balance}
+.h-h1 .h-ln{display:block;overflow:hidden;padding-bottom:.24em;margin-bottom:-.18em;white-space:nowrap}
+.h-h1 .h-ln>span{display:inline-block}
+.h-h1 em{font-style:normal;display:inline-block;padding:.04em 0 .26em;margin-bottom:-.26em;background:linear-gradient(180deg,#fff 10%,var(--h-gold2) 60%,var(--h-gold) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.h-lead{margin:20px 0 0;font-size:clamp(16.5px,1.25vw,20px);line-height:1.75;color:var(--h-ink2);max-width:31em}
+.h-feats{display:flex;flex-wrap:wrap;gap:8px 22px;margin:22px 0 0;padding:0;list-style:none}
+.h-feats li{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--h-ink)}
+.h-feats .h-i{width:18px;height:18px;color:var(--h-cyan)}
+.h-ctas{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:30px}
+.h-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:10px;height:56px;padding:0 28px;border-radius:999px;font-size:17px;font-weight:800;white-space:nowrap;transition:transform .5s var(--h-ease),box-shadow .5s var(--h-ease),background .3s,border-color .3s,color .3s}
+.h-btn .h-i{width:20px;height:20px}
+.h-btn-gold{color:#1d1300;background:linear-gradient(180deg,#ffe08a 0%,#ffc53d 55%,#f2a923 100%);box-shadow:0 10px 30px -10px rgba(255,190,60,.65),inset 0 1px 0 rgba(255,255,255,.6)}
+.h-btn-gold:hover{transform:translateY(-2px);box-shadow:0 18px 44px -12px rgba(255,190,60,.85),inset 0 1px 0 rgba(255,255,255,.6)}
+.h-btn-ghost{color:#fff;border:1px solid rgba(255,255,255,.22);background:rgba(8,18,44,.66)}
+.h-btn-ghost:hover{border-color:rgba(47,226,255,.6);background:rgba(12,30,70,.6);transform:translateY(-2px)}
+.h-btn[aria-disabled="true"]{opacity:.55;pointer-events:none}
+.h-cue{position:absolute;left:var(--h-pad);bottom:clamp(40px,8vh,96px);display:flex;align-items:center;gap:14px;font-size:14px;font-weight:700;color:var(--h-muted)}
+.h-cue i{position:relative;width:1.5px;height:54px;background:rgba(255,255,255,.12);overflow:hidden}
+.h-cue i::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent,var(--h-cyan));animation:cue 2.2s var(--h-ease2) infinite}
+@keyframes cue{0%{transform:translateY(-100%)}100%{transform:translateY(100%)}}
 
-  /* continue where you left off */
-  .resume-sec { margin-top: 34px; }
-  .resume-sec .sec-head { margin-bottom: 12px; }
-  .resume-sec h2 .ui-ico { color: var(--gold); }
-  .resume-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
-  .resume-list .room-item { animation: none; }
-  .resume-list .btn { min-height: 44px; }
+/* stops: tall scroll spacers with a sticky stage */
+.h-stop{position:relative;height:200vh}
+.h-stage{position:sticky;top:0;height:100vh;height:100svh;display:flex;align-items:center;padding:var(--h-hdr) var(--h-pad) 40px}
+.h-panel{width:min(520px,40vw);position:relative}
+.h-p-top{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.h-p-idx{font:800 13px/1 Tajawal,sans-serif;color:var(--h-muted);letter-spacing:.5px}
+.h-p-idx b{color:#fff}
+.h-p-kick{font-size:15px;font-weight:800;color:var(--h-gold2)}
+.h-p-line{flex:1;max-width:120px;height:1px;background:linear-gradient(270deg,rgba(255,197,61,.7),transparent);transform-origin:right}
+.h-tabs{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 14px;padding:4px;border-radius:14px;background:rgba(6,14,36,.55);border:1px solid var(--h-line);width:max-content;max-width:100%}
+.h-tab{position:relative;display:flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:10px;font-size:15px;font-weight:800;color:var(--h-ink2);transition:color .3s,background .3s}
+.h-tab:hover{color:#fff}
+.h-tab[aria-selected="true"]{color:#06122c;background:linear-gradient(180deg,#fff,#dfe9ff)}
+.h-tab .h-soon{font-size:11px;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(170,140,255,.18);color:#c9b8ff}
+.h-tab[aria-selected="true"] .h-soon{background:#6a42c0;color:#fff}
+.h-p-name{margin:0;font-size:clamp(60px,6.4vw,112px);line-height:1;font-weight:900;letter-spacing:0;padding-bottom:.2em;margin-bottom:-.12em}
+.h-p-name-w{overflow:hidden;padding-top:.06em}
+.h-p-pitch{text-wrap:pretty;margin:14px 0 0;font-size:clamp(17px,1.3vw,20px);line-height:1.7;color:var(--h-ink2);max-width:28em;min-height:3.4em}
+.h-meta{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;margin:20px 0 0;padding:0;list-style:none;font-size:15.5px;font-weight:700;color:var(--h-ink)}
+.h-meta li{display:flex;align-items:center;gap:8px}
+.h-meta .h-i{width:18px;height:18px;color:var(--h-cyan)}
+.h-liveline{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:14.5px;font-weight:700;color:var(--h-muted)}
+.h-liveline i{width:8px;height:8px;border-radius:50%;background:var(--h-green);box-shadow:0 0 0 0 rgba(59,227,154,.6);animation:pulse 2s infinite}
+.h-liveline.h-soon i{background:#a58bff;animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(59,227,154,.55)}70%{box-shadow:0 0 0 9px rgba(59,227,154,0)}100%{box-shadow:0 0 0 0 rgba(59,227,154,0)}}
+.h-p-ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
 
-  /* categories */
-  .cat-row { display: flex; gap: 8px; flex-wrap: wrap; margin: -4px 0 16px; }
-  .cat { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 7px 15px; border-radius: 99px; font-weight: 800; font-size: 14px;
-    color: #c9d8ea; background: rgba(14, 28, 61, .55); border: 1px solid var(--line2); text-decoration: none !important; transition: border-color .15s, color .15s, background .15s; }
-  .cat:hover { color: var(--text); border-color: rgba(0, 180, 255, .55); background: rgba(0, 180, 255, .1); }
-  .cat .ui-ico { width: 18px; height: 18px; color: var(--cyan2); }
-  .cat[data-cat="cards"] .ui-ico { color: var(--gold); }
+/* rail (map) */
+.h-rail{position:fixed;z-index:20;left:var(--h-pad);top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;opacity:0;pointer-events:none;transition:opacity .6s var(--h-ease)}
+.h-rail.on{opacity:1;pointer-events:auto}
+.h-rail::before{content:"";position:absolute;left:5px;top:18px;bottom:18px;width:1px;background:rgba(255,255,255,.12)}
+.h-rail button{position:relative;display:flex;align-items:center;gap:14px;height:36px;font-size:14px;font-weight:700;color:#9fb0cf;transition:color .3s;direction:ltr;text-shadow:0 1px 10px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.8)}
+.h-rail button span{direction:rtl;white-space:nowrap}
+.h-rail button::before{content:"";width:11px;height:11px;border-radius:3px;transform:rotate(45deg) scale(.6);background:#3a4b6e;transition:transform .4s var(--h-ease),background .3s,box-shadow .3s;flex:none}
+.h-rail button span{opacity:0;transform:translateX(-6px);transition:opacity .35s,transform .45s var(--h-ease)}
+.h-rail button:hover span,.h-rail button.on span{opacity:1;transform:none}
+.h-rail button:hover{color:#fff}
+.h-rail button.on{color:#fff}
+.h-rail button.on::before{transform:rotate(45deg) scale(1);background:var(--h-gold);box-shadow:0 0 14px rgba(255,197,61,.7)}
 
-  /* featured row */
-  .feat-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .feat-row .gcard-top h3 { font-size: 20px; }
-  .feat-row .gc-go { display: none; }
+/* hover tag following the pointer */
+.h-tag{position:fixed;z-index:25;left:0;top:0;pointer-events:none;padding:10px 14px 10px 16px;border-radius:12px;background:rgba(4,10,28,.86);border:1px solid rgba(47,226,255,.35);box-shadow:0 12px 30px -10px rgba(0,0,0,.6);opacity:0;transform:translate3d(-9999px,0,0);transition:opacity .25s}
+.h-tag.on{opacity:1}
+.h-tag b{display:block;font-size:15px;font-weight:900}
+.h-tag small{display:block;font-size:12.5px;color:var(--h-muted);font-weight:700}
 
-  /* rooms + leaders */
-  .home-split { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; align-items: start; }
-  .mini-leaders { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-  .ml-row { display: grid; grid-template-columns: 26px auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 48px; padding: 6px 10px; border-radius: 12px; color: var(--text); text-decoration: none !important; }
-  .ml-row:hover { background: rgba(0, 180, 255, .08); }
-  .ml-rank { font-weight: 900; color: var(--muted); text-align: center; }
-  .mini-leaders li:nth-child(1) .ml-rank { color: var(--gold); }
-  .mini-leaders li:nth-child(2) .ml-rank { color: #cbd5e1; }
-  .mini-leaders li:nth-child(3) .ml-rank { color: #fb923c; }
-  .ml-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
-  .ml-pts { display: inline-flex; align-items: center; gap: 4px; color: var(--gold); font-weight: 900; direction: ltr; }
-  .ml-pts .ui-ico { width: 15px; height: 15px; }
-  .rooms-panel .room-item .btn { min-height: 44px; min-width: 64px; }
+/* how to play + index */
+.h-how{position:relative;min-height:100vh;padding:calc(var(--h-hdr) + 40px) var(--h-pad) 80px;display:flex;flex-direction:column;justify-content:center}
+.h-how::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,6,17,0) 0,rgba(2,6,17,.55) 24%,rgba(2,6,17,.8) 70%,rgba(2,6,17,.92) 100%);pointer-events:none}
+.h-how>*{position:relative}
+.h-sec-h{margin:0;font-size:clamp(38px,4vw,64px);font-weight:900;line-height:1.1}
+.h-sec-s{margin:10px 0 0;font-size:18px;color:var(--h-ink2)}
+.h-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(16px,2.4vw,40px);margin:44px 0 0;padding:0;list-style:none;counter-reset:s}
+.h-steps li{position:relative;padding:26px 0 0;border-top:1px solid rgba(255,255,255,.14)}
+.h-steps li::before{content:"";position:absolute;top:-1px;right:0;width:56px;height:2px;background:linear-gradient(270deg,var(--h-gold),transparent)}
+.h-steps .h-n{display:block;font:900 15px/1 Tajawal,sans-serif;color:var(--h-gold);margin-bottom:16px;direction:ltr;text-align:right}
+.h-steps .h-ic{display:grid;place-items:center;width:52px;height:52px;border-radius:16px;background:rgba(47,226,255,.08);border:1px solid rgba(47,226,255,.22);color:var(--h-cyan);margin-bottom:18px}
+.h-steps .h-ic .h-i{width:24px;height:24px}
+.h-steps h3{margin:0;font-size:24px;font-weight:900}
+.h-steps p{margin:8px 0 0;font-size:16.5px;color:var(--h-ink2);max-width:22em}
+.h-index{margin-top:72px;display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(16px,2.4vw,40px)}
+.h-idx-h{grid-column:1/-1;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.h-idx-h h3{margin:0;font-size:26px;font-weight:900}
+.h-idx-h p{margin:0;color:var(--h-muted);font-size:16px}
+.h-cat h4{margin:0 0 6px;font-size:14px;font-weight:800;color:var(--h-gold2);display:flex;align-items:center;gap:8px}
+.h-cat ul{margin:0;padding:0;list-style:none}
+.h-cat a{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:20px;font-weight:800;transition:color .3s,padding .45s var(--h-ease)}
+.h-cat a small{margin-inline-start:auto;font-size:14px;font-weight:700;color:var(--h-muted)}
+.h-cat a .h-ar{width:16px;height:16px;color:var(--h-cyan);opacity:0;transform:translateX(8px);transition:opacity .3s,transform .45s var(--h-ease)}
+.h-cat a:hover{color:var(--h-cyan2);padding-inline-start:6px}
+.h-cat a:hover .h-ar{opacity:1;transform:none}
+.h-cat .h-soon{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(170,140,255,.16);color:#c9b8ff}
 
-  /* how to play */
-  .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: none; }
-  .step { position: relative; padding: 22px 20px 20px; border-radius: 20px; border: 1px solid var(--line);
-    background: radial-gradient(240px 120px at 85% 0%, rgba(0, 180, 255, .12), transparent 70%), linear-gradient(180deg, rgba(14, 28, 61, .55), rgba(10, 21, 48, .85)); }
-  .step b { display: block; font-size: 19px; font-weight: 900; margin: 12px 0 4px; }
-  .step p { margin: 0; color: var(--muted); line-height: 1.75; font-size: 14.5px; }
-  .step-ico { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 16px;
-    background: linear-gradient(135deg, rgba(0, 180, 255, .2), rgba(47, 226, 255, .06)); border: 1px solid rgba(47, 226, 255, .3); color: var(--cyan2); }
-  .step-ico .ui-ico { width: 26px; height: 26px; }
-  .step-n { position: absolute; top: 14px; inset-inline-end: 18px; font-size: 44px; font-weight: 900; line-height: 1; color: rgba(47, 226, 255, .12); }
-  .how-cta { display: flex; justify-content: center; margin-top: 24px; }
+.h-foot{position:relative;z-index:5;background:#020510;border-top:1px solid rgba(255,255,255,.06);padding:34px var(--h-pad);display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.h-foot img{width:40px;height:40px}
+.h-foot .h-by{font-size:17px;font-weight:800}
+.h-foot .h-by bdi{color:var(--h-cyan)}
+.h-foot small{color:var(--h-muted);font-size:14px}
+.h-foot nav{margin-inline-start:auto;display:flex;gap:18px;flex-wrap:wrap}
+.h-foot nav a{font-size:14.5px;color:var(--h-muted);font-weight:700}
+.h-foot nav a:hover{color:#fff}
 
-  @media (max-width: 1020px) {
-    .feat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (max-width: 900px) {
-    .hero { grid-template-columns: 1fr; text-align: center; gap: 4px; padding-top: 8px; }
-    .lead { margin-inline: auto; }
-    .hero-cta, .trust, .hero-live { justify-content: center; }
-    .stage { order: -1; width: min(100%, 420px); }
-    .home-split { grid-template-columns: 1fr; }
-  }
-  @media (max-width: 760px) {
-    .hero h1 { margin: 12px 0 10px; }
-    .lead { font-size: 16px; margin-bottom: 18px; }
-    .hero-cta .btn { flex: 1 1 100%; }
-    .trust { gap: 6px; margin-top: 16px; }
-    .trust li { font-size: 13px; padding: 5px 11px 5px 9px; }
-    .stage { width: min(100%, 360px); aspect-ratio: 1.36; }
-    .stage-main { width: 80%; left: 10%; top: 18%; }
-    .stage-tag { top: 8px; inset-inline-start: 8px; font-size: 13.5px; }
-    .hero-dice { --d: 40px; gap: 10px; inset-inline-end: 3%; bottom: 0; }
-    .cat-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; }
-    .cat-row::-webkit-scrollbar { display: none; }
-    .cat { flex: 0 0 auto; }
-    /* phones: featured games scroll sideways */
-    .feat-row { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; margin-inline: -16px; padding: 4px 16px 10px; scrollbar-width: none; }
-    .feat-row::-webkit-scrollbar { display: none; }
-    .feat-row .gcard { flex: 0 0 78%; scroll-snap-align: center; }
-    .feat-row .gcard:hover { transform: none; }
-    .resume-list { grid-template-columns: 1fr; }
-    .steps { grid-template-columns: 1fr; gap: 10px; }
-    .step { display: grid; grid-template-columns: auto 1fr; column-gap: 14px; align-items: center; padding: 14px 16px; }
-    .step-ico { grid-row: 1 / span 2; width: 46px; height: 46px; }
-    .step b { margin: 0; font-size: 17px; }
-    .step p { font-size: 13.5px; }
-    .step-n { font-size: 30px; top: 10px; inset-inline-end: 14px; }
-    .how-cta .btn { width: 100%; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .stage-main { animation: none; }
-  }
+/* ---------------------------------------------------------------- palette */
+.h-pal{position:fixed;inset:0;z-index:80;display:none;align-items:flex-start;justify-content:center;padding:14vh 16px 16px;background:rgba(1,4,12,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.h-pal.open{display:flex}
+.h-pal-box{width:min(620px,100%);border-radius:20px;background:linear-gradient(180deg,#0a1636,#060d24);border:1px solid rgba(120,180,255,.2);box-shadow:0 40px 100px -20px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.03) inset;overflow:hidden}
+.h-pal-in{display:flex;align-items:center;gap:12px;padding:0 18px;height:64px;border-bottom:1px solid rgba(255,255,255,.07)}
+.h-pal-in .h-i{color:var(--h-cyan);width:22px;height:22px}
+.h-pal-in input{flex:1;min-width:0;height:100%;background:none;border:0;outline:none;color:#fff;font:700 18px Tajawal,sans-serif}
+.h-pal-in input::placeholder{color:#6f81a3}
+.h-pal-list{max-height:min(420px,52vh);overflow:auto;padding:8px;margin:0;list-style:none;overscroll-behavior:contain}
+.h-pal-list li[role=option]{display:flex;align-items:center;gap:14px;padding:8px 10px;border-radius:12px;cursor:pointer}
+.h-pal-list li[aria-selected="true"]{background:rgba(47,226,255,.1);box-shadow:inset 0 0 0 1px rgba(47,226,255,.25)}
+.h-pal-list img{width:60px;height:38px;border-radius:8px;object-fit:cover;background:#0b1a40;flex:none}
+.h-pal-list .h-t{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.h-pal-list .h-t b{font-size:17px;font-weight:800}
+.h-pal-list .h-t small{font-size:13px;color:var(--h-muted);font-weight:700}
+.h-pal-list .h-go{margin-inline-start:auto;font-size:12.5px;font-weight:800;color:var(--h-muted)}
+.h-pal-list .h-grp{padding:10px 10px 4px;font-size:12.5px;font-weight:800;color:var(--h-gold2)}
+.h-pal-empty{padding:28px;text-align:center;color:var(--h-muted);font-weight:700}
+.h-pal-foot{display:flex;gap:16px;padding:10px 18px;border-top:1px solid rgba(255,255,255,.07);font-size:12.5px;color:var(--h-muted);font-weight:700}
+
+/* ---------------------------------------------------------------- fallback (no WebGL / reduced motion) */
+.hfb #hxWorld,.hfb .h-rail,.hfb .h-tag,.hfb .h-scrim{display:none}
+.hfb #hxPoster{display:block;position:fixed;inset:0;z-index:0}
+.hfb #hxPoster img{width:100%;height:100%;object-fit:cover;object-position:30% 50%}
+.hfb .h-veil{background:linear-gradient(270deg,rgba(2,6,17,.86) 0,rgba(2,6,17,.45) 45%,rgba(2,6,17,.1) 75%),linear-gradient(180deg,rgba(2,6,17,.5),transparent 25%,transparent 70%,rgba(2,6,17,.6))}
+.hfb .h-stop{height:auto;background:rgba(2,6,17,.9);border-top:1px solid rgba(255,255,255,.06)}
+.hfb .h-stage{position:relative;height:auto;min-height:0;padding:72px var(--h-pad);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:clamp(24px,4vw,64px);align-items:center}
+.hfb .h-panel{width:auto}
+.hfb .h-fb-img{display:block;border-radius:22px;overflow:hidden;border:1px solid var(--h-line);aspect-ratio:16/10;background:#06112b}
+.hfb .h-fb-img img{width:100%;height:100%;object-fit:cover}
+.hfb .h-how::before{background:rgba(2,6,17,.92)}
+.h-fb-img{display:none}
+.hfb .h-cue{display:none}
+
+/* ---------------------------------------------------------------- responsive */
+@media (max-width:1180px){
+  .h-nav a{padding:8px 10px;font-size:15px}
+  .h-sbtn .h-lbl{display:none}
+  .h-sbtn{padding:0 12px}
+}
+@media (max-width:1100px){.h-rail{display:none}}
+@media (max-width:860px){
+  .hx{--h-hdr:56px}
+  .h-hdr-row{flex-wrap:wrap;height:auto;padding-top:10px;padding-bottom:8px;gap:6px 10px}
+  .h-nav{order:3;width:100%;margin:0;justify-content:space-between;gap:0}
+  .h-nav a{padding:6px 2px;font-size:14.5px}
+  .h-nav a::after{inset-inline:2px}
+  .h-sbtn{width:42px;height:42px;padding:0;justify-content:center}
+  .h-sbtn .h-kbd{display:none}
+  .h-brand img{width:36px;height:36px}
+  .h-brand b{font-size:18px}
+  .h-hero{align-items:flex-end;padding-bottom:max(22px,env(safe-area-inset-bottom))}
+  .h-hero-c{width:100%}
+  .h-eyebrow{font-size:14px;margin-bottom:10px}
+  .h-h1{font-size:clamp(38px,10.4vw,52px)}
+  .h-lead{font-size:16px;line-height:1.65;margin-top:12px}
+  .h-feats{gap:8px 16px;margin-top:14px}
+  .h-feats li{font-size:14px}
+  .h-ctas{margin-top:20px;flex-wrap:nowrap}
+  .h-ctas .h-btn-gold{flex:1}
+  .h-ctas .h-btn-ghost .h-lbl{display:none}
+  .h-ctas .h-btn-ghost{width:56px;padding:0}
+  .h-btn{height:52px;font-size:16.5px;padding:0 20px}
+  .h-cue{display:none}
+  .h-scrim{background:linear-gradient(0deg,rgba(2,6,17,.95) 0,rgba(2,6,17,.8) 34%,rgba(2,6,17,0) 62%)}
+  .h-stop{height:190vh}
+  .h-stage{align-items:flex-end;padding:var(--h-hdr) var(--h-pad) max(24px,env(safe-area-inset-bottom))}
+  .h-panel{width:100%}
+  .h-p-top{margin-bottom:10px}
+  .h-tabs{margin-bottom:10px}
+  .h-tab{height:34px;padding:0 10px;font-size:14px}
+  .h-p-name{font-size:clamp(46px,13vw,60px)}
+  .h-p-pitch{font-size:16px;margin-top:8px;min-height:0}
+  .h-meta{margin-top:12px;font-size:14.5px;gap:8px 16px}
+  .h-liveline{margin-top:10px}
+  .h-p-ctas{margin-top:18px;flex-wrap:nowrap;gap:10px}
+  .h-p-ctas .h-btn{flex:1;padding:0 14px}
+  .h-how{padding-top:calc(var(--h-hdr) + 24px)}
+  .h-steps{grid-template-columns:1fr;gap:26px;margin-top:30px}
+  .h-steps li{display:grid;grid-template-columns:52px 1fr;column-gap:16px;padding-top:20px}
+  .h-steps .h-n{grid-column:1/-1;margin-bottom:12px}
+  .h-steps .h-ic{grid-row:span 2;margin:0}
+  .h-steps h3{font-size:21px}
+  .h-steps p{font-size:15.5px;margin-top:4px}
+  .h-index{grid-template-columns:1fr;margin-top:52px;gap:28px}
+  .h-cat a{font-size:19px}
+  .h-pal{padding-top:10vh}
+  .hfb .h-stage{grid-template-columns:1fr;padding:48px var(--h-pad)}
+  .hfb .h-fb-img{order:-1}
+  .hfb #hxPoster img{object-position:28% 50%}
+}
+@media (max-width:860px) and (max-height:700px){.h-lead{display:none}}
+@media (min-width:861px) and (max-height:760px){
+  .h-h1{font-size:clamp(44px,4.6vw,76px)}
+  .h-lead{margin-top:14px}
+  .h-ctas{margin-top:22px}
+  .h-p-name{font-size:clamp(54px,5.4vw,90px)}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------------------------------------------------------------- live 3D: the poster crossfades into the canvas */
+#hxPoster{position:fixed;inset:0;z-index:0;transition:opacity 1.4s var(--h-ease)}
+#hxPoster img{width:100%;height:100%;object-fit:cover;object-position:30% 50%}
+.h3d #hxPoster{display:block}
+.h-live #hxPoster{opacity:0;pointer-events:none}
+.h-live .h-panel>*{opacity:0;will-change:transform,opacity}
+.h3d:not(.h-live) .h-scrim{opacity:1}
+.h-live .h-p-name{will-change:transform}
+
+/* ---------------------------------------------------------------- header: real site links + account */
+.h-hdr-row{height:var(--h-hdr);display:flex;align-items:center;gap:18px}
+.h-site{display:flex;align-items:center;gap:2px;margin-inline-end:auto;padding-inline-start:14px;border-inline-start:1px solid rgba(255,255,255,.12)}
+.h-site a{display:flex;align-items:center;gap:7px;padding:8px 11px;border-radius:10px;font-size:14.5px;font-weight:700;color:var(--h-muted);transition:color .3s,background .3s}
+.h-site a .h-i{width:17px;height:17px}
+.h-site a:hover{color:#fff;background:rgba(255,255,255,.06)}
+.h-hdr .acct{margin:0;min-height:44px}
+.h-hdr .acct .btn{min-height:40px}
+.h-menu{display:none;position:relative}
+.h-menu summary{list-style:none;display:grid;place-items:center;width:42px;height:42px;border-radius:999px;border:1px solid var(--h-line);background:rgba(6,16,40,.72);cursor:pointer;color:var(--h-ink2)}
+.h-menu summary::-webkit-details-marker{display:none}
+.h-menu nav{position:absolute;top:calc(100% + 8px);inset-inline-end:0;min-width:210px;display:flex;flex-direction:column;padding:8px;border-radius:14px;background:#0a1636;border:1px solid rgba(120,180,255,.2);box-shadow:0 20px 50px -10px rgba(0,0,0,.7)}
+.h-menu nav a{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;font-weight:700;color:var(--h-ink)}
+.h-menu nav a:hover{background:rgba(47,226,255,.08)}
+.h-menu nav .h-i{color:var(--h-cyan);width:18px;height:18px}
+.h-hdr{transition:background .4s,box-shadow .4s}
+.h-hdr.solid{background:rgba(4,10,28,.96);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border-bottom:1px solid rgba(120,170,255,.16);box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.h-banners{padding:0;max-width:960px;margin:0 auto}
+.h-banners:not(:empty){padding:0 0 10px}
+.h-stage{padding-top:var(--h-hdr-real,var(--h-hdr))}
+.h-hero{padding-top:var(--h-hdr-real,var(--h-hdr))}
+
+/* hero extras */
+.h-resume{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:18px;font-size:14px}
+.h-resume b{display:flex;align-items:center;gap:6px;color:var(--h-gold2);font-weight:800}
+.h-resume b .h-i{width:17px;height:17px}
+.h-resume a{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(6,16,40,.72);border:1px solid rgba(47,226,255,.3);font-weight:800}
+.h-resume a small{color:var(--h-muted);font-weight:700}
+.h-resume a span{color:var(--h-cyan);font-size:12.5px}
+.h-resume a:hover{border-color:var(--h-cyan)}
+.h-btn.loading{opacity:.7;pointer-events:none}
+.h-btn:disabled{opacity:.6}
+
+/* panel extras */
+.h-p-more{display:inline-flex;align-items:center;gap:6px;margin-top:16px;font-size:14.5px;font-weight:700;color:var(--h-muted)!important}
+.h-p-more .h-i{width:16px;height:16px}
+.h-p-more:hover{color:#fff!important}
+.h-p-off{margin:20px 0 0;color:var(--h-ink2);font-weight:700}
+.h-p-off a{color:var(--h-cyan)!important}
+
+/* ---------------------------------------------------------------- after the tour */
+.h-after{position:relative;min-height:100vh;padding:calc(var(--h-hdr-real,var(--h-hdr)) + 40px) var(--h-pad) 80px;display:flex;flex-direction:column;justify-content:center}
+.h-after::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,6,17,0) 0,rgba(2,6,17,.62) 14%,rgba(2,6,17,.86) 40%,rgba(2,6,17,.94) 100%);pointer-events:none}
+.h-after>*{position:relative}
+.h-after .h-steps a{color:var(--h-cyan)!important}
+.h-grid3{display:grid;grid-template-columns:1.2fr 1fr;gap:clamp(16px,2.2vw,32px);margin-top:64px;align-items:start}
+.h-index{grid-column:1/-1;display:block!important;margin:0!important}
+.h-index .h-idx-h{margin-bottom:6px}
+.h-idx-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.h-libbtn{margin-top:22px;height:48px;font-size:15.5px}
+.h-box{border-radius:20px;padding:18px 18px 16px;background:rgba(6,14,36,.72);border:1px solid var(--h-line)}
+.h-box-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.h-box-h h3{margin:0;font-size:20px;font-weight:900}
+.h-box-link{font-size:14px;font-weight:700;color:var(--h-cyan)!important}
+.h-codebtn{margin-top:12px;height:46px;width:100%;font-size:15px}
+.h-box .room-list{display:flex;flex-direction:column;gap:8px}
+.h-box .room-item .btn{min-height:40px}
+.h-box .mini-leaders{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.h-box .ml-row{display:grid;grid-template-columns:24px auto minmax(0,1fr) auto;align-items:center;gap:10px;min-height:46px;padding:5px 8px;border-radius:12px;color:var(--h-ink)!important}
+.h-box .ml-row:hover{background:rgba(47,226,255,.07)}
+.h-box .ml-rank{font-weight:900;color:var(--h-muted);text-align:center}
+.h-box .ml-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:800}
+.h-box .ml-pts{display:inline-flex;align-items:center;gap:4px;color:var(--h-gold);font-weight:900;direction:ltr}
+.h-box .ml-pts .ui-ico{width:15px;height:15px}
+.h-box .room-empty{color:var(--h-muted);font-weight:700;display:flex;gap:8px;align-items:center;padding:10px 4px}
+.h-after .ad-wrap{margin:0 0 28px}
+.h-after .ad-wrap[data-ad="home_bottom"]{margin:36px 0 0}
+.h-foot .h-by{display:flex;align-items:center;gap:12px;font-size:17px;font-weight:800;color:var(--h-ink)}
+.h-foot .h-by bdi{color:var(--h-cyan)}
+
+@media (max-width:1440px){
+  .h-hdr-row{gap:12px}
+  .h-site a .h-i{display:none}
+  .h-site a{padding:8px 9px}
+  .h-nav a{padding:8px 10px;font-size:15px}
+  .h-sbtn .h-lbl,.h-sbtn .h-kbd{display:none}
+  .h-sbtn{width:44px;padding:0;justify-content:center}
+}
+@media (max-width:1180px){
+  .h-site{display:none}
+  .h-menu{display:block}
+  .h-nav{margin-inline-end:auto}
+}
+@media (max-width:860px){
+  .hx{--h-hdr:100px}
+  .h-hdr-row{height:auto}
+  .h-brand{margin-inline-end:auto}
+  .h-hdr .acct .btn{min-height:40px;padding:7px 10px}
+  .h-nav{order:5;flex:1 1 calc(100% - 56px);margin:0;justify-content:space-between}
+  .h-menu{order:6}
+  .h-menu summary{width:38px;height:38px}
+  .h-grid3{grid-template-columns:1fr;margin-top:44px}
+  .h-idx-cols{grid-template-columns:1fr;gap:22px}
+  .h-libbtn{width:100%}
+  .h-resume{font-size:13.5px}
+}
+@media (max-width:400px){.h-brand b{font-size:16.5px}.h-brand img{width:32px;height:32px}}
+
 </style>
 
 <script>
-  import '../../../public/fx.js';
+  import { gsap } from 'gsap';
+  import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
   import { $, $$, esc, fmtN, ui, api, toast, avatarHTML, loadSession, session, mountAds, modal } from '../lib/client';
-  import { liveGames, type LiveGame } from '../components/games/catalog';
-  import { gameCardHTML } from '../components/games/cards';
-  import { openRooms, roomItemHTML, myRooms, findRoom, roomUrl, askName, join, playError, rememberName, savedName, isTharwa, type OpenRoom } from '../components/games/play';
+  import { mountChrome } from '../lib/chrome';
+  import { liveGames, norm, type LiveGame } from '../components/games/catalog';
+  import { start, askName, playError, openRooms, roomItemHTML, myRooms, findRoom, roomUrl, join, rememberName, savedName, isTharwa, type OpenRoom, type Mode } from '../components/games/play';
+
+  gsap.registerPlugin(ScrollToPlugin);
+  mountChrome();
+
+  const H = document.documentElement;
+  const STOP_OF: Record<string, number> = { tharwa: 1, tarneeb: 2, '400': 2, trix: 2, konkan: 2, ludo: 3, xo: 4, connect4: 4 };
+  const STOP_ID = ['', 'stop-tharwa', 'stop-cards', 'stop-ludo', 'stop-arcade'];
+  const CAT_OF = (g: LiveGame) => (STOP_OF[g.slug] === 2 || g.tags.includes('cards') ? 'cards' : STOP_OF[g.slug] === 4 ? 'quick' : 'board');
+  const CAT_LABEL: Record<string, string> = { cards: 'ورق الشدة', board: 'ألعاب لوح', quick: 'ألعاب سريعة' };
+  const ico = (n: string, cls = 'h-i') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  const pl = (g: LiveGame) => `<bdi dir="ltr">${g.minPlayers === g.maxPlayers ? g.minPlayers : `${g.minPlayers}–${g.maxPlayers}`}</bdi> لاعبين`;
+  const is3d = () => H.classList.contains('h-live');
 
   let games: LiveGame[] = [];
   const bySlug = (s: string) => games.find((g) => g.slug === s);
-  const isCards = (g: LiveGame) => (g.tags || []).some((t) => /^(cards|ورق|ورق الشدة|شدة)$/i.test(String(t).trim()));
+  const rooms: Record<string, number> = {};
 
-  // ---- hero dice: tap to roll. Every face shows the rolled value, so no wrong number ever flashes.
-  const dice = $('#heroDice')!;
-  window.FX.setDice(dice, [5, 6], false);
-  dice.addEventListener('click', () => {
-    const v = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
-    window.FX.setDice(dice, v, true);
-    window.FX.Sound.play('dice');
+  // ---------------------------------------------------------------- panels (one per landmark)
+  type Panel = { el: HTMLElement; stop: number; ids: string[]; cur: string; shown: boolean; tl: gsap.core.Timeline | null };
+  const panels: Panel[] = [];
+  $$<HTMLElement>('.h-panel').forEach((el) => {
+    const stop = +(el.dataset.stop || 0);
+    const ids = $$<HTMLElement>('.h-tab', el).map((t) => t.dataset.g || '');
+    const first = $<HTMLElement>('[data-act]', el)?.dataset.slug || '';
+    panels[stop] = { el, stop, ids: ids.length ? ids : [first], cur: first, shown: false, tl: null };
+    const tabs = $('.h-tabs', el);
+    tabs?.addEventListener('click', (e) => { const t = (e.target as Element).closest<HTMLElement>('.h-tab'); if (t) select(panels[stop], t.dataset.g || ''); });
+    tabs?.addEventListener('keydown', (e) => {
+      const list = $$<HTMLElement>('.h-tab:not([hidden])', el), i = list.indexOf(document.activeElement as HTMLElement);
+      const d = e.key === 'ArrowLeft' ? 1 : e.key === 'ArrowRight' ? -1 : 0;
+      if (i < 0 || !d) return;
+      e.preventDefault(); const n = list[(i + d + list.length) % list.length]; n.focus(); select(panels[stop], n.dataset.g || '');
+    });
   });
 
-  // ---- hero art: hide games that aren't in the live registry
-  function drawStage() {
-    $$<HTMLElement>('.stage [data-slug]').forEach((a) => { a.style.visibility = bySlug(a.dataset.slug || '') ? '' : 'hidden'; });
+  let onGameCb: ((stop: number, tint: string) => void) | null = null;
+  function liveLine(g: LiveGame | undefined) {
+    if (!g) return '';
+    const parts: string[] = [];
+    if (rooms[g.slug] > 0) parts.push(`<bdi dir="ltr">${fmtN(rooms[g.slug])}</bdi> ${rooms[g.slug] === 1 ? 'غرفة مفتوحة' : rooms[g.slug] >= 11 ? 'غرفة مفتوحة' : 'غرف مفتوحة'}`);
+    if (g.live > 0) parts.push(`<bdi dir="ltr">${fmtN(g.live)}</bdi> عم يلعبوا هلق`);
+    return parts.join(' · ');
+  }
+  function fill(P: Panel, slug: string) {
+    const g = bySlug(slug), el = P.el;
+    P.cur = slug;
+    $$<HTMLElement>('.h-tab', el).forEach((t) => { const on = t.dataset.g === slug; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; });
+    const off = $('.h-p-off', el)!, ctas = $('.h-p-ctas', el)!, more = $<HTMLAnchorElement>('.h-p-more', el)!;
+    if (!g) {
+      // the registry has none of this landmark's games switched on: say so, never offer a fake button
+      off.hidden = false; ctas.hidden = true; more.hidden = true; $('.h-liveline', el)!.hidden = true;
+      return;
+    }
+    off.hidden = true; ctas.hidden = false; more.hidden = false;
+    $('.h-p-name', el)!.textContent = g.name;
+    $('.h-p-pitch', el)!.textContent = g.description;
+    const meta = $('.h-meta', el)!;
+    meta.innerHTML = `<li>${ico('users')}<span>${pl(g)}</span></li>` +
+      (g.duration ? `<li>${ico('clock')}<span><bdi dir="ltr">${esc(g.duration.replace(/\s*د$/, ''))}</bdi> دقيقة</span></li>` : '') +
+      `<li>${ico(el.dataset.ico || 'board')}${esc(el.dataset.type || '')}</li>`;
+    $$<HTMLElement>('[data-act]', el).forEach((b) => { b.dataset.slug = g.slug; });
+    more.href = g.url;
+    const line = liveLine(g), live = $('.h-liveline', el)!;
+    live.hidden = !line; $('span', live)!.innerHTML = line;
+    onGameCb?.(P.stop, g.accent);
+  }
+  function select(P: Panel, slug: string) {
+    if (!P || P.cur === slug) return;
+    const parts = ['.h-p-name', '.h-p-pitch', '.h-meta', '.h-liveline', '.h-p-ctas'].map((s) => $(s, P.el)!);
+    if (!is3d()) { fill(P, slug); return; }
+    gsap.killTweensOf(parts);
+    gsap.timeline()
+      .to(parts[0], { yPercent: -105, duration: .3, ease: 'power2.in' })
+      .to(parts.slice(1), { opacity: 0, y: -8, duration: .2, stagger: .03, ease: 'power2.in' }, 0)
+      .add(() => fill(P, slug))
+      .fromTo(parts[0], { yPercent: 105 }, { yPercent: 0, duration: .75, ease: 'expo.out' })
+      .fromTo(parts.slice(1), { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .6, stagger: .05, ease: 'power3.out' }, '<0.08');
+  }
+  function showPanel(P: Panel | undefined, on: boolean) {
+    if (!P || P.shown === on) return;
+    P.shown = on;
+    const kids = [...P.el.children] as HTMLElement[];
+    P.tl?.kill();
+    if (on) {
+      P.tl = gsap.timeline()
+        .set(kids, { opacity: 1, y: 0 })
+        .fromTo($$('.h-p-kick,.h-p-idx', P.el), { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .7, ease: 'power3.out', stagger: .06 }, 0)
+        .fromTo($('.h-p-line', P.el), { scaleX: 0 }, { scaleX: 1, duration: 1, ease: 'expo.out' }, .05)
+        .fromTo($('.h-p-name', P.el), { yPercent: 108 }, { yPercent: 0, duration: 1.05, ease: 'expo.out' }, .1)
+        .fromTo(kids.filter((k) => !k.matches('.h-p-top,.h-p-name-w')), { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: .8, ease: 'power3.out', stagger: .07 }, .22);
+    } else {
+      P.tl = gsap.timeline().to(kids, { opacity: 0, y: -10, duration: .3, ease: 'power2.in', stagger: .02 });
+    }
+  }
+  function setActive(act: number) { panels.forEach((P, i) => P && showPanel(P, i === act)); }
+
+  // ---------------------------------------------------------------- real play actions
+  async function act(btn: HTMLButtonElement) {
+    const slug = btn.dataset.slug || '', mode = (btn.dataset.act || 'quick') as Mode;
+    if (!bySlug(slug)) { toast('هاللعبة مو متاحة هلق'); return; }
+    const name = await askName();
+    if (!name) return;
+    btn.disabled = true; btn.classList.add('loading');
+    try { location.href = await start(slug, mode, name); }
+    catch (e) { toast(playError(e, slug)); btn.disabled = false; btn.classList.remove('loading'); }
   }
 
-  function drawGames() {
-    const grid = $('#featGrid')!;
-    if (!session.ok) { grid.innerHTML = `<div class="panel state state-error" style="grid-column:1/-1">${ui('warn')}<span>ما قدرنا نوصل للسيرفر — جرّب تحدّث الصفحة.</span></div>`; return; }
-    if (!games.length) { grid.innerHTML = `<div class="panel state state-empty" style="grid-column:1/-1">${ui('sparkle')}<span>ما في ألعاب مفعّلة هلق.</span></div>`; return; }
-    // four games, and when card games exist one of them is a card game (so every kind shows up)
-    const firstCard = games.find(isCards);
-    const feat = firstCard ? [...games.filter((g) => !isCards(g)).slice(0, 3), firstCard] : games.slice(0, 4);
-    grid.innerHTML = feat.map((g, i) => gameCardHTML(g, i)).join('');
-    // categories: «ورق الشدة» shows up as soon as a card game is in the registry
-    const cards = $('.cat[data-cat="cards"]');
-    if (cards) cards.hidden = !games.some(isCards);
-    const live = games.reduce((n, g) => n + (g.live || 0), 0);
-    const hl = $('#heroLive')!;
-    hl.hidden = !live && games.length < 2;
-    $('span:last-child', hl)!.innerHTML = live
-      ? `<b>${fmtN(live)}</b> لاعب عم يلعبوا هلق · <b>${games.length}</b> ألعاب بالمكتبة`
-      : `<b>${games.length}</b> ألعاب بالمكتبة، وكلها جاهزة تلعبها هلق`;
-    ($('.live-dot', hl) as HTMLElement).hidden = !live;
-    if (session.ok && games.length) drawStage();
+  // ---------------------------------------------------------------- navigation (fly = scroll along the camera path)
+  let geo = { vh: innerHeight, tops: [0] as number[], holds: [0] as number[], how: 0 };
+  function measure() {
+    const vh = innerHeight, sy = scrollY, stops = $$<HTMLElement>('.h-stop');
+    const tops = [0, ...stops.map((s) => s.getBoundingClientRect().top + sy)];
+    const holds = tops.map((t, i) => (i === 0 ? 0 : t + stops[i - 1].offsetHeight - vh));
+    geo = { vh, tops, holds, how: $('#how')!.getBoundingClientRect().top + sy };
+    return geo;
+  }
+  function flyTo(i: number) {
+    measure();
+    const y = i <= 0 ? 0 : i <= 4 ? geo.tops[i] + (is3d() ? geo.vh * 0.04 : -70) : geo.how;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { scrollTo(0, y); return; }
+    const dist = Math.abs(y - scrollY) / geo.vh;
+    gsap.to(window, { scrollTo: { y, autoKill: true }, duration: Math.min(2.6, Math.max(0.9, 0.55 + dist * 0.42)), ease: 'power2.inOut' });
+  }
+  function goGame(slug: string) {
+    const stop = STOP_OF[slug];
+    if (!stop || !bySlug(slug)) { location.href = '/games/' + encodeURIComponent(slug); return; }
+    const P = panels[stop];
+    if (P) (P.shown ? select(P, slug) : fill(P, slug));
+    flyTo(stop);
+  }
+  document.addEventListener('click', (e) => {
+    const t = e.target as Element;
+    const a = t.closest<HTMLElement>('[data-fly]');
+    if (a) { e.preventDefault(); (t.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); flyTo(+(a.dataset.fly || 0)); return; }
+    const b = t.closest<HTMLButtonElement>('[data-act]');
+    if (b) { act(b); return; }
+    if (t.closest('[data-code], #codeBtn')) codeModal();
+  });
+
+  // ---------------------------------------------------------------- command palette (results open the real game page)
+  const pal = $('#hxPal')!, palq = $<HTMLInputElement>('#hxPalQ')!, pallist = $('#hxPalList')!;
+  let palSel = 0, palItems: LiveGame[] = [], lastFocus: Element | null = null;
+  function palRender() {
+    const q = norm(palq.value);
+    palItems = games.filter((g) => !q || norm([g.name, ...g.aliases, CAT_LABEL[CAT_OF(g)]].join(' ')).includes(q));
+    if (!games.length) { pallist.innerHTML = `<li class="h-pal-empty" role="presentation">${session.ok ? 'ما في ألعاب مفعّلة هلق.' : 'ما قدرنا نوصل للسيرفر، جرّب تحدّث الصفحة.'}</li>`; return; }
+    if (!palItems.length) { pallist.innerHTML = `<li class="h-pal-empty" role="presentation">ما لقينا لعبة بهالاسم. جرّب «طرنيب» أو «لودو».</li>`; return; }
+    palSel = Math.min(palSel, palItems.length - 1);
+    let html = '', lastCat = '';
+    const ordered = q ? palItems : (['cards', 'board', 'quick'] as const).flatMap((c) => palItems.filter((g) => CAT_OF(g) === c));
+    palItems = ordered;
+    ordered.forEach((g, i) => {
+      if (!q && CAT_OF(g) !== lastCat) { lastCat = CAT_OF(g); html += `<li class="h-grp" role="presentation">${CAT_LABEL[lastCat]}</li>`; }
+      html += `<li role="option" id="po-${esc(g.slug)}" data-i="${i}" aria-selected="${i === palSel}"><a href="${esc(g.url)}" tabindex="-1">${g.art ? `<img src="${esc(g.art)}" alt="" loading="lazy">` : ''}<span class="h-t"><b>${esc(g.name)}</b><small>${CAT_LABEL[CAT_OF(g)]} · ${pl(g)}</small></span><span class="h-go">افتح اللعبة</span></a></li>`;
+    });
+    pallist.innerHTML = html;
+    palq.setAttribute('aria-activedescendant', 'po-' + palItems[palSel].slug);
+  }
+  function palOpen() {
+    lastFocus = document.activeElement; pal.classList.add('open'); palq.value = ''; palSel = 0; palRender();
+    requestAnimationFrame(() => palq.focus());
+    gsap.fromTo('.h-pal-box', { opacity: 0, y: -14, scale: .98 }, { opacity: 1, y: 0, scale: 1, duration: .45, ease: 'expo.out' });
+  }
+  function palClose() { pal.classList.remove('open'); (lastFocus as HTMLElement | null)?.focus?.(); }
+  $('#hxOpenPal')!.addEventListener('click', palOpen);
+  palq.addEventListener('input', () => { palSel = 0; palRender(); });
+  pallist.addEventListener('mousemove', (e) => { const li = (e.target as Element).closest<HTMLElement>('[data-i]'); if (li && +(li.dataset.i || 0) !== palSel) { palSel = +(li.dataset.i || 0); palRender(); } });
+  pal.addEventListener('click', (e) => { if (e.target === pal) palClose(); });
+  document.addEventListener('keydown', (e) => {
+    const typing = /INPUT|TEXTAREA|SELECT/.test((document.activeElement as HTMLElement)?.tagName || '');
+    if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') || (e.key === '/' && !typing)) {
+      e.preventDefault(); pal.classList.contains('open') ? palClose() : palOpen(); return;
+    }
+    if (!pal.classList.contains('open')) return;
+    if (e.key === 'Escape') { e.preventDefault(); palClose(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault(); if (!palItems.length) return;
+      palSel = (palSel + (e.key === 'ArrowDown' ? 1 : -1) + palItems.length) % palItems.length; palRender();
+      document.getElementById('po-' + palItems[palSel].slug)?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') { e.preventDefault(); const g = palItems[palSel]; if (g) location.href = g.url; }
+    else if (e.key === 'Tab') { e.preventDefault(); palq.focus(); }
+  });
+
+  // ---------------------------------------------------------------- live registry → panels, tabs, index
+  function applyGames() {
+    for (const P of panels) {
+      if (!P) continue;
+      const live = P.ids.filter((id) => bySlug(id));
+      $$<HTMLElement>('.h-tab', P.el).forEach((t) => { t.hidden = !bySlug(t.dataset.g || ''); });
+      const tabs = $('.h-tabs', P.el); if (tabs) tabs.hidden = live.length < 2;
+      P.cur = '';
+      fill(P, live[0] || P.ids[0]);
+    }
+    // index: only enabled games (plus any new registry game the city has no landmark for yet)
+    $$<HTMLElement>('#hxIndexCols li[data-slug]').forEach((li) => { li.hidden = !bySlug(li.dataset.slug || ''); });
+    for (const g of games.filter((x) => !(x.slug in STOP_OF))) {
+      const ul = $(`#hxIndexCols .h-cat[data-cat="${CAT_OF(g)}"] ul`);
+      ul?.insertAdjacentHTML('beforeend', `<li data-slug="${esc(g.slug)}"><a href="${esc(g.url)}">${esc(g.name)}<small>${pl(g)}</small>${ico('arrow', 'h-i h-ar')}</a></li>`);
+    }
+    $$<HTMLElement>('#hxIndexCols .h-cat').forEach((c) => { c.hidden = !$$('li:not([hidden])', c).length; });
   }
 
-  function drawMe() {
-    const me = session.me, box = $('#myCard')!;
-    box.innerHTML = me ? `<a class="my-card" href="/u/${encodeURIComponent(me.username)}">${avatarHTML(me.avatar, 52, me.color)}
-      <div class="who"><b>أهلين ${esc(me.displayName)}</b><small dir="ltr">@${esc(me.username)}</small></div>
-      <div class="my-stats"><span>${ui('star')}<b>${fmtN(me.points)}</b> نقطة</span><span>${ui('trophy')}<b>${fmtN(me.wins)}</b> فوز</span><span>${ui('dice')}<b>${fmtN(me.games)}</b> لعبة</span></div></a>` : '';
-  }
-
-  // ---- open rooms across every game (refreshed every 5 s while the tab is visible)
+  // ---------------------------------------------------------------- open rooms (real, refreshed while visible)
   let failed = 0, lastRefresh = 0;
   async function refreshRooms() {
-    if (document.hidden || !games.length) return;
-    if (Date.now() - lastRefresh < 2000) return; // visibilitychange + timer can fire together
+    if (document.hidden || !games.length || Date.now() - lastRefresh < 2000) return;
     lastRefresh = Date.now();
     const box = $('#roomList')!;
     const results = await Promise.all(games.map((g) => openRooms(g.slug).then((r) => r || [], () => null)));
     const ok = results.filter((r): r is OpenRoom[] => r !== null);
-    if (!ok.length) {
-      if (++failed >= 2) box.innerHTML = `<div class="state state-error">${ui('warn')}<span>ما قدرنا نجيب الغرف — عم نجرّب كمان…</span></div>`;
-      return;
-    }
+    games.forEach((g, i) => { rooms[g.slug] = results[i] ? (results[i] as OpenRoom[]).length : 0; });
+    for (const P of panels) if (P && bySlug(P.cur)) { const live = $('.h-liveline', P.el)!, line = liveLine(bySlug(P.cur)); live.hidden = !line; $('span', live)!.innerHTML = line; }
+    if (!ok.length) { if (++failed >= 2) box.innerHTML = `<div class="state state-error">${ui('warn')}<span>ما قدرنا نجيب الغرف، عم نجرّب كمان…</span></div>`; return; }
     failed = 0;
-    const all = ok.flat().sort((a, b) => b.count - a.count).slice(0, 8);
+    const all = ok.flat().sort((a, b) => b.count - a.count).slice(0, 6);
     box.innerHTML = all.length
       ? all.map((r) => { const g = bySlug(r.slug); return roomItemHTML(r, g?.name, g?.art); }).join('')
-      : `<div class="room-empty">${ui('dice')}ما في غرف مفتوحة هلق — <a href="/games">اختار لعبة</a> وابدأ وحدة.</div>`;
+      : `<div class="room-empty">${ui('dice')}ما في غرف مفتوحة هلق. اختار لعبة واكبس «غرفة مع صحابي».</div>`;
   }
-
-  async function drawResume() {
-    const list = await myRooms(games.map((g) => g.slug)).catch(() => []);
-    const box = $('#resumeBox')!;
-    box.hidden = !list.length;
-    $('#resumeList')!.innerHTML = list.map((r) => {
-      const g = bySlug(r.slug);
-      const st = r.status === 'lobby' ? 'بالانتظار' : 'اللعبة شغّالة';
-      return `<div class="room-item resume">${g?.art ? `<img class="ri-art" src="${esc(g.art)}" alt="" width="48" height="30">` : ''}
-        <div class="ri-text"><b>${esc(g?.name || r.slug)}</b><small><span class="ltr">${esc(r.code)}</span><i class="dot-sep"></i>${st}</small></div>
-        <a class="btn btn-cyan sm" href="${esc(roomUrl(r.slug, r.code))}">${ui('play')}كمّل</a></div>`;
-    }).join('');
-  }
-
-  // ---- entering a room from a list
   async function enter(slug: string, code: string, btn: HTMLButtonElement) {
     if (isTharwa(slug)) { const n = savedName(); if (n) rememberName(n); location.href = roomUrl(slug, code); return; }
     const name = await askName();
@@ -348,8 +828,19 @@ const CATS = [
     if (b) enter(b.dataset.slug || 'tharwa', b.dataset.room || '', b);
   });
 
-  // ---- «عندي كود غرفة»: works for any game (ثروة codes are checked first, then the other games' open rooms)
-  $('#codeBtn')!.addEventListener('click', () => {
+  // «كمّل من وين وقفت»: rooms this browser still has a seat in
+  async function drawResume() {
+    const list = await myRooms(games.map((g) => g.slug)).catch(() => []);
+    const box = $('#hxResume')!;
+    box.hidden = !list.length;
+    box.innerHTML = list.length ? `<b>${ico('refresh')}كمّل من وين وقفت</b>` + list.slice(0, 3).map((r) => {
+      const g = bySlug(r.slug);
+      return `<a href="${esc(roomUrl(r.slug, r.code))}">${esc(g?.name || r.slug)}<small dir="ltr">${esc(r.code)}</small><span>${r.status === 'lobby' ? 'بالانتظار' : 'شغّالة'}</span></a>`;
+    }).join('') : '';
+  }
+
+  // «عندي كود غرفة»: same flow as before (ثروة codes first, then the other games)
+  function codeModal() {
     const m = modal('ادخل بكود الغرفة', `<form id="codeForm" class="name-form">
       <p class="modal-text" style="margin:0">صاحبك بعتلك كود؟ اكتبه هون وبندخّلك عالغرفة.</p>
       <input class="input ltr" id="codeIn" maxlength="8" placeholder="abc12" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" style="text-align:center;font-weight:800;letter-spacing:3px;font-size:18px">
@@ -367,20 +858,18 @@ const CATS = [
         if (hit && isTharwa(hit.slug)) { location.href = roomUrl('tharwa', hit.code); return; }
         if (hit) {
           m.close();
-          // a game that already started can only be watched: the room page handles spectators
           if (hit.status !== 'lobby') { location.href = roomUrl(hit.slug, hit.code); return; }
           const name = await askName();
           if (!name) return;
           location.href = await join(hit.slug, hit.code, name);
           return;
         }
-        toast('ما لقينا غرفة مفتوحة بهالكود — تأكّد منه');
+        toast('ما لقينا غرفة مفتوحة بهالكود، تأكّد منه');
       } catch (err) { toast(playError(err, 'g', true)); }
       go.disabled = false; go.classList.remove('loading');
     });
-  });
+  }
 
-  // ---- leaders (top 5)
   async function drawLeaders() {
     const box = $('#miniLeaders')!;
     try {
@@ -388,18 +877,40 @@ const CATS = [
       box.innerHTML = list.length
         ? list.slice(0, 5).map((u, i) => `<li><a class="ml-row" href="/u/${encodeURIComponent(u.username)}"><span class="ml-rank">${i + 1}</span>${avatarHTML(u.avatar, 34, u.color)}
             <span class="ml-name">${esc(u.displayName)}</span><span class="ml-pts">${ui('star')}${fmtN(u.points)}</span></a></li>`).join('')
-        : `<li class="room-empty">${ui('trophy')}لسا ما حدا عالقائمة — كون أول واحد!</li>`;
-    } catch {
-      box.innerHTML = `<li class="state state-error">${ui('warn')}<span>ما قدرنا نجيب القائمة</span></li>`;
-    }
+        : `<li class="room-empty">${ui('trophy')}لسا ما حدا عالقائمة، كون أول واحد.</li>`;
+    } catch { box.innerHTML = `<li class="state state-error">${ui('warn')}<span>ما قدرنا نجيب القائمة</span></li>`; }
   }
+
+  // the fixed header may grow (banners): keep the content clear of it
+  function syncHeader() { H.style.setProperty('--h-hdr-real', ($('#hxHdr') as HTMLElement).offsetHeight + 'px'); }
+  document.addEventListener('tharwa:banners', syncHeader);
+  // once the hero is scrolled away, content passes under the header: give it a solid navy backing
+  const hdr = $('#hxHdr')!;
+  const solid = () => hdr.classList.toggle('solid', scrollY > ($('#hero') as HTMLElement).offsetHeight - hdr.offsetHeight);
+  addEventListener('scroll', solid, { passive: true }); solid();
+  addEventListener('resize', syncHeader);
+  syncHeader();
 
   loadSession().then(() => {
     games = liveGames(session.site.games);
-    drawGames(); drawMe(); mountAds();
+    applyGames(); mountAds();
     refreshRooms(); drawResume();
-    setInterval(refreshRooms, 5000);
+    setInterval(refreshRooms, 8000);
     document.addEventListener('visibilitychange', refreshRooms);
   });
   drawLeaders();
+
+  // ---------------------------------------------------------------- the 3D world: after first paint, only when allowed
+  function boot3d() {
+    if (!H.classList.contains('h3d')) return;
+    import('../home/world').then((m) => m.start({
+      panels, measure, flyTo, setActive,
+      onGame: (cb: (stop: number, tint: string) => void) => { onGameCb = cb; },
+    })).catch((err) => {
+      console.warn('3D city unavailable, showing the static city', err);
+      H.classList.remove('h3d', 'h-live'); H.classList.add('hfb');
+    });
+  }
+  const idle = (cb: () => void) => ('requestIdleCallback' in window ? (window as any).requestIdleCallback(cb, { timeout: 1500 }) : setTimeout(cb, 300));
+  if (document.readyState === 'complete') idle(boot3d); else addEventListener('load', () => idle(boot3d), { once: true });
 </script>
