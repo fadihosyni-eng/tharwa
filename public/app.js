@@ -324,12 +324,14 @@
     if (!tile) return;
     tile.classList.remove('flash'); void tile.offsetWidth; tile.classList.add('flash');
   }
+  // Small toast at the top of the board centre: never over the «دور …» line, the dice or the roll button
+  // (the centre's content can move while it shows, so it does not follow it).
   function banner(text) {
     const b = $('#cBanner');
     if (!b) return;
     b.innerHTML = `<div class="banner">${text}</div>`;
     clearTimeout(S.bannerTimer);
-    S.bannerTimer = setTimeout(() => { b.innerHTML = ''; }, 1700);
+    S.bannerTimer = setTimeout(() => { b.innerHTML = ''; }, 1400);
   }
   // One money change on screen: floating «+$200 / −$140» over the row and the token, the row counts up.
   function moneyFx(p, from, to, st) {
@@ -384,7 +386,7 @@
     if (g.auction && pg.auction && g.auction.bid !== pg.auction.bid) FX.Sound.play('bid');
     if (me) tradeEffects(prev, st, me);
     if (st.status === 'playing' && me && g.order[g.turn] === me && pg.order[pg.turn] !== me) {
-      afterWalk(g.moveSeq, () => { banner('دورك! 🎲'); FX.Sound.play('turn'); });
+      afterWalk(g.moveSeq, () => { banner(`${ART.ui('dice')}<span>دورك!</span>`); FX.Sound.play('turn'); });
     }
     if (st.status === 'ended' && prev.status !== 'ended') {
       FX.confetti();

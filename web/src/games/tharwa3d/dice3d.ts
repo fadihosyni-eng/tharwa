@@ -1,65 +1,67 @@
 // «ثروة» 3D crystal dice (three + cannon-es), bundled to public/tharwa/dice3d.js by web/scripts/build-tharwa-dice.mjs.
-// Loaded lazily by public/fx.js for the board dice (#dice). If WebGL is missing, fx.js keeps the CSS dice.
+// Loaded lazily by public/fx.js for the board dice (#dice). If WebGL is missing or anything fails, fx.js shows the
+// CSS dice instead (same place, same values).
 //
-// Layout: one transparent canvas covers the whole board centre (pointer-events: none), so a throw flies over the
-// centre: the dice come in from the thrower's side in an arc, hit the table (an invisible plane), bounce 2–3 times,
-// roll and settle side by side near the middle. They stay there ~1.2 s, then glide to their resting spot — the
-// #dice element next to «دور …», which is only an empty placeholder — at a readable size.
+// Layout (owner): the dice live in their home spot only — the #dice element under «دور …», where the CSS dice sit.
+// A small transparent canvas covers that spot plus a margin to the left and right (pointer-events: none), so a throw
+// can never cover the turn label, the buttons or the log. The camera looks straight down (orthographic): a die at
+// rest is a flat, face-on square exactly the size and place of a CSS die.
 //
-// Owner rule (strict): a die only ever shows the number that was actually rolled.
-//   1. The throw is simulated with cannon-es BEFORE anything moves (fixed 120 Hz steps, a few ms); throws that
-//      don't land flat, apart and near the middle are thrown away.
-//   2. While the recorded throw plays back, both dice have NO pips at all: all six faces are blank crystal.
-//   3. Only after the throw has finished, the face that actually points up gets the pips of the server's value,
-//      then the die squares up and tips that face towards the camera so the number reads at once.
-//      The client never picks a number; it only picks which blank face receives the server's number.
-//   4. A new roll clears the pips first, so an old number can't linger.
+// Real dice (owner): every face has its pips the whole time (opposite faces add up to 7).
+//   1. The throw is simulated with cannon-es BEFORE anything moves (fixed 120 Hz steps, a few ms); throws that don't
+//      land flat, in order and next to the home spots are thrown away.
+//   2. The simulation tells which face will end up on top. The die is then numbered (a valid die: opposite faces
+//      sum to 7) so that this face carries the server's value. So the die really rolls and stops on the rolled
+//      number — no swap or snap at the end; a short settle only slides it onto its exact spot and squares it up,
+//      keeping the same face on top.
+//   3. The first value is always on the right-hand die (the board reads right to left), like the CSS dice.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import * as CANNON from 'cannon-es';
 
-const H = 0.5;                 // die half size (edge = 1 world unit)
+const H = 0.5;                 // die half size (edge = 1 world unit = one CSS die on screen)
 const STEP = 1 / 120;
-const MAX_STEPS = 260;
-const CAM_TILT = 35;           // camera tilt away from straight down (degrees)
-const FACE_TILT = THREE.MathUtils.degToRad(16); // landed face tipped towards the viewer
-const PRESENT_MS = 340;        // squaring up + lining up side by side after landing
-const HOLD_MS = 1200;          // the value stays big in the middle this long
-const GLIDE_MS = 560;          // then the dice glide to their resting spot
-const GHOSTS = 3;              // motion trail copies per die while flying
+const MAX_STEPS = 240;         // 2.0 s of physics at most
+const SETTLE_MS = 240;         // slide onto the exact home spot + square up (same face on top)
+const MARGIN_X = 1.6;          // tumbling room left and right of the home spot (in dice)
+const MARGIN_Y_PX = 4;         // above / below: a few px of the gap that is always empty (chips may appear below mid-throw)
 const PIPS: Record<number, [number, number][]> = {
   1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]],
   4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]],
   6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]],
 };
-// local face normal + two in-face axes (for laying out pips)
-const FACES: [THREE.Vector3, THREE.Vector3, THREE.Vector3][] = [
-  [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0)],
-  [new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0)],
-  [new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1)],
-  [new THREE.Vector3(0, -1, 0), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1)],
-  [new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)],
-  [new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0)],
-];
+// face normals in the order of the box geometry's material groups: +x, -x, +y, -y, +z, -z (opposites are pairs)
+const NORMALS = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)];
+const OPP = [1, 0, 3, 2, 5, 4];
 function upFace(q: THREE.Quaternion) {
   const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q.clone().invert());
   let face = 0, dot = -2;
-  FACES.forEach(([n], k) => { const d = n.dot(up); if (d > dot) { dot = d; face = k; } });
+  NORMALS.forEach((n, k) => { const d = n.dot(up); if (d > dot) { dot = d; face = k; } });
   return { face, dot };
+}
+/** a valid die (opposite faces sum to 7) with `v` on face `f` */
+function numbering(f: number, v: number, rnd: () => number): number[] {
+  const nums = [0, 0, 0, 0, 0, 0];
+  nums[f] = v; nums[OPP[f]] = 7 - v;
+  const pairs = [1, 2, 3].filter((a) => a !== v && a !== 7 - v).map((a) => (rnd() < 0.5 ? [a, 7 - a] : [7 - a, a]));
+  const rest = [0, 2, 4].filter((k) => k !== f && k !== OPP[f] && OPP[k] !== f);
+  rest.forEach((k, i) => { nums[k] = pairs[i][0]; nums[OPP[k]] = pairs[i][1]; });
+  return nums;
 }
 
 type Court = { x0: number; x1: number; z0: number; z1: number };
-type Throw = { frames: Float32Array[]; count: number; ok: boolean; impact: number };
-/** screen direction from the board centre towards the thrower (x right, y down); {0,1} = from the bottom */
+type Throw = { frames: Float32Array[]; count: number; ok: boolean; impact: number; up: number[] };
+/** screen direction from the board centre towards the thrower (x right, y down) */
 export type From = { x: number; y: number };
 type RollOpts = { from?: From; onImpact?: () => void };
 
-type Aim = { x: number; z: number };
-function oneThrow(c: Court, from: From, aim: Aim, rnd: () => number): Throw {
-  const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -58, 0) });
+/** one throw: both dice come in from one side of the home strip, tumble and stop next to their home spots.
+ *  home[0] = the right-hand spot (first value), home[1] = the left-hand one. */
+function oneThrow(c: Court, home: THREE.Vector3[], fromLeft: boolean, rnd: () => number): Throw {
+  const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -50, 0) });
   world.allowSleep = true;
-  world.defaultContactMaterial.friction = 0.22;
-  world.defaultContactMaterial.restitution = 0.42;
+  world.defaultContactMaterial.friction = 0.3;
+  world.defaultContactMaterial.restitution = 0.35;
   const floor = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
   floor.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
   world.addBody(floor);
@@ -69,33 +71,27 @@ function oneThrow(c: Court, from: From, aim: Aim, rnd: () => number): Throw {
     const b = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(sx, wh / 2, sz)) });
     b.position.set(x, wh / 2, z); world.addBody(b);
   }
-  // entry point: on the thrower's side, just inside the edge of the centre area
-  let dx = from.x, dz = from.y;
-  const len = Math.hypot(dx, dz) || 1;
-  dx /= len; dz /= len;
-  if (!from.x && !from.y) { dx = 0; dz = 1; }
-  const reach = Math.min(Math.abs(dx) > 1e-3 ? (hx - 0.8) / Math.abs(dx) : Infinity, Math.abs(dz) > 1e-3 ? (hz - 0.8) / Math.abs(dz) : Infinity);
-  const ex = cx + dx * reach, ez = cz + dz * reach;
-  const px = -dz, pz = dx; // across the throw: the two dice leave the hand a little apart
-  let impact = -1;
+  const dir = fromLeft ? 1 : -1; // direction of travel along x
+  let impact = -1, count = 0;
+  // the die that must end further along the travel direction starts in front
+  const lead = fromLeft ? 0 : 1; // travelling right: the right-hand die (0) leads; travelling left: the left-hand die (1)
   const dice = [0, 1].map((k) => {
-    const d = new CANNON.Body({ mass: 1, shape: new CANNON.Box(new CANNON.Vec3(H, H, H)), linearDamping: 0.12, angularDamping: 0.18 });
+    const d = new CANNON.Body({ mass: 1, shape: new CANNON.Box(new CANNON.Vec3(H, H, H)), linearDamping: 0.15, angularDamping: 0.2 });
     d.allowSleep = true; d.sleepSpeedLimit = 0.25; d.sleepTimeLimit = 0.1;
-    const side = (k ? 1 : -1) * (0.45 + rnd() * 0.25);
-    d.position.set(ex + px * side, 2.4 + rnd() * 0.9, ez + pz * side);
+    // both dice leave the hand at the edge of the strip, the leading one a die-length ahead
+    const startX = (fromLeft ? c.x0 + 0.62 : c.x1 - 0.62) + (k === lead ? dir * 1.15 : 0);
+    d.position.set(startX, 1.0 + rnd() * 0.6, home[k].z + (rnd() - 0.5) * 0.12);
     d.quaternion.setFromEuler(rnd() * 6.28, rnd() * 6.28, rnd() * 6.28);
-    // thrown towards the landing spot (an empty part of the centre, see BoardDice.findSpot)
-    const ax = aim.x - ex, az = aim.z - ez, dist = Math.hypot(ax, az) || 1;
-    const v = (5.2 + rnd() * 2.4) * Math.sqrt(Math.max(1, dist) / 3.2);
-    const lateral = (rnd() - 0.5) * 1.4;
-    d.velocity.set((ax / dist) * v + px * lateral, 3.4 + rnd() * 2.2, (az / dist) * v + pz * lateral);
-    d.angularVelocity.set((rnd() - 0.5) * 36, (rnd() - 0.5) * 26, (rnd() - 0.5) * 36);
+    const dist = Math.abs(home[k].x - startX);
+    const v = (2.6 + rnd() * 1.6) * Math.sqrt(Math.max(0.6, dist)) * (k === lead ? 1.12 : 1);
+    d.velocity.set(dir * v, 1.5 + rnd() * 1.5, 0);
+    // rolling along x: mostly a spin about z (plus a little wobble)
+    d.angularVelocity.set((rnd() - 0.5) * 6, (rnd() - 0.5) * 6, -dir * (14 + rnd() * 12));
     d.addEventListener('collide', (e: { body: CANNON.Body }) => { if (impact < 0 && e.body === floor) impact = count; });
     world.addBody(d);
     return d;
   });
   const frames = [new Float32Array(MAX_STEPS * 7), new Float32Array(MAX_STEPS * 7)];
-  let count = 0;
   for (; count < MAX_STEPS; count++) {
     world.step(STEP);
     dice.forEach((d, k) => {
@@ -105,107 +101,105 @@ function oneThrow(c: Court, from: From, aim: Aim, rnd: () => number): Throw {
     });
     if (count > 40 && dice.every((d) => d.sleepState === CANNON.Body.SLEEPING)) { count++; break; }
   }
-  const near = (d: CANNON.Body) => Math.abs(d.position.x - aim.x) < 1.7 && Math.abs(d.position.z - aim.z) < 1.3;
-  const ok = dice.every((d) => {
-    const q = new THREE.Quaternion(d.quaternion.x, d.quaternion.y, d.quaternion.z, d.quaternion.w);
-    return upFace(q).dot > 0.995 && Math.abs(d.position.y - H) < 0.03 && near(d);
-  }) && Math.hypot(dice[0].position.x - dice[1].position.x, dice[0].position.z - dice[1].position.z) > 1.2;
-  return { frames, count, ok, impact: impact < 0 ? 0 : impact };
+  const q = dice.map((d) => new THREE.Quaternion(d.quaternion.x, d.quaternion.y, d.quaternion.z, d.quaternion.w));
+  const ok = dice.every((d, k) => upFace(q[k]).dot > 0.995 && Math.abs(d.position.y - H) < 0.03
+    && Math.abs(d.position.x - home[k].x) < 0.7 && Math.abs(d.position.z - home[k].z) < 0.35)
+    && dice[0].position.x - dice[1].position.x > 1.02; // right-hand die really on the right, not touching
+  return { frames, count: Math.min(count, MAX_STEPS), ok, impact: impact < 0 ? 0 : impact, up: q.map((x) => upFace(x).face) };
 }
-function simulate(c: Court, from: From, aim: Aim): Throw {
+function simulate(c: Court, home: THREE.Vector3[], fromLeft: boolean): Throw {
   let best: Throw | null = null;
-  for (let a = 0; a < 24; a++) { // (each try is a few ms; 24 keeps the click-to-throw delay short)
-    const t = oneThrow(c, from, aim, Math.random), s = t.count * STEP;
-    if (t.ok && s >= 0.75 && s <= 1.45) return t;
-    if (t.ok && (!best || !best.ok || Math.abs(s - 1.1) < Math.abs(best.count * STEP - 1.1))) best = t;
+  for (let a = 0; a < 36; a++) {
+    const t = oneThrow(c, home, fromLeft, Math.random), s = t.count * STEP;
+    if (t.ok && s >= 0.6 && s <= 1.6) return t;
+    if (t.ok && (!best || !best.ok)) best = t;
     else if (!best) best = t;
   }
   return best!;
 }
 
-function glowTexture() {
-  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
-  const g = cv.getContext('2d')!, gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+// ---------------------------------------------------------------- look: deep sapphire crystal, neon edges, white pips
+const FACE_PX = 128;
+function faceCanvases(v: number) {
+  const mk = () => { const c = document.createElement('canvas'); c.width = c.height = FACE_PX; return c; };
+  const col = mk(), glow = mk();
+  const g = col.getContext('2d')!, e = glow.getContext('2d')!;
+  const grd = g.createRadialGradient(FACE_PX * 0.35, FACE_PX * 0.3, 4, FACE_PX / 2, FACE_PX / 2, FACE_PX * 0.75);
+  grd.addColorStop(0, '#1a4bb8'); grd.addColorStop(0.6, '#0b2a78'); grd.addColorStop(1, '#061848');
+  g.fillStyle = grd; g.fillRect(0, 0, FACE_PX, FACE_PX);
+  e.fillStyle = '#000'; e.fillRect(0, 0, FACE_PX, FACE_PX);
+  const r = v === 1 ? FACE_PX * 0.13 : FACE_PX * 0.095, s = FACE_PX * 0.25;
+  for (const [a, b] of PIPS[v]) {
+    const x = FACE_PX / 2 + a * s, y = FACE_PX / 2 + b * s;
+    g.fillStyle = '#020a26'; g.beginPath(); g.arc(x, y, r * 1.28, 0, Math.PI * 2); g.fill(); // socket
+    for (const [ctx, blur] of [[g, 10], [e, 14]] as [CanvasRenderingContext2D, number][]) {
+      ctx.shadowColor = '#5fe8ff'; ctx.shadowBlur = blur; ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+    }
+  }
+  const tex = (c: HTMLCanvasElement) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
+  return { map: tex(col), emissiveMap: tex(glow) };
 }
-
-type Mats = { pip: THREE.Material; ring: THREE.Material; glow: THREE.Material; ghost: THREE.MeshBasicMaterial[]; body: THREE.Material; core: THREE.Material; shell: THREE.Material };
-type Geos = { pip: THREE.BufferGeometry; ring: THREE.BufferGeometry; glow: THREE.BufferGeometry; body: THREE.BufferGeometry; core: THREE.BufferGeometry; ghost: THREE.BufferGeometry; shell: THREE.BufferGeometry };
+function faceMaterial(v: number) {
+  const { map, emissiveMap } = faceCanvases(v);
+  const m = new THREE.MeshStandardMaterial({ map, emissiveMap, color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.85, roughness: 0.18, metalness: 0.2 });
+  // neon edges: light the bevels (where two local coordinates are both near the surface)
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLocalPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLocalPos = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vLocalPos;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      vec3 a3 = abs(vLocalPos) * 2.0;
+      float mx = max(a3.x, max(a3.y, a3.z)), mn = min(a3.x, min(a3.y, a3.z)), md = a3.x + a3.y + a3.z - mx - mn;
+      totalEmissiveRadiance += vec3(0.08, 0.8, 1.0) * smoothstep(0.8, 0.98, md) * 2.6;`);
+  };
+  m.customProgramCacheKey = () => 'tharwa-dice-face';
+  return m;
+}
 
 class Die {
   root = new THREE.Group();
-  ghosts: THREE.Mesh[] = [];
-  private pips: THREE.Group | null = null;
-  value = 0;
-  face = -1;
-  constructor(private m: Mats, private g: Geos) {
-    const body = new THREE.Mesh(g.body, m.body);
-    body.castShadow = true;
-    const core = new THREE.Mesh(g.core, m.core); // the inner cyan glow seen through the crystal
-    const shell = new THREE.Mesh(g.shell, m.shell); shell.renderOrder = 6;
-    this.root.add(core, body, shell);
-    for (let k = 0; k < GHOSTS; k++) { const gh = new THREE.Mesh(g.ghost, m.ghost[k]); gh.visible = false; gh.renderOrder = -1; this.ghosts.push(gh); }
+  body: THREE.Mesh;
+  nums = [3, 4, 1, 6, 2, 5];
+  constructor(geo: THREE.BufferGeometry, private mats: THREE.Material[], shell: THREE.Mesh) {
+    this.body = new THREE.Mesh(geo, this.mats.slice(0, 6));
+    this.body.castShadow = true;
+    this.root.add(this.body, shell);
+    this.number(this.nums);
   }
-  blank() { if (this.pips) { this.root.remove(this.pips); this.pips = null; } this.value = 0; this.face = -1; }
-  /** put `v` pips on the face that points up right now (and only there) */
-  showOnTop(v: number) {
-    this.blank();
-    if (!(v >= 1 && v <= 6)) return;
-    const face = upFace(this.root.quaternion).face;
-    const [n, u, w] = FACES[face];
-    const grp = new THREE.Group(), s = 0.25;
-    const along = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
-    const flat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
-    for (const [a, b] of PIPS[v]) {
-      const big = v === 1 ? 1.45 : 1;
-      // bright pip in a dark navy socket (reads as a recessed dot), with a soft cyan halo
-      const ring = new THREE.Mesh(this.g.ring, this.m.ring);
-      ring.position.copy(n).multiplyScalar(H + 0.002).addScaledVector(u, a * s).addScaledVector(w, b * s);
-      ring.quaternion.copy(along); ring.scale.set(big, 1, big); ring.renderOrder = 3;
-      const pip = new THREE.Mesh(this.g.pip, this.m.pip);
-      pip.position.copy(ring.position).addScaledVector(n, 0.006);
-      pip.quaternion.copy(along); pip.scale.set(big, 1, big); pip.renderOrder = 4;
-      const gl = new THREE.Mesh(this.g.glow, this.m.glow);
-      gl.position.copy(pip.position).addScaledVector(n, 0.01); gl.quaternion.copy(flat); gl.scale.setScalar(big); gl.renderOrder = 5;
-      grp.add(ring, pip, gl);
-    }
-    this.root.add(grp); this.pips = grp; this.value = v; this.face = face;
+  /** paint the six faces (mats[n - 1] has n pips) */
+  number(nums: number[]) { this.nums = nums.slice(); this.body.material = nums.map((n) => this.mats[n - 1]); }
+  /** the number on the face that points up now */
+  get value() { return this.nums[upFace(this.root.quaternion).face]; }
+  frame(f: Float32Array, i: number) {
+    const o = Math.max(0, i) * 7;
+    this.root.position.set(f[o], f[o + 1], f[o + 2]);
+    this.root.quaternion.set(f[o + 3], f[o + 4], f[o + 5], f[o + 6]);
   }
-  /** orientation that keeps `face` up, squared to the screen axes and tipped by `tilt` towards the camera (+z) */
-  presentQuat(tilt: number) {
-    const q = this.root.quaternion.clone();
-    const [n, u, w] = FACES[this.face];
-    // of the four in-face directions, keep the one already closest to world +x (smallest turn)
-    const cands = [u, u.clone().negate(), w, w.clone().negate()];
+  /** same face on top, squared to the screen (the smallest turn about the vertical axis) */
+  squareQuat() {
+    const q = this.root.quaternion.clone(), f = upFace(q).face, n = NORMALS[f];
+    const cands = NORMALS.filter((x, k) => k !== f && k !== OPP[f]);
     let best = cands[0], bd = -2;
     for (const c of cands) { const d = c.clone().applyQuaternion(q).x; if (d > bd) { bd = d; best = c; } }
     const local = new THREE.Matrix4().makeBasis(best, n, best.clone().cross(n));
     const world = new THREE.Matrix4().makeBasis(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0).cross(new THREE.Vector3(0, 1, 0)));
-    const r = new THREE.Quaternion().setFromRotationMatrix(world.multiply(local.invert()));
-    return new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), tilt).multiply(r);
-  }
-  frame(f: Float32Array, i: number, target: THREE.Object3D = this.root) {
-    const o = Math.max(0, i) * 7;
-    target.position.set(f[o], f[o + 1], f[o + 2]);
-    target.quaternion.set(f[o + 3], f[o + 4], f[o + 5], f[o + 6]);
+    return new THREE.Quaternion().setFromRotationMatrix(world.multiply(local.invert()));
   }
 }
 
 const calm = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 const ease = (t: number) => 1 - Math.pow(1 - t, 3);
-const easeIO = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-type Mode = 'rest' | 'throw' | 'present' | 'hold' | 'glide';
+type Mode = 'rest' | 'throw' | 'settle';
 
 class BoardDice {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
-  private cam = new THREE.PerspectiveCamera(30, 1, 0.1, 400);
+  private cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
   private dice: Die[];
-  private glowMat: THREE.MeshBasicMaterial;
-  private court: Court = { x0: -3, x1: 3, z0: -2, z1: 2 };
+  private court: Court = { x0: -3, x1: 3, z0: -1, z1: 1 };
+  private home = [new THREE.Vector3(0.67, H, 0), new THREE.Vector3(-0.67, H, 0)];
   private canvas: HTMLCanvasElement;
   private slot: HTMLElement;
   private host: HTMLElement;
@@ -215,20 +209,30 @@ class BoardDice {
   private th: Throw | null = null;
   private impactDone = false;
   private onImpact: (() => void) | null = null;
-  private from = { pos: [new THREE.Vector3(), new THREE.Vector3()], quat: [new THREE.Quaternion(), new THREE.Quaternion()], scale: 1 };
-  private to = { pos: [new THREE.Vector3(), new THREE.Vector3()], quat: [new THREE.Quaternion(), new THREE.Quaternion()], scale: 1 };
-  private rest = { pos: [new THREE.Vector3(), new THREE.Vector3()], scale: 0.5 };
-  private bigPx = 84;
+  private from = { pos: [new THREE.Vector3(), new THREE.Vector3()], quat: [new THREE.Quaternion(), new THREE.Quaternion()] };
+  private to = { quat: [new THREE.Quaternion(), new THREE.Quaternion()] };
+  private px = 60; // px per world unit = the CSS die size
   private raf = 0;
   private ro: ResizeObserver | null = null;
+  private mo: MutationObserver | null = null;
   private watch = 0;
   private kick = 0;
-  private aim = { x: 0, z: 0 };
-  private spot = { x: 0, y: 0 }; // landing spot on screen (px in the centre)
-  private checkAt = 0;
+  private guard = 0;
   private slotKey = '';
-  /** for the dice-rule self-check (window.__tharwaDice) */
-  get state() { return { rolling: this.mode === 'throw', mode: this.mode, shown: this.dice.map((d) => d.value), want: this.values.slice() }; }
+  private anchor = { x: 0, y: 0, left: 0, top: 0 }; // where the home spot was when the canvas was placed
+  failed = false;
+  onFail: ((values: number[]) => void) | null = null;
+  /** for the dice self-check (window.__tharwaDice) */
+  get state() {
+    return { rolling: this.mode === 'throw', mode: this.mode, want: this.values.slice(),
+      // what the player sees: the right-hand die first (top faces)
+      shown: this.mode === 'throw' ? [0, 0] : this.dice.map((d) => d.value) };
+  }
+  /** screen centres (px, page) of the two dice, right-hand first — for the self-check */
+  get centres() {
+    const r = this.canvas.getBoundingClientRect();
+    return this.dice.map((d) => { const p = d.root.position.clone().project(this.cam); return { x: r.left + (p.x + 1) / 2 * r.width, y: r.top + (1 - p.y) / 2 * r.height, v: d.value }; });
+  }
 
   constructor(slot: HTMLElement) {
     this.slot = slot;
@@ -237,67 +241,39 @@ class BoardDice {
     this.canvas.className = 'dice3d-canvas';
     this.canvas.setAttribute('aria-hidden', 'true');
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true, powerPreference: 'default' });
-    this.renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1)); // light on the GPU (the owner often has a heavy game running)
+    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); // the canvas is small now
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.NeutralToneMapping; // keeps the blue blue (ACES turned it lavender)
-    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.toneMapping = THREE.NeutralToneMapping; // keeps the blue blue
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap; // (PCFSoft is gone in this three version; it fell back to this anyway)
-    // No environment map: building one (PMREM) blocked the page for 1-2 s on load, and on a busy GPU that stall can
-    // land during a throw (dice frozen in the air). Plain lights give the highlights instead.
-    const spec = new THREE.PointLight(0xffffff, 60, 40); spec.position.set(1.5, 9, 7); this.scene.add(spec);
-    const side = new THREE.PointLight(0x00b4ff, 30, 30); side.position.set(6, 3, 2); this.scene.add(side);
-    const key = new THREE.DirectionalLight(0xeaf8ff, 2.6);
-    key.position.set(3, 12, 7); key.castShadow = true;
-    key.shadow.mapSize.set(512, 512); key.shadow.radius = 4; key.shadow.bias = -0.0006;
-    Object.assign(key.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
-    this.scene.add(key, key.target, new THREE.HemisphereLight(0x5fc8ff, 0x020818, 0.28));
-    const rim = new THREE.PointLight(0x2fe2ff, 40, 30); rim.position.set(-5, 5, -4); this.scene.add(rim);
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.ShadowMaterial({ opacity: 0.38 }));
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // plain lights (no environment map: building one blocked the page for 1-2 s)
+    const key = new THREE.DirectionalLight(0xeaf8ff, 2.4);
+    key.position.set(-2, 10, -3); key.castShadow = true;
+    key.shadow.mapSize.set(512, 512); key.shadow.bias = -0.0006;
+    Object.assign(key.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 30 });
+    const spec = new THREE.PointLight(0xffffff, 40, 30); spec.position.set(1.5, 7, 2);
+    const side = new THREE.PointLight(0x00b4ff, 20, 20); side.position.set(4, 2, 1);
+    this.scene.add(key, key.target, spec, side, new THREE.HemisphereLight(0x8fd8ff, 0x020818, 0.6));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ opacity: 0.35 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; this.scene.add(ground);
 
-    // deep sapphire crystal like the owner's blue cards: dark navy glass, strong clear-coat highlights,
-    // neon-cyan bevelled edges (a fresnel glow added to the shader) and a dim cyan core inside
-    // MeshStandardMaterial (not Physical): a much smaller shader, so it compiles fast even on a busy GPU
-    const body = new THREE.MeshStandardMaterial({
-      color: 0x07205e, roughness: 0.1, metalness: 0.35, transparent: true, opacity: 0.95,
-      envMapIntensity: 1.1, emissive: 0x020c33, emissiveIntensity: 1,
-    });
-    // neon edges: light the bevels (where two local coordinates are both near the surface) + a faint fresnel rim
-    body.onBeforeCompile = (sh) => {
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLocalPos;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLocalPos = position;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vLocalPos;')
-        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        vec3 a3 = abs(vLocalPos) * 2.0;
-        float mx = max(a3.x, max(a3.y, a3.z)), mn = min(a3.x, min(a3.y, a3.z)), md = a3.x + a3.y + a3.z - mx - mn;
-        float edge = smoothstep(0.8, 0.98, md);
-        float rimF = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 3.0);
-        totalEmissiveRadiance += vec3(0.08, 0.8, 1.0) * (edge * 3.4 + rimF * 0.35);`);
-    };
-    body.customProgramCacheKey = () => 'tharwa-dice-edges';
-    const core = new THREE.MeshBasicMaterial({ color: 0x0a58d8, toneMapped: false });
-    // a soft neon outline just outside the die (back faces of a slightly bigger box, added light)
-    const shell = new THREE.MeshBasicMaterial({ color: 0x1ccfff, transparent: true, opacity: 0.45, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-    this.glowMat = new THREE.MeshBasicMaterial({ map: glowTexture(), color: 0x5fe8ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-    const ghost = [0.22, 0.12, 0.05].map((o) => new THREE.MeshBasicMaterial({ color: 0x2fc8ff, transparent: true, opacity: o, depthWrite: false, toneMapped: false }));
-    const mats: Mats = { pip: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), ring: new THREE.MeshBasicMaterial({ color: 0x020a26 }), glow: this.glowMat, ghost, body, core, shell };
-    const geos: Geos = {
-      pip: new THREE.CylinderGeometry(0.105, 0.105, 0.02, 28), ring: new THREE.CylinderGeometry(0.14, 0.14, 0.02, 28), glow: new THREE.PlaneGeometry(0.44, 0.44),
-      body: new RoundedBoxGeometry(1, 1, 1, 6, 0.17), core: new RoundedBoxGeometry(0.6, 0.6, 0.6, 3, 0.16), ghost: new RoundedBoxGeometry(1, 1, 1, 2, 0.17),
-      shell: new RoundedBoxGeometry(1.08, 1.08, 1.08, 4, 0.2),
-    };
-    this.dice = [0, 1].map(() => new Die(mats, geos));
-    this.dice.forEach((d) => { this.scene.add(d.root); d.ghosts.forEach((g) => this.scene.add(g)); });
+    const mats = [1, 2, 3, 4, 5, 6].map(faceMaterial);
+    const geo = new RoundedBoxGeometry(1, 1, 1, 5, 0.16);
+    const shellMat = new THREE.MeshBasicMaterial({ color: 0x1ccfff, transparent: true, opacity: 0.4, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+    const shellGeo = new RoundedBoxGeometry(1.07, 1.07, 1.07, 3, 0.19);
+    this.dice = [0, 1].map(() => new Die(geo, mats, new THREE.Mesh(shellGeo, shellMat)));
+    this.dice.forEach((d) => this.scene.add(d.root));
 
-    // A busy GPU (e.g. a heavy game running on the same PC) can take the WebGL context away: the canvas would keep
-    // its last frame (dice frozen in the air). Then the 2D dice take over with the right values.
+    // A busy GPU (e.g. a heavy game on the same PC) can take the WebGL context away: the 2D dice take over.
     this.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.fail(new Error('WebGL context lost')); });
     this.host.appendChild(this.canvas);
-    this.ro = new ResizeObserver(() => this.layout());
+    this.ro = new ResizeObserver(() => { if (this.mode === 'rest') this.layout(false); });
     this.ro.observe(this.host);
-    // the resting spot follows the «دور …» line when the centre re-flows (cheap rect check, no rendering when idle)
-    this.watch = window.setInterval(() => { if (this.mode === 'rest' && this.slotMoved()) { this.computeRest(); this.pose(this.values); this.draw(); } }, 300);
+    // follow the home spot when the centre re-flows (cheap rect check; draws only when it moved)
+    this.watch = window.setInterval(() => { if (this.mode === 'rest' && this.slotMoved()) this.layout(false); }, 120);
+    // and at once when the centre changes (the DOM change is seen before the next paint, so the dice never lag behind)
+    this.mo = new MutationObserver(() => { try { if (this.mode === 'rest') { if (this.slotMoved()) this.layout(false); } else this.follow(); } catch (e) { this.fail(e); } });
+    this.mo.observe(this.host, { childList: true, subtree: true, characterData: true });
     document.addEventListener('visibilitychange', this.onVis);
     this.layout();
     this.warmUp();
@@ -314,94 +290,74 @@ class BoardDice {
     this.slotKey = k; return true;
   }
 
-  /** the canvas covers the board centre; the camera looks down at ~35°, the centre area is the physics table */
-  private layout() {
-    const r = this.host.getBoundingClientRect();
-    if (!r.width || !r.height) return;
-    const W = r.width, Hh = r.height;
+  /** the canvas covers the home spot (the CSS dice) plus room left and right; the camera looks straight down */
+  // `repose`: put the dice back in the resting pose (new values); otherwise only follow the spot, same faces and turn
+  private layout(repose = true) {
+    const h = this.host.getBoundingClientRect(), cssDice = [...this.slot.querySelectorAll('.die3d')] as HTMLElement[];
+    const s = this.slot.getBoundingClientRect();
+    if (!h.width || !s.width || cssDice.length < 2) return;
+    this.slotKey = ''; this.slotMoved();
+    const r0 = cssDice[0].getBoundingClientRect(), r1 = cssDice[1].getBoundingClientRect(); // [0] = first value (right-hand in RTL)
+    this.px = Math.max(16, r0.width);
+    const mx = MARGIN_X * this.px;
+    const left = Math.max(0, s.left - h.left - mx), right = Math.min(h.width, s.right - h.left + mx);
+    // above / below: only the empty gap, never over the «دور …» line or the buttons
+    const spot = (this.slot.parentElement as HTMLElement) || this.slot;
+    const near = (el: Element | null, next: boolean): DOMRect | null => {
+      for (let e = el; e; e = next ? e.nextElementSibling : e.previousElementSibling) {
+        const r = e.getBoundingClientRect();
+        if (r.height > 0 && getComputedStyle(e).display !== 'none') return r;
+      }
+      return null;
+    };
+    const above = near(spot.previousElementSibling, false), below = near(spot.nextElementSibling, true);
+    const gapUp = above ? Math.max(0, s.top - above.bottom - 1) : MARGIN_Y_PX, gapDown = below ? Math.max(0, below.top - s.bottom - 1) : MARGIN_Y_PX;
+    const top = s.top - h.top - Math.min(MARGIN_Y_PX, gapUp), bottom = s.bottom - h.top + Math.min(MARGIN_Y_PX, gapDown);
+    const W = right - left, Hh = bottom - top;
+    Object.assign(this.canvas.style, { left: left + 'px', top: top + 'px', width: W + 'px', height: Hh + 'px' });
+    this.anchor = { x: s.left - h.left, y: s.top - h.top, left, top };
     this.renderer.setSize(W, Hh, false);
-    this.canvas.style.width = W + 'px'; this.canvas.style.height = Hh + 'px';
-    this.bigPx = Math.max(44, Math.min(90, Hh * 0.135, W * 0.11)); // die edge on screen while landing
-    const cam = this.cam;
-    cam.aspect = W / Hh;
-    const dist = Hh / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * this.bigPx);
-    const e = THREE.MathUtils.degToRad(90 - CAM_TILT);
-    cam.position.set(0, Math.sin(e) * dist, Math.cos(e) * dist);
-    cam.lookAt(0, 0, 0);
-    cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
-    // the table: the centre area on the plane through the dice centres, a little inside the edges
-    const m = 0.04;
-    const tl = this.toPlane(m * W, 0.06 * Hh, H), tr = this.toPlane((1 - m) * W, 0.06 * Hh, H);
-    const bl = this.toPlane(m * W, (1 - m) * Hh, H), br = this.toPlane((1 - m) * W, (1 - m) * Hh, H);
-    const x0 = Math.max(tl.x, bl.x) + 0.6, x1 = Math.min(tr.x, br.x) - 0.6;
-    let z0 = Math.max(tl.z, tr.z) + 0.9, z1 = Math.min(bl.z, br.z) - 0.6;
-    if (z1 < z0 + 1) { const zm = (z0 + z1) / 2; z0 = zm - 0.5; z1 = zm + 0.5; }
-    this.court = { x0: x0 - H, x1: x1 + H, z0: z0 - H, z1: z1 + H };
-    this.slotKey = '';
-    this.slotMoved();
-    this.computeRest();
-    if (this.mode === 'rest') this.pose(this.values);
+    const u = (v: number) => v / this.px;
+    Object.assign(this.cam, { left: -u(W) / 2, right: u(W) / 2, top: u(Hh) / 2, bottom: -u(Hh) / 2 });
+    this.cam.position.set(0, 30, 0); this.cam.up.set(0, 0, -1); this.cam.lookAt(0, 0, 0);
+    this.cam.updateProjectionMatrix(); this.cam.updateMatrixWorld(true);
+    // home spots: the centres of the (hidden) CSS dice, in table units; screen down = +z
+    const toWorld = (r: DOMRect) => new THREE.Vector3(u(r.left + r.width / 2 - h.left - left - W / 2), H, u(r.top + r.height / 2 - h.top - top - Hh / 2));
+    this.home = [toWorld(r0), toWorld(r1)];
+    this.court = { x0: -u(W) / 2, x1: u(W) / 2, z0: -u(Hh) / 2, z1: u(Hh) / 2 };
+    if (this.mode === 'rest') { if (repose) this.pose(this.values); else this.dice.forEach((d, k) => d.root.position.copy(this.home[k])); }
     this.draw();
   }
-  /** screen point (px, relative to the canvas) -> point on the horizontal plane y = h */
-  private toPlane(px: number, py: number, h: number) {
-    const r = this.host.getBoundingClientRect();
-    const ray = new THREE.Raycaster(), hit = new THREE.Vector3();
-    ray.setFromCamera(new THREE.Vector2((px / r.width) * 2 - 1, -((py / r.height) * 2 - 1)), this.cam);
-    return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -h), hit) ? hit.clone() : new THREE.Vector3();
-  }
-  /** pixels per world unit at a point (how big a die of scale 1 looks there) */
-  private ppu(p: THREE.Vector3) {
-    const r = this.host.getBoundingClientRect();
-    const a = p.clone().project(this.cam), b = p.clone().add(new THREE.Vector3(1, 0, 0)).project(this.cam);
-    return Math.hypot((b.x - a.x) * r.width / 2, (b.y - a.y) * r.height / 2);
-  }
-  /** resting spot: the #dice placeholder (next to «دور …»), two dice side by side at a readable size */
-  private computeRest() {
-    const s = this.slot.getBoundingClientRect(), h = this.host.getBoundingClientRect();
-    if (!s.width || !s.height || !h.width) return;
-    const restPx = Math.max(24, Math.min(48, s.height * 0.86, s.width / 2.5));
-    const sx = s.left - h.left + s.width / 2, sy = s.top - h.top + s.height / 2;
-    let scale = 0.5;
-    for (let k = 0; k < 2; k++) { // plane height depends on the scale: two passes settle it
-      const c = this.toPlane(sx, sy, H * scale);
-      scale = restPx / Math.max(1, this.ppu(c));
-    }
-    const c = this.toPlane(sx, sy, H * scale);
-    const gap = 0.62 * scale + 0.06 * scale;
-    this.rest.scale = scale;
-    this.rest.pos[0].set(c.x + gap, H * scale, c.z);
-    this.rest.pos[1].set(c.x - gap, H * scale, c.z);
-  }
 
-  /** dice at rest in their spot, the given values facing the camera (no throw) */
+  /** dice at rest on their home spots, the values on top, face-on and squared (no throw) */
   private pose(values: number[]) {
     this.dice.forEach((d, k) => {
-      d.blank();
-      d.root.position.copy(this.rest.pos[k]);
-      d.root.scale.setScalar(this.rest.scale);
-      d.root.quaternion.setFromEuler(new THREE.Euler(0, k ? -0.08 : 0.06, 0));
-      d.showOnTop(values[k]);
-      if (d.face >= 0) d.root.quaternion.copy(d.presentQuat(FACE_TILT));
-      d.ghosts.forEach((g) => { g.visible = false; });
+      const v = values[k] >= 1 && values[k] <= 6 ? values[k] : 1;
+      d.root.position.copy(this.home[k]);
+      d.root.quaternion.identity();
+      d.number(numbering(2, v, () => 0.3)); // face +y (index 2) on top
     });
-    this.glowMat.opacity = 0.75;
+  }
+  /** during a throw the centre can re-flow (the roll button becomes «…»): the canvas moves with the home spot */
+  private follow() {
+    const s = this.slot.getBoundingClientRect(), h = this.host.getBoundingClientRect();
+    const dx = s.left - h.left - this.anchor.x, dy = s.top - h.top - this.anchor.y;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+    this.canvas.style.left = this.anchor.left + dx + 'px';
+    this.canvas.style.top = this.anchor.top + dy + 'px';
   }
   /** resting pose with the values, drawn at once (even if animation frames are not coming) */
   private toRest() {
     this.mode = 'rest'; this.th = null; clearTimeout(this.guard);
-    this.computeRest(); this.pose(this.values);
+    this.layout(); this.pose(this.values);
     try { this.renderer.render(this.scene, this.cam); } catch { /* drawn on the next frame */ }
     this.draw();
   }
 
   // ---------------------------------------------------------------- safety
-  // Whatever happens the dice end face-up with the server's values: a throw that has not settled in 2.2 s lands at
-  // once, the hold always ends in the glide to rest, a watchdog puts them at rest if frames stop coming, and any
-  // error in the 3D path hands over to the 2D dice (fx.js) with the right values.
-  failed = false;
-  onFail: ((values: number[]) => void) | null = null;
-  private guard = 0;
+  // Whatever happens the dice end on their spot with the server's values: a throw that has not settled in 2.0 s
+  // settles at once, a watchdog puts them at rest if frames stop coming, and any error in the 3D path hands over to
+  // the 2D dice (fx.js) with the right values.
   private fail(e: unknown) {
     if (this.failed) return;
     this.failed = true;
@@ -409,20 +365,11 @@ class BoardDice {
     try { this.dispose(); } catch { /* already gone */ }
     try { this.onFail?.(this.values.slice()); } catch { /* nothing more to do */ }
   }
-  /** compile every shader at load (glass, pips, trail) — off the main thread where the browser can — so the first
-   *  throw never stalls in the air while the GPU driver compiles */
+  /** compile every shader at load so the first throw never stalls */
   private warmUp() {
     try {
-      this.dice[0].showOnTop(6);
-      this.dice.forEach((d) => d.ghosts.forEach((g) => { g.visible = true; }));
-      const done = () => {
-        try {
-          this.dice.forEach((d) => d.ghosts.forEach((g) => { g.visible = false; }));
-          if (this.mode === 'rest') this.pose(this.values);
-          this.draw();
-        } catch (e) { this.fail(e); }
-      };
       const r = this.renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<unknown> };
+      const done = () => this.draw();
       if (r.compileAsync) r.compileAsync(this.scene, this.cam).then(done, done);
       else { this.renderer.compile(this.scene, this.cam); done(); }
     } catch (e) { this.fail(e); }
@@ -431,9 +378,8 @@ class BoardDice {
     try {
       if (this.mode === 'throw' && this.th) this.land();
       if (this.mode !== 'rest') {
-        // second chance: frames are not coming at all -> straight to the resting spot
         clearTimeout(this.guard);
-        this.guard = window.setTimeout(() => { try { if (this.mode !== 'rest') this.toRest(); } catch (e) { this.fail(e); } }, PRESENT_MS + HOLD_MS + GLIDE_MS + 600);
+        this.guard = window.setTimeout(() => { try { if (this.mode !== 'rest') this.toRest(); } catch (e) { this.fail(e); } }, SETTLE_MS + 600);
         this.draw();
       }
     } catch (e) { this.fail(e); }
@@ -449,12 +395,13 @@ class BoardDice {
     this.onImpact = opts.onImpact || null;
     try {
       if (document.hidden || calm()) { this.toRest(); if (this.onImpact) this.onImpact(); return; }
-      // land in an empty part of the centre (never on the buttons, chips, log or panels)
-      const s = this.findSpot();
-      const th = simulate(this.court, opts.from || { x: 0, y: 1 }, s.aim);
+      this.layout();
+      const from = opts.from || { x: 0, y: 1 };
+      const th = simulate(this.court, this.home, from.x < -1); // a thrower on the left throws from the left
       if (!th || !th.count || th.frames.some((f) => !Number.isFinite(f[(th.count - 1) * 7]))) throw new Error('bad throw');
-      this.spot = s.px; this.aim = s.aim; this.th = th;
-      this.dice.forEach((d) => { d.blank(); d.root.scale.setScalar(1); }); // every face blank before anything moves
+      // number each die so that the face that will end on top carries the server's value
+      this.dice.forEach((d, k) => d.number(numbering(th.up[k], this.values[k] >= 1 && this.values[k] <= 6 ? this.values[k] : 1, Math.random)));
+      this.th = th;
       this.impactDone = false;
       this.mode = 'throw'; this.t0 = performance.now();
       this.dice.forEach((d, k) => d.frame(th.frames[k], 0));
@@ -464,24 +411,15 @@ class BoardDice {
     } catch (e) { this.fail(e); }
   }
 
-  /** the throw is over: pips on the face that is up, then square up and line up side by side */
+  /** the throw is over (the right numbers are already on top): slide onto the exact spots and square up */
   private land() {
     const t = this.th!;
-    this.dice.forEach((d, k) => { d.frame(t.frames[k], t.count - 1); d.ghosts.forEach((g) => { g.visible = false; }); });
-    // first value on the right-hand die (the board reads right to left)
-    const order = this.dice[0].root.position.x >= this.dice[1].root.position.x ? [0, 1] : [1, 0];
-    this.dice[order[0]].showOnTop(this.values[0]);
-    this.dice[order[1]].showOnTop(this.values[1]);
-    const mid = this.dice[0].root.position.clone().add(this.dice[1].root.position).multiplyScalar(0.5);
-    const cc = new THREE.Vector3(this.aim.x, H, this.aim.z);
-    mid.lerp(cc, 0.92); mid.y = H;
     this.dice.forEach((d, k) => {
+      d.frame(t.frames[k], t.count - 1);
       this.from.pos[k].copy(d.root.position); this.from.quat[k].copy(d.root.quaternion);
-      this.to.quat[k].copy(d.presentQuat(FACE_TILT));
-      this.to.pos[k].copy(mid).add(new THREE.Vector3(order[0] === k ? 0.72 : -0.72, 0, 0));
+      this.to.quat[k].copy(d.squareQuat());
     });
-    this.glowMat.opacity = 0;
-    this.mode = 'present'; this.t0 = performance.now();
+    this.mode = 'settle'; this.t0 = performance.now();
   }
 
   private loop = () => {
@@ -490,61 +428,28 @@ class BoardDice {
   private step() {
     this.raf = 0;
     if (document.hidden || this.failed) return;
+    if (this.mode !== 'rest') this.follow();
     const now = performance.now();
     if (this.mode === 'throw' && this.th) {
       // window.__tharwaDiceSlow (tests only) plays the throw in slow motion so single frames can be checked
       const slow = Number((window as any).__tharwaDiceSlow) || 1;
       const t = this.th, i = Math.floor(((now - this.t0) / 1000) / STEP / slow);
       if (!this.impactDone && i >= t.impact) { this.impactDone = true; try { this.onImpact?.(); } catch { /* sound only */ } }
-      if (i >= t.count - 1 || (slow === 1 && now - this.t0 > 2000)) this.land(); // never longer than 2 s in the air
-      else {
-        this.dice.forEach((d, k) => {
-          d.frame(t.frames[k], i);
-          // a short trail while the die is flying fast
-          const f = t.frames[k], o = i * 7, p = Math.max(0, i - 3) * 7;
-          const fast = Math.hypot(f[o] - f[p], f[o + 1] - f[p + 1], f[o + 2] - f[p + 2]) > 0.22;
-          d.ghosts.forEach((g, n) => { g.visible = fast; if (fast) d.frame(f, i - (n + 1) * 3, g); });
-        });
-      }
+      if (i >= t.count - 1 || (slow === 1 && now - this.t0 > 2000)) this.land(); // never longer than 2 s
+      else this.dice.forEach((d, k) => d.frame(t.frames[k], i));
     }
-    if (this.mode === 'present') {
-      const k = Math.min(1, (now - this.t0) / PRESENT_MS), e = ease(k);
+    if (this.mode === 'settle') {
+      const k = Math.min(1, (now - this.t0) / SETTLE_MS), e = ease(k);
       this.dice.forEach((d, j) => {
         d.root.quaternion.copy(this.from.quat[j]).slerp(this.to.quat[j], e);
-        d.root.position.lerpVectors(this.from.pos[j], this.to.pos[j], e);
-        d.root.position.y = H + 0.12 * Math.sin(e * Math.PI / 2);
+        d.root.position.lerpVectors(this.from.pos[j], this.home[j], e);
       });
-      this.glowMat.opacity = 0.75 * e;
-      if (k >= 1) { this.mode = 'hold'; this.t0 = now; }
-    }
-    // the centre can change under the dice (e.g. the buttons come back after the walk): if they would cover
-    // anything, they leave for their resting spot at once
-    if (this.mode === 'hold' && now >= this.checkAt) {
-      this.checkAt = now + 120;
-      if (this.covering()) { this.mode = 'hold'; this.t0 = now - HOLD_MS; }
-    }
-    if (this.mode === 'hold' && now - this.t0 >= HOLD_MS) {
-      this.computeRest();
-      // the die on the right (it shows the first value) goes to the right-hand resting spot: no crossing, no pip swap
-      if (this.dice[0].root.position.x < this.dice[1].root.position.x) this.dice.reverse();
-      this.dice.forEach((d, j) => { this.from.pos[j].copy(d.root.position); });
-      this.mode = 'glide'; this.t0 = now;
-    }
-    if (this.mode === 'glide') {
-      const k = Math.min(1, (now - this.t0) / GLIDE_MS), e = easeIO(k);
-      const sc = 1 + (this.rest.scale - 1) * e;
-      this.dice.forEach((d, j) => {
-        d.root.position.lerpVectors(this.from.pos[j], this.rest.pos[j], e);
-        d.root.position.y += Math.sin(e * Math.PI) * 0.5; // a small lift on the way
-        d.root.scale.setScalar(sc);
-      });
-      if (k >= 1) { this.mode = 'rest'; this.pose(this.values); this.slotKey = ''; this.slotMoved(); }
+      if (k >= 1) { this.mode = 'rest'; this.th = null; clearTimeout(this.guard); if (this.slotMoved()) this.layout(false); }
     }
     this.renderer.render(this.scene, this.cam);
     if (this.mode !== 'rest') this.draw();
   }
-  // requestAnimationFrame can be slowed down a lot (a window in the background): a timer keeps the throw moving,
-  // so the dice never sit on top of the buttons for longer than planned
+  // requestAnimationFrame can be slowed down a lot (a window in the background): a timer keeps the throw moving
   private draw() {
     if (this.raf || document.hidden) return;
     this.raf = requestAnimationFrame(this.loop);
@@ -552,61 +457,8 @@ class BoardDice {
     if (this.mode !== 'rest') this.kick = window.setTimeout(() => { if (this.raf) { cancelAnimationFrame(this.raf); this.loop(); } }, 120);
   }
 
-  // ---------------------------------------------------------------- where to land
-  /** rectangles (px, relative to the centre) the dice must not cover; `predict` reserves room for the action buttons */
-  private obstacles(predict: boolean) {
-    const h = this.host.getBoundingClientRect(), out: { l: number; t: number; r: number; b: number }[] = [];
-    const sel = '#cTop > *, .dice-spot, .offer-chip, #cActions button, #cActions .deed, #cActions .debt-box, #cActions .auction, #cActions .hint, '
-      + '#cActions .offer2, #cActions .build-hint, #cActions .debt, #cActions .spectator, #cLog > div, .card2, .rent-pill, .banner, .winner, .emblem, .sub';
-    this.host.querySelectorAll(sel).forEach((el) => {
-      const r = el.getBoundingClientRect();
-      if (r.width && r.height) out.push({ l: r.left - h.left, t: r.top - h.top, r: r.right - h.left, b: r.bottom - h.top });
-    });
-    const a = predict && this.host.querySelector('#cActions');
-    if (a) {
-      const r = a.getBoundingClientRect(), cx = (r.left + r.right) / 2 - h.left, cy = (r.top + r.bottom) / 2 - h.top;
-      const w = Math.max(r.width, 360) / 2, hh = Math.max(r.height, 150) / 2;
-      out.push({ l: cx - w, t: cy - hh, r: cx + w, b: cy + hh });
-    }
-    return out;
-  }
-  private foot() { return { w: this.bigPx * 2.75, h: this.bigPx * 1.5 }; }
-  private overlap(cx: number, cy: number, obs: { l: number; t: number; r: number; b: number }[], pad = 8) {
-    const f = this.foot(), l = cx - f.w / 2 - pad, r = cx + f.w / 2 + pad, t = cy - f.h / 2 - pad, b = cy + f.h / 2 + pad;
-    let area = 0;
-    for (const o of obs) area += Math.max(0, Math.min(r, o.r) - Math.max(l, o.l)) * Math.max(0, Math.min(b, o.b) - Math.max(t, o.t));
-    return area;
-  }
-  /** the empty place of the centre closest to its middle that fits both dice (screen px + the matching table point) */
-  private findSpot() {
-    const h = this.host.getBoundingClientRect(), f = this.foot(), obs = this.obstacles(true);
-    const W = h.width, Hh = h.height, m = 6;
-    const x0 = m + f.w / 2, x1 = W - m - f.w / 2, y0 = Hh * 0.06 + f.h / 2, y1 = Hh - m - f.h / 2;
-    let best = { px: { x: W / 2, y: Hh / 2 }, aim: { x: 0, z: 0 } }, bestScore = Infinity;
-    for (let i = 0; i <= 12; i++) {
-      for (let j = 0; j <= 10; j++) {
-        const x = x1 > x0 ? x0 + ((x1 - x0) * i) / 12 : W / 2, y = y1 > y0 ? y0 + ((y1 - y0) * j) / 10 : Hh / 2;
-        // the dice must also stay inside the table: judge the spot where they will really end up
-        const w = this.toPlane(x, y, H);
-        const aim = { x: Math.min(this.court.x1 - 1.25, Math.max(this.court.x0 + 1.25, w.x)), z: Math.min(this.court.z1 - 0.8, Math.max(this.court.z0 + 0.8, w.z)) };
-        const p = new THREE.Vector3(aim.x, H, aim.z).project(this.cam);
-        const px = { x: (p.x + 1) / 2 * W, y: (1 - p.y) / 2 * Hh };
-        const score = this.overlap(px.x, px.y, obs) * 1000 + Math.hypot((px.x - W / 2) * 0.8, px.y - Hh * 0.45);
-        if (score < bestScore) { bestScore = score; best = { px, aim }; }
-      }
-    }
-    return best;
-  }
-  /** are the landed dice on top of something now? (their real outline on screen) */
-  private covering() {
-    const h = this.host.getBoundingClientRect(), r = this.bigPx * 0.62;
-    const pts = this.dice.map((d) => { const p = d.root.position.clone().project(this.cam); return { x: (p.x + 1) / 2 * h.width, y: (1 - p.y) / 2 * h.height }; });
-    const l = Math.min(pts[0].x, pts[1].x) - r, rr = Math.max(pts[0].x, pts[1].x) + r, t = Math.min(pts[0].y, pts[1].y) - r, b = Math.max(pts[0].y, pts[1].y) + r;
-    return this.obstacles(false).some((o) => Math.min(rr, o.r) > Math.max(l, o.l) && Math.min(b, o.b) > Math.max(t, o.t));
-  }
-
   dispose() {
-    cancelAnimationFrame(this.raf); this.ro?.disconnect(); clearInterval(this.watch); clearTimeout(this.kick); clearTimeout(this.guard);
+    cancelAnimationFrame(this.raf); this.ro?.disconnect(); this.mo?.disconnect(); clearInterval(this.watch); clearTimeout(this.kick); clearTimeout(this.guard);
     document.removeEventListener('visibilitychange', this.onVis);
     this.renderer.dispose(); this.canvas.remove();
   }
