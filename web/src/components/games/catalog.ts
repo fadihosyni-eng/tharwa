@@ -8,6 +8,7 @@ import ludoArt from '../../assets/games/ludo.svg?url';
 import tarneebArt from '../../games/cards/art/tarneeb.svg?url';
 import fourHundredArt from '../../games/cards/art/400.svg?url';
 import trixArt from '../../games/cards/art/trix.svg?url';
+import konkanArt from '../../games/cards/art/konkan.svg?url';
 
 export type GameInfo = {
   slug: string;
@@ -129,6 +130,21 @@ export const CATALOG: GameInfo[] = [
       ['shield', 'الشيخ −75، كل بنت −25، كل ديناري −10، كل لمّة −15 — هرّب منهن.'],
       ['bolt', 'دبّل الشيخ أو البنات: اللي بياكلها بيدفع دبل وإنت بتربح.'],
       ['chart', 'بالتركس نزّل ورقك على الصفوف وطلاع أول: +200.'],
+    ],
+  },
+  {
+    slug: 'konkan',
+    name: 'كونكان',
+    description: 'رامي بشدّتين وجوكرين: نزّل 51 بأول نزلة وسكّر قبل الكل.',
+    pitch: 'لعبة الصبر والحساب بالشام والخليج: لمّ سلاسل ومجموعات، انطر لتجمع 51 بأول نزلة، ركّب ورقك على تنزيلات غيرك، وسكّر قبلهم. وإذا نزّلت كل ورقك بضربة وحدة… هاند ودبل عليهم.',
+    minPlayers: 2, maxPlayers: 4, bots: true, tags: ['party', 'cards', 'strategy'],
+    art: konkanArt, accent: '#3fd0ff', aliases: ['konkan', 'conquian', 'concan', 'kankan', 'كونكان', 'كنكان', 'كونكين', 'رامي', 'rummy', 'شدة', 'ورق', 'cards'], duration: '20–40 د',
+    howto: [
+      ['users', 'من 2 لـ 4 لاعبين، شدّتين وجوكرين، و14 ورقة لكل واحد.'],
+      ['cards', 'اسحب أو خود الورقة المرمية (بس إذا رح تنزّلها)، وبالآخر ارمي ورقة.'],
+      ['chart', 'لمّ سلاسل من نفس النقشة ومجموعات من نفس الرقم — والجوكر بيكمّل أي وحدة.'],
+      ['gavel', 'أول نزلة لازم تكون 51 نقطة ع الأقل، وبعدها ركّب على كل التنزيلات.'],
+      ['trophy', 'سكّر برمي آخر ورقة: −30 إلك، والباقي عليهم ورقهم — أقل مجموع بعد 5 جولات بيربح.'],
     ],
   },
 ];

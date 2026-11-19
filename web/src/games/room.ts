@@ -9,6 +9,7 @@ import { createXO } from './xo';
 import { createConnect4 } from './connect4';
 import { createLudo } from './ludo';
 import { createCardGame } from './cards/table';
+import { createKonkan } from './cards/konkan';
 // Team card games report both winning partners in result.winners.
 const isWinner = (r: Room, pid: string | null | undefined) => !!r.result && !!pid && (r.result.winner === pid || ((r.result as { winners?: string[] }).winners || []).includes(pid));
 
@@ -132,6 +133,7 @@ function roomPage(code: string) {
   const makeBoard = () => {
     if (slug === 'xo') return createXO(boardEl, under, ctx);
     if (slug === 'connect4') return createConnect4(boardEl, under, ctx);
+    if (slug === 'konkan') return createKonkan(boardEl, under, ctx);
     if (meta.cards) return createCardGame(slug, boardEl, under, ctx);
     return createLudo(boardEl, under, ctx);
   };
@@ -356,7 +358,7 @@ function roomPage(code: string) {
       : r.game === 'xo'
         ? `<div class="mg-opt"><span class="mg-label">المباراة</span><div class="mg-seg" data-opt="bestOf">${[[1, 'جولة'], [3, 'من 3'], [5, 'من 5']].map(([v, l]) => `<button type="button" data-v="${v}" aria-checked="${(r.opts.bestOf || 1) === v}">${l}</button>`).join('')}</div></div>`
         : meta.cards // card games: the room's numeric option is the target score; partners sit 1+3 and 2+4
-          ? `${meta.cards.targets ? `<div class="mg-opt"><span class="mg-label">اللعب للـ</span><div class="mg-seg" data-opt="bestOf">${meta.cards.targets.map((v) => `<button type="button" data-v="${v}" aria-checked="${(meta.cards!.targets!.includes(r.opts.bestOf || 0) ? r.opts.bestOf : 41) === v}">${v}</button>`).join('')}</div></div>` : ''}${meta.cards.teams ? '<p class="muted mg-small">المقعد 1 و3 فريق، و2 و4 فريق. بدّك صاحبك شريكك؟ ضيف كمبيوتر قبل ما يفوت.</p>' : ''}`
+          ? `${meta.cards.targets ? `<div class="mg-opt"><span class="mg-label">${meta.cards.optLabel || 'اللعب للـ'}</span><div class="mg-seg" data-opt="bestOf">${meta.cards.targets.map((v) => `<button type="button" data-v="${v}" aria-checked="${(meta.cards!.targets!.includes(r.opts.bestOf || 0) ? r.opts.bestOf : meta.cards!.optDefault || 41) === v}">${v}</button>`).join('')}</div></div>` : ''}${meta.cards.teams ? '<p class="muted mg-small">المقعد 1 و3 فريق، و2 و4 فريق. بدّك صاحبك شريكك؟ ضيف كمبيوتر قبل ما يفوت.</p>' : ''}`
           : '';
     return `${opts}<div class="mg-ov-btns">
       <button type="button" class="btn" data-lobby="addBot" ${full ? 'disabled' : ''}>${ui('robot')}ضيف كمبيوتر</button>
@@ -436,6 +438,7 @@ function roomPage(code: string) {
       <span class="mg-res-ico">${ui(res.draw ? 'handshake' : won ? 'trophy' : 'medal')}</span>
       <h2>${title}</h2>
       ${r.game === 'xo' && r.state && r.state.bestOf > 1 ? `<p class="muted">النتيجة: ${[0, 1].map((k) => `<bdi>${esc((ctx.player(r.state.seats[k]) || { name: k ? 'O' : 'X' }).name)}: <b>${r.state.score[k]}</b></bdi>`).join(' · ')}</p>` : ''}
+      ${r.game === 'konkan' && r.state ? `<p class="muted">المجموع (الأقل بيربح): ${r.state.seats.map((pid: string, k: number) => `<bdi>${esc((ctx.player(pid) || { name: '' }).name)}: <b><bdi>${r.state.scores[k] < 0 ? '−' + Math.abs(r.state.scores[k]) : r.state.scores[k]}</bdi></b></bdi>`).join(' · ')}</p>` : ''}
       ${rank}${pts}
       ${voted && waiting.length ? `<p class="muted mg-small">ناطرين: ${esc(waiting.join('، '))}</p>` : ''}
       <div class="mg-ov-btns">${again}<button type="button" class="btn" data-look>${ui('eye')}شوف اللوح</button><a class="btn btn-ghost" href="/games">${ui('gamepad')}ألعاب تانية</a></div>

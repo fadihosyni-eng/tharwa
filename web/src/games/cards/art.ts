@@ -107,6 +107,22 @@ export function backSVG() {
   <text x="125" y="186" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="76" fill="url(#chrome)" stroke="#0a1730" stroke-width="1.5">S</text>
   <text x="125" y="268" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="30" letter-spacing="3" fill="url(#chrome)">SERVA</text></svg>`;
 }
+// The joker («الجوكر», كونكان): same glass card, a crystal jester cap with chrome bells, «JOKER» down the corners.
+export function jokerSVG() {
+  const letters = (x: number) => 'JOKER'.split('').map((ch, i) => `<text x="${x}" y="${50 + i * 25}" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="22" fill="url(#chrome)" stroke="#0a1730" stroke-width="1">${ch}</text>`).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350">${DEFS('H')}${FRAME}
+  <circle cx="125" cy="168" r="86" fill="url(#glow)"/>
+  <ellipse cx="125" cy="170" rx="92" ry="30" fill="none" stroke="#3fd0ff" stroke-width="1.6" opacity=".45" transform="rotate(-14 125 170)"/>
+  <path d="M74 214C72 174 62 144 50 120C86 128 101 150 108 172C110 132 118 98 125 74C132 98 140 132 142 172C149 150 164 128 200 120C188 144 178 174 176 214Z" fill="url(#pip)" stroke="#d9ecff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M74 214C72 174 62 144 50 120C86 128 101 150 108 172C110 132 118 98 125 74C132 98 140 132 142 172C149 150 164 128 200 120C188 144 178 174 176 214Z" fill="url(#gloss)"/>
+  <circle cx="50" cy="120" r="10" fill="url(#chrome)" stroke="#0a1730" stroke-width="1.2"/><circle cx="125" cy="72" r="11" fill="url(#chrome)" stroke="#0a1730" stroke-width="1.2"/><circle cx="200" cy="120" r="10" fill="url(#chrome)" stroke="#0a1730" stroke-width="1.2"/>
+  <rect x="68" y="208" width="114" height="20" rx="7" fill="url(#chrome)" stroke="#0a1730" stroke-width="1.2"/>
+  ${pip('D', 96, 218, 13)}${pip('S', 125, 218, 13)}${pip('D', 154, 218, 13)}
+  <text x="125" y="270" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="32" letter-spacing="4" fill="url(#chrome)" stroke="#0a1730" stroke-width="1.2">JOKER</text>
+  <text x="125" y="300" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="12" letter-spacing="4" fill="url(#chrome)" opacity=".85">SERVA</text>
+  ${letters(30)}<g transform="rotate(180 125 175)">${letters(30)}</g></svg>`;
+}
+export const isJokerCard = (c: string) => c === 'XX';
 
 const svgUrl = (svg: string) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 const cache = new Map<string, string>();
@@ -115,7 +131,7 @@ const broken = new Set<string>();
 export function cardSrc(card: string) {
   let u = cache.get(card);
   if (u) return u;
-  u = HAVE.has(card) && !broken.has(card) ? `/cards/${card}.webp` : svgUrl(card === 'back' ? backSVG() : faceSVG(card));
+  u = HAVE.has(card) && !broken.has(card) ? `/cards/${card}.webp` : svgUrl(card === 'back' ? backSVG() : isJokerCard(card) ? jokerSVG() : faceSVG(card));
   cache.set(card, u);
   return u;
 }
@@ -137,7 +153,7 @@ export function preloadCards() {
 /** <img> for a card face (or the back when `card` is '' / 'back'). */
 export function cardImg(card: string, cls = '') {
   const name = card && card !== 'back' ? card : 'back';
-  const alt = name === 'back' ? '' : `${rankLabel(name)} ${SUIT_AR[name[1]]}`;
+  const alt = name === 'back' ? '' : isJokerCard(name) ? 'جوكر' : `${rankLabel(name)} ${SUIT_AR[name[1]]}`;
   return `<img class="ct-face ${cls}" src="${cardSrc(name)}" data-card="${name}" alt="${alt}" draggable="false">`;
 }
 /** Small inline suit symbol for text (status, panels). */

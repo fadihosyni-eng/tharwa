@@ -35,9 +35,8 @@
   // The CSS dice below stay as the fallback (no WebGL, script failed, or `?dice2d` in the URL).
   let d3Load = null;
   function want3D() {
-    // Hotfix 2026-11-19: the 3D dice froze mid-air in real browsers, so they are OFF by default until fixed.
-    // Opt in for testing with `?dice3d` in the URL.
-    if (!/[?&]dice3d\b/.test(location.search)) return false;
+    // 3D dice are ON by default again (2026-11-19, after the freeze fix: context-loss handler + watchdog
+    // fall back to the CSS dice). `?dice2d` in the URL forces the CSS dice.
     if (/[?&]dice2d\b/.test(location.search)) return false;
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
   }
@@ -54,7 +53,8 @@
     });
     d3Load.then((M) => {
       if (!root.isConnected) return;
-      const d = M.mount(root);
+      // if the 3D dice ever fail, they hand over to these CSS dice with the right values (and stay off for this page)
+      const d = M.mount(root, (vals) => { off3D(root); setDice(root, vals, false); });
       if (!d) return;
       root._d3 = d;
       root.classList.add('d3');
@@ -62,6 +62,12 @@
     }).catch(() => { /* keep the CSS dice */ });
   }
 
+  function off3D(root) {
+    const d = root._d3;
+    root._d3 = null;
+    root.classList.remove('d3');
+    try { if (d && !d.failed) d.dispose(); } catch (e) { /* already gone */ }
+  }
   let spins = 0;
   // opts (board dice): { from: {x, y} screen direction of the thrower from the board centre, onImpact() at the first bounce }
   function setDice(root, values, animate, opts = {}) {
@@ -69,7 +75,11 @@
     if (root.id === 'dice') {
       root._vals = values.map(val);
       attach3D(root);
-      if (root._d3) { if (animate) root._d3.roll(root._vals, opts); else root._d3.show(root._vals); return; }
+      if (root._d3) {
+        try { if (animate) root._d3.roll(root._vals, opts); else root._d3.show(root._vals); } catch (e) { off3D(root); }
+        if (root._d3) return; // still 3D (it may have just failed and switched to the CSS dice below)
+        animate = false;
+      }
     }
     if (animate && opts.onImpact) opts.onImpact(); // CSS dice: the sound goes with the tumble
     if (animate && calm()) animate = false;

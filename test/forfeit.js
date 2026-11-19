@@ -112,7 +112,7 @@ async function table(game, humans, extra = {}) {
     assert.strictEqual(st.result.ranking[st.result.ranking.length - 1], me.pid, 'ludo vs bots: last');
   }
   // ---------------------------------------------------------------- card games
-  for (const game of ['tarneeb', '400', 'trix']) {
+  for (const game of ['tarneeb', '400', 'trix', 'konkan']) {
     const { code, list: [a, b] } = await table(game, 2);
     assert.strictEqual((await act(code, a, 'forfeit')).status, 200);
     let st = await snapshot(code, b);
@@ -131,5 +131,5 @@ async function table(game, humans, extra = {}) {
     assert.strictEqual((await act(code, b, 'leave')).status, 200);
     assert.strictEqual((await call('/api/g/room?code=' + code)).status, 404, game + ': room closed when everyone left');
   }
-  console.log('FORFEIT OK — xo, connect4, ludo, tarneeb, 400, trix');
+  console.log('FORFEIT OK — xo, connect4, ludo, tarneeb, 400, trix, konkan');
 })().catch((e) => { console.error(e); process.exit(1); });

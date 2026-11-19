@@ -114,7 +114,7 @@ function oneThrow(c: Court, from: From, aim: Aim, rnd: () => number): Throw {
 }
 function simulate(c: Court, from: From, aim: Aim): Throw {
   let best: Throw | null = null;
-  for (let a = 0; a < 40; a++) {
+  for (let a = 0; a < 24; a++) { // (each try is a few ms; 24 keeps the click-to-throw delay short)
     const t = oneThrow(c, from, aim, Math.random), s = t.count * STEP;
     if (t.ok && s >= 0.75 && s <= 1.45) return t;
     if (t.ok && (!best || !best.ok || Math.abs(s - 1.1) < Math.abs(best.count * STEP - 1.1))) best = t;
@@ -133,22 +133,6 @@ function glowTexture() {
 
 type Mats = { pip: THREE.Material; ring: THREE.Material; glow: THREE.Material; ghost: THREE.MeshBasicMaterial[]; body: THREE.Material; core: THREE.Material; shell: THREE.Material };
 type Geos = { pip: THREE.BufferGeometry; ring: THREE.BufferGeometry; glow: THREE.BufferGeometry; body: THREE.BufferGeometry; core: THREE.BufferGeometry; ghost: THREE.BufferGeometry; shell: THREE.BufferGeometry };
-
-/** dark studio for reflections: black room, one white soft-box above, cyan strips on the sides and behind */
-function studioEnv() {
-  const s = new THREE.Scene();
-  s.background = new THREE.Color(0x010409);
-  const box = (w: number, h: number, color: number, power: number, x: number, y: number, z: number) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(power), side: THREE.DoubleSide }));
-    m.position.set(x, y, z); m.lookAt(0, 0, 0); s.add(m);
-  };
-  box(5, 1.4, 0xffffff, 5, 0, 7, 3);
-  box(1.2, 6, 0x2fe2ff, 3.2, -7, 2, 1);
-  box(1.2, 6, 0x00b4ff, 3.2, 7, 2, -1);
-  box(9, 0.7, 0x2fe2ff, 2.2, 0, 1.5, -7);
-  box(3, 0.6, 0xffffff, 2.5, 2, 4, 6);
-  return s;
-}
 
 class Die {
   root = new THREE.Group();
@@ -252,21 +236,20 @@ class BoardDice {
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'dice3d-canvas';
     this.canvas.setAttribute('aria-hidden', 'true');
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true, powerPreference: 'default' });
+    this.renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1)); // light on the GPU (the owner often has a heavy game running)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NeutralToneMapping; // keeps the blue blue (ACES turned it lavender)
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    const pm = new THREE.PMREMGenerator(this.renderer);
-    // a dark studio with a few bright soft-boxes: the glass reflects mostly darkness plus sharp white/cyan highlights
-    // (a bright room environment is what made the dice look pale / pastel)
-    this.scene.environment = pm.fromScene(studioEnv(), 0.02).texture;
-    pm.dispose();
+    this.renderer.shadowMap.type = THREE.PCFShadowMap; // (PCFSoft is gone in this three version; it fell back to this anyway)
+    // No environment map: building one (PMREM) blocked the page for 1-2 s on load, and on a busy GPU that stall can
+    // land during a throw (dice frozen in the air). Plain lights give the highlights instead.
+    const spec = new THREE.PointLight(0xffffff, 60, 40); spec.position.set(1.5, 9, 7); this.scene.add(spec);
+    const side = new THREE.PointLight(0x00b4ff, 30, 30); side.position.set(6, 3, 2); this.scene.add(side);
     const key = new THREE.DirectionalLight(0xeaf8ff, 2.6);
     key.position.set(3, 12, 7); key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024); key.shadow.radius = 6; key.shadow.bias = -0.0006;
+    key.shadow.mapSize.set(512, 512); key.shadow.radius = 4; key.shadow.bias = -0.0006;
     Object.assign(key.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
     this.scene.add(key, key.target, new THREE.HemisphereLight(0x5fc8ff, 0x020818, 0.28));
     const rim = new THREE.PointLight(0x2fe2ff, 40, 30); rim.position.set(-5, 5, -4); this.scene.add(rim);
@@ -275,10 +258,10 @@ class BoardDice {
 
     // deep sapphire crystal like the owner's blue cards: dark navy glass, strong clear-coat highlights,
     // neon-cyan bevelled edges (a fresnel glow added to the shader) and a dim cyan core inside
-    const body = new THREE.MeshPhysicalMaterial({
-      color: 0x07205e, roughness: 0.12, metalness: 0.15, ior: 1.5, transparent: true, opacity: 0.95,
-      clearcoat: 1, clearcoatRoughness: 0.03, envMapIntensity: 0.9, specularIntensity: 1,
-      emissive: 0x020c33, emissiveIntensity: 1, iridescence: 0.15, iridescenceIOR: 1.3,
+    // MeshStandardMaterial (not Physical): a much smaller shader, so it compiles fast even on a busy GPU
+    const body = new THREE.MeshStandardMaterial({
+      color: 0x07205e, roughness: 0.1, metalness: 0.35, transparent: true, opacity: 0.95,
+      envMapIntensity: 1.1, emissive: 0x020c33, emissiveIntensity: 1,
     });
     // neon edges: light the bevels (where two local coordinates are both near the surface) + a faint fresnel rim
     body.onBeforeCompile = (sh) => {
@@ -307,6 +290,9 @@ class BoardDice {
     this.dice = [0, 1].map(() => new Die(mats, geos));
     this.dice.forEach((d) => { this.scene.add(d.root); d.ghosts.forEach((g) => this.scene.add(g)); });
 
+    // A busy GPU (e.g. a heavy game running on the same PC) can take the WebGL context away: the canvas would keep
+    // its last frame (dice frozen in the air). Then the 2D dice take over with the right values.
+    this.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.fail(new Error('WebGL context lost')); });
     this.host.appendChild(this.canvas);
     this.ro = new ResizeObserver(() => this.layout());
     this.ro.observe(this.host);
@@ -314,6 +300,7 @@ class BoardDice {
     this.watch = window.setInterval(() => { if (this.mode === 'rest' && this.slotMoved()) { this.computeRest(); this.pose(this.values); this.draw(); } }, 300);
     document.addEventListener('visibilitychange', this.onVis);
     this.layout();
+    this.warmUp();
   }
 
   private onVis = () => {
@@ -400,23 +387,81 @@ class BoardDice {
     });
     this.glowMat.opacity = 0.75;
   }
-  private toRest() { this.mode = 'rest'; this.th = null; this.computeRest(); this.pose(this.values); this.draw(); }
+  /** resting pose with the values, drawn at once (even if animation frames are not coming) */
+  private toRest() {
+    this.mode = 'rest'; this.th = null; clearTimeout(this.guard);
+    this.computeRest(); this.pose(this.values);
+    try { this.renderer.render(this.scene, this.cam); } catch { /* drawn on the next frame */ }
+    this.draw();
+  }
 
-  show(values: number[]) { this.values = values.slice(0, 2); this.toRest(); }
+  // ---------------------------------------------------------------- safety
+  // Whatever happens the dice end face-up with the server's values: a throw that has not settled in 2.2 s lands at
+  // once, the hold always ends in the glide to rest, a watchdog puts them at rest if frames stop coming, and any
+  // error in the 3D path hands over to the 2D dice (fx.js) with the right values.
+  failed = false;
+  onFail: ((values: number[]) => void) | null = null;
+  private guard = 0;
+  private fail(e: unknown) {
+    if (this.failed) return;
+    this.failed = true;
+    console.warn('3D dice off:', e);
+    try { this.dispose(); } catch { /* already gone */ }
+    try { this.onFail?.(this.values.slice()); } catch { /* nothing more to do */ }
+  }
+  /** compile every shader at load (glass, pips, trail) — off the main thread where the browser can — so the first
+   *  throw never stalls in the air while the GPU driver compiles */
+  private warmUp() {
+    try {
+      this.dice[0].showOnTop(6);
+      this.dice.forEach((d) => d.ghosts.forEach((g) => { g.visible = true; }));
+      const done = () => {
+        try {
+          this.dice.forEach((d) => d.ghosts.forEach((g) => { g.visible = false; }));
+          if (this.mode === 'rest') this.pose(this.values);
+          this.draw();
+        } catch (e) { this.fail(e); }
+      };
+      const r = this.renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<unknown> };
+      if (r.compileAsync) r.compileAsync(this.scene, this.cam).then(done, done);
+      else { this.renderer.compile(this.scene, this.cam); done(); }
+    } catch (e) { this.fail(e); }
+  }
+  private watchdog = () => {
+    try {
+      if (this.mode === 'throw' && this.th) this.land();
+      if (this.mode !== 'rest') {
+        // second chance: frames are not coming at all -> straight to the resting spot
+        clearTimeout(this.guard);
+        this.guard = window.setTimeout(() => { try { if (this.mode !== 'rest') this.toRest(); } catch (e) { this.fail(e); } }, PRESENT_MS + HOLD_MS + GLIDE_MS + 600);
+        this.draw();
+      }
+    } catch (e) { this.fail(e); }
+  };
+
+  show(values: number[]) {
+    this.values = values.slice(0, 2);
+    try { this.toRest(); } catch (e) { this.fail(e); }
+  }
 
   roll(values: number[], opts: RollOpts = {}) {
     this.values = values.slice(0, 2);
     this.onImpact = opts.onImpact || null;
-    if (document.hidden || calm()) { this.show(values); if (this.onImpact) this.onImpact(); return; }
-    this.dice.forEach((d) => { d.blank(); d.root.scale.setScalar(1); }); // every face blank before anything moves
-    // land in an empty part of the centre (never on the buttons, chips, log or panels)
-    const s = this.findSpot();
-    this.spot = s.px; this.aim = s.aim;
-    this.th = simulate(this.court, opts.from || { x: 0, y: 1 }, this.aim);
-    this.impactDone = false;
-    this.mode = 'throw'; this.t0 = performance.now();
-    this.dice.forEach((d, k) => d.frame(this.th!.frames[k], 0));
-    this.draw();
+    try {
+      if (document.hidden || calm()) { this.toRest(); if (this.onImpact) this.onImpact(); return; }
+      // land in an empty part of the centre (never on the buttons, chips, log or panels)
+      const s = this.findSpot();
+      const th = simulate(this.court, opts.from || { x: 0, y: 1 }, s.aim);
+      if (!th || !th.count || th.frames.some((f) => !Number.isFinite(f[(th.count - 1) * 7]))) throw new Error('bad throw');
+      this.spot = s.px; this.aim = s.aim; this.th = th;
+      this.dice.forEach((d) => { d.blank(); d.root.scale.setScalar(1); }); // every face blank before anything moves
+      this.impactDone = false;
+      this.mode = 'throw'; this.t0 = performance.now();
+      this.dice.forEach((d, k) => d.frame(th.frames[k], 0));
+      clearTimeout(this.guard);
+      this.guard = window.setTimeout(this.watchdog, 2000);
+      this.draw();
+    } catch (e) { this.fail(e); }
   }
 
   /** the throw is over: pips on the face that is up, then square up and line up side by side */
@@ -440,15 +485,18 @@ class BoardDice {
   }
 
   private loop = () => {
+    try { this.step(); } catch (e) { this.fail(e); }
+  };
+  private step() {
     this.raf = 0;
-    if (document.hidden) return;
+    if (document.hidden || this.failed) return;
     const now = performance.now();
     if (this.mode === 'throw' && this.th) {
       // window.__tharwaDiceSlow (tests only) plays the throw in slow motion so single frames can be checked
       const slow = Number((window as any).__tharwaDiceSlow) || 1;
       const t = this.th, i = Math.floor(((now - this.t0) / 1000) / STEP / slow);
       if (!this.impactDone && i >= t.impact) { this.impactDone = true; try { this.onImpact?.(); } catch { /* sound only */ } }
-      if (i >= t.count - 1) this.land();
+      if (i >= t.count - 1 || (slow === 1 && now - this.t0 > 2000)) this.land(); // never longer than 2 s in the air
       else {
         this.dice.forEach((d, k) => {
           d.frame(t.frames[k], i);
@@ -477,6 +525,8 @@ class BoardDice {
     }
     if (this.mode === 'hold' && now - this.t0 >= HOLD_MS) {
       this.computeRest();
+      // the die on the right (it shows the first value) goes to the right-hand resting spot: no crossing, no pip swap
+      if (this.dice[0].root.position.x < this.dice[1].root.position.x) this.dice.reverse();
       this.dice.forEach((d, j) => { this.from.pos[j].copy(d.root.position); });
       this.mode = 'glide'; this.t0 = now;
     }
@@ -492,7 +542,7 @@ class BoardDice {
     }
     this.renderer.render(this.scene, this.cam);
     if (this.mode !== 'rest') this.draw();
-  };
+  }
   // requestAnimationFrame can be slowed down a lot (a window in the background): a timer keeps the throw moving,
   // so the dice never sit on top of the buttons for longer than planned
   private draw() {
@@ -556,7 +606,7 @@ class BoardDice {
   }
 
   dispose() {
-    cancelAnimationFrame(this.raf); this.ro?.disconnect(); clearInterval(this.watch); clearTimeout(this.kick);
+    cancelAnimationFrame(this.raf); this.ro?.disconnect(); clearInterval(this.watch); clearTimeout(this.kick); clearTimeout(this.guard);
     document.removeEventListener('visibilitychange', this.onVis);
     this.renderer.dispose(); this.canvas.remove();
   }
@@ -567,8 +617,9 @@ function webgl() {
 }
 
 (window as any).TharwaDice3D = {
-  mount(slot: HTMLElement) {
+  /** `onFail(values)`: the 3D dice gave up (an error): the caller shows its 2D dice with these values */
+  mount(slot: HTMLElement, onFail?: (values: number[]) => void) {
     if (!webgl()) return null;
-    try { const d = new BoardDice(slot); (window as any).__tharwaDice = d; return d; } catch (e) { console.warn('3D dice off:', e); return null; }
+    try { const d = new BoardDice(slot); d.onFail = onFail || null; (window as any).__tharwaDice = d; return d; } catch (e) { console.warn('3D dice off:', e); return null; }
   },
 };

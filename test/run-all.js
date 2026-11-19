@@ -48,6 +48,7 @@ function run(file, args = []) {
     // Last: it runs a while, and this runner's own pooled connection would go stale meanwhile.
     run('minigames.js', [BASE]); // إكس أو، أربعة بخط، لودو: rules, bots, room API
     run('cards-games.js', [BASE]); // طرنيب، أربعمية، تركس: deck, rules, scoring, bots, AFK, room API
+    run('konkan.js', [BASE]); // كونكان: melds, opening, joker rules, scoring, 1,200 bot games, AFK, room API
     run('forfeit.js', [BASE]); // «انسحاب» in every small game
     console.log('ALL TESTS PASSED');
   } finally {
