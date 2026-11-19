@@ -1,14 +1,10 @@
 // @ts-nocheck — ported plain JS (three.js scene code); typed boundaries live in pages/index.astro.
-// «مدينة Serva» — the real-time 3D homepage world (three.js). Loaded lazily after first paint, and only when
-// WebGL2 is available and motion is allowed (otherwise the page keeps the Blender renders in public/home/).
+// «مدينة Serva» — the optional real-time 3D tour of the homepage (three.js). Never loaded by default: the page
+// itself is pre-rendered stills. This module is imported only when a capable desktop turns «جولة 3D» on.
+// Light by design: no post-processing (glow is faked with sprites), DPR ≤ 1.25, frames only on demand.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { gsap } from 'gsap';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const UP = V(0, 1, 0);
@@ -19,21 +15,19 @@ const ease3 = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 export async function start(ctx) {
   const H = document.documentElement, canvas = document.getElementById('hxWorld');
-  let introDone = false;
-  const coarse = matchMedia('(pointer: coarse)').matches;
-  const small = Math.min(innerWidth, innerHeight) < 560 || innerWidth < 760;
-  const LITE = small || (coarse && innerWidth < 1100);
-  const Q = LITE
-    ? { dprMax: 1.35, msaa: 0, motes: 200, falls: 70, shadow: 1024, coins: 12, cards: 6, clouds: 10, bloom: .55 }
-    : { dprMax: 1.5, msaa: 4, motes: 520, falls: 140, shadow: 2048, coins: 22, cards: 10, clouds: 18, bloom: .62 };
+  let introDone = false, stopped = false, raf = 0, keep = 0, tPrev = performance.now(), looping = false;
+  const ac = new AbortController();
+  const on = (t, ty, fn, o = {}) => t.addEventListener(ty, fn, { ...o, signal: ac.signal });
+  const coarse = false;
+  const Q = { dprMax: 1.25, motes: 360, falls: 100, shadow: 1024, coins: 18, cards: 8, clouds: 14 };
   const setLoad = () => {};
 
   // ---------------------------------------------------------------- renderer / composer
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
   // integrated / low-power GPUs start lighter (no MSAA, DPR 1); the adaptive loop below can go further
   try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info');
     const gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
-    if (/Intel|UHD|Iris|Radeon\(TM\) Graphics|Vega \d+ Graphics|Mali|Adreno|PowerVR|SwiftShader|llvmpipe/i.test(gpu)) { Q.dprMax = Math.min(Q.dprMax, 1); Q.msaa = 0; Q.motes = Math.min(Q.motes, 260); }
+    if (/Intel|UHD|Iris|Radeon\(TM\) Graphics|Vega \d+ Graphics|Mali|Adreno|PowerVR|SwiftShader|llvmpipe/i.test(gpu)) { Q.dprMax = 1; Q.motes = 200; }
   } catch (e) { /* keep defaults */ }
   let dpr = Math.min(devicePixelRatio || 1, Q.dprMax);
   let W = innerWidth, Hh = innerHeight;
@@ -51,14 +45,6 @@ export async function start(ctx) {
   scene.fog = new THREE.FogExp2(FOG, 0.0036);
   const camera = new THREE.PerspectiveCamera(34, W / Hh, 0.5, 2600);
 
-  const rt = new THREE.WebGLRenderTarget(W * dpr, Hh * dpr, { type: THREE.HalfFloatType, samples: Q.msaa });
-  const composer = new EffectComposer(renderer, rt);
-  composer.setPixelRatio(dpr);
-  composer.setSize(W, Hh);
-  composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(W, Hh), Q.bloom, 0.5, 1.0);
-  composer.addPass(bloom);
-  composer.addPass(new OutputPass());
 
   const U = { uTime: { value: 0 } };
   const MOON_DIR = V(-0.46, 0.25, -0.85).normalize();
@@ -211,7 +197,7 @@ export async function start(ctx) {
   }
 
   // ---------------------------------------------------------------- load the city
-  const gltf = await new Promise((res, rej) => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load('/home/city.glb', res, e => e.total && setLoad(e.loaded / e.total * .85), rej));
+  const gltf = await new Promise((res, rej) => new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('/home/draco/')).load('/home/city-light.glb', res, e => e.total && setLoad(e.loaded / e.total * .85), rej));
   const city = gltf.scene;
   scene.add(city);
 
@@ -239,7 +225,7 @@ export async function start(ctx) {
     allMats.add(o.material);
     if (/^win_/.test(o.material.name) && o.geometry.attributes.uv) o.geometry.setAttribute('aWin', o.geometry.attributes.uv);
   });
-  const EMUL = { cyan_glow: .36, gold_glow: .36, crystal: .34, cyan_soft: .6, xo_x: .42, xo_o: .42, suit_red: .13, suit_cyan: .12, c4_red: .55, c4_yellow: .55, win_warm: .42, win_cyan: .36, felt: 1.4 };
+  const EMUL = { cyan_glow: .5, gold_glow: .5, crystal: .45, cyan_soft: .7, xo_x: .55, xo_o: .55, suit_red: .2, suit_cyan: .2, c4_red: .7, c4_yellow: .7, win_warm: .62, win_cyan: .55, felt: 1.4 };
   for (const m of allMats) {
     const n = m.name;
     if (n === 'suit_red') { m.color.setRGB(0.25, 0.55, 1.0); m.emissive.setRGB(0.2, 0.5, 1.0); }
@@ -276,7 +262,15 @@ export async function start(ctx) {
   if (anim.coin) { anim.coin.position.y -= 2.0; anim.coin.scale.setScalar(0.78); }
   for (const o of [anim.coin, anim.die, ...anim.suit, ...anim.floats]) o && (o.userData.y = o.position.y);
   anim.coin && anim.coin.traverse(o => { if (o.isMesh && o.material.name === 'gold') { o.material = o.material.clone(); o.material.emissiveIntensity = .2; o.material.userData.ei = .2; o.material.envMapIntensity = 3; } });
-  if (LITE) anim.floats.slice(3).forEach(f => f.visible = false);
+  // soft halos where bloom used to be (additive sprites; three → (x, z, -y) of the Blender coordinates)
+  const halo = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.25, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const glow = (pos, col, size, op = .8, parent = scene) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: halo, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    sp.position.copy(pos); sp.scale.setScalar(size); parent.add(sp); return sp; };
+  glow(V(9.1, 19.7, -8.7), 0xffc86a, 2.4); glow(V(9.6, 17.76, 8.4), 0x4fe6ff, 3.6, .7); glow(V(9.6, 19.96, 8.4), 0x7ff0ff, 1.8);
+  glow(V(-8.5, 12.0, -7.5), 0xffd27a, 2.0); glow(V(0, 3.9, 0), 0x4fe6ff, 2.8, .65); glow(V(-8.5, 2.2, -7.5), 0x39e0a8, 5.0, .45);
+  glow(V(9.6, 12.4, 10.1), 0x4fe6ff, 4.2, .4); if (anim.coin) glow(V(), 0xffc24a, 5.5, .5, anim.coin);
   const matByName = n => [...allMats].find(m => m.name === n);
 
   // landmark helpers: pulsing ground ring + invisible pick volume + accent light
@@ -446,13 +440,14 @@ export async function start(ctx) {
     const w = innerWidth, h = innerHeight;
     if (!force && w === W && Math.abs(h - Hh) < 120 && coarse) return; // ignore mobile URL-bar height jitter
     W = w; Hh = h;
-    renderer.setSize(W, Hh, false); composer.setSize(W, Hh);
+    renderer.setSize(W, Hh, false);
     pxScale.value = Hh * dpr / (2 * Math.tan(THREE.MathUtils.degToRad(FOVV / 2)));
     buildKeys();
     pxScale.value = Hh * dpr / (2 * Math.tan(THREE.MathUtils.degToRad(FOVV / 2)));
     geo = ctx.measure();
+    invalidate(2);
   }
-  let rT; addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(() => resize(false), 120); });
+  let rT; on(window, 'resize', () => { clearTimeout(rT); rT = setTimeout(() => resize(false), 120); });
   buildKeys(); resize(true);
 
   // ---------------------------------------------------------------- pointer: hover glow + click to fly
@@ -462,63 +457,56 @@ export async function start(ctx) {
   const NAMES = { tharwa: 'برج ثروة', cards: 'جناح ورق الشدة', ludo: 'ساحة اللودو', arcade: 'برج الألعاب السريعة' };
   const overUI = t => t && t.closest && t.closest('a,button,input,.h-pal,.h-hdr,.h-rail,.h-panel,.h-hero-c,.h-after,.h-foot,#modal-root');
   const pick = (cx, cy) => { ndc.set(cx / W * 2 - 1, -(cy / Hh) * 2 + 1); ray.setFromCamera(ndc, camera); const hit = ray.intersectObjects(proxies, false)[0]; return hit ? hit.object.userData.L : null; };
-  addEventListener('pointermove', e => {
+  on(window, 'pointermove', e => {
     if (e.pointerType !== 'mouse') return;
     pX = e.clientX / W * 2 - 1; pY = e.clientY / Hh * 2 - 1;
     if (overUI(e.target) || document.getElementById('hxPal').classList.contains('open')) { setHover(null); return; }
-    ndc.set(pX, -pY); pointerDirty = true;
+    ndc.set(pX, -pY); pointerDirty = true; invalidate(3);
     tag.style.transform = `translate3d(${Math.min(e.clientX + 18, W - 240)}px,${e.clientY + 18}px,0)`;
   }, { passive: true });
-  addEventListener('pointerleave', () => setHover(null));
+  on(document, 'pointerleave', () => { setHover(null); invalidate(3); });
   function setHover(L) {
     if (hovered === L) return; hovered = L;
     document.body.style.cursor = L ? 'pointer' : '';
     tag.classList.toggle('on', !!L); if (L) tagB.textContent = NAMES[L.key];
   }
-  addEventListener('click', e => {
+  on(window, 'click', e => {
     if (overUI(e.target) || !introDone) return;
     const L = e.pointerType === 'mouse' || !e.pointerType ? hovered || pick(e.clientX, e.clientY) : pick(e.clientX, e.clientY);
     if (L) ctx.flyTo(L.stop);
   });
 
-  // ---------------------------------------------------------------- precompile, first frame, intro
-  setLoad(.92);
+  // ---------------------------------------------------------------- precompile, first frame
   let k = mapScroll(scrollY), kT = k;
   poseAt(k, tmpP, tmpT); camera.position.copy(tmpP); camera.lookAt(tmpT);
   renderer.shadowMap.needsUpdate = true;
   try { await renderer.compileAsync(scene, camera); } catch (e) { /* older drivers: compile lazily */ }
-  // upload every texture now so nothing stalls the first time a landmark comes into view
   scene.traverse(o => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-    for (const m of ms) for (const k of ['map', 'emissiveMap']) if (m[k]) renderer.initTexture(m[k]); });
+    for (const m of ms) for (const kk of ['map', 'emissiveMap']) if (m[kk]) renderer.initTexture(m[kk]); });
   renderer.initTexture(noiseTex); renderer.initTexture(blobTex);
-  setLoad(1);
+  if (stopped) { dispose(); return { stop() {} }; }
 
-  const intro = { t: scrollY > 40 ? 1 : 0 };
+  // a short arrival: from a pulled-back hero pose (text is already on screen)
+  const intro = { t: scrollY > 40 ? 1 : 0, t0: 0 };
   introDone = intro.t >= 1;
-  const master = gsap.timeline({ paused: true, onComplete: () => { introDone = true; } });
-  master.to(intro, { t: 1, duration: 2.8, ease: 'none' }, 0);
   const iA = V(), iB = V();
   function introPose(t, outP, outT) {
-    const K0 = K[0];
-    const e = 1 - Math.pow(1 - t, 3);
+    const K0 = K[0], e = 1 - Math.pow(1 - t, 3);
     iA.copy(K0.pos).add(V(-10, 9, 26)); iB.copy(K0.tgt).add(V(0, 3, 0));
     outP.lerpVectors(iA, K0.pos, e); outT.lerpVectors(iB, K0.tgt, e);
   }
-  const speedUp = () => { if (!introDone && master.isActive()) master.timeScale(3); };
-  addEventListener('wheel', speedUp, { passive: true }); addEventListener('touchstart', speedUp, { passive: true }); addEventListener('keydown', speedUp);
-  let introCancel = false;
-  H.classList.add('h-live');
-  if (intro.t >= 1) master.progress(1); else setTimeout(() => { if (!introCancel) master.play(0); }, 120);
+  on(window, 'wheel', () => { if (!introDone) intro.t = Math.max(intro.t, 0.85); }, { passive: true });
 
-  // ---------------------------------------------------------------- loop
-  let tPrev = performance.now(), tAcc = 0;
-  const ft = new Float32Array(1200); let fi = 0, frames = 0, lastNow = performance.now(), adaptN = 0, adaptSum = 0, settle = 0, slowRuns = 0, dprLog = [dpr], longK = [];
-  let activeStop = -1;
-  const rail = document.getElementById('hxRail'), railBtns = [...rail.querySelectorAll('button')], navA = [...document.querySelectorAll('.h-nav a[data-cat]')];
-  const scrim = document.getElementById('hxScrim');
-  const iP = V(), iT = V(), par = V(), right = V(), upv = V(), lookM = new THREE.Matrix4(), dummy = new THREE.Object3D(), roll = new THREE.Quaternion();
-  let running = true;
-  document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) { tPrev = lastNow = performance.now(); requestAnimationFrame(loop); } });
+  // ---------------------------------------------------------------- render on demand
+  // Nothing animates on its own: frames are drawn only while the camera moves, the pointer hovers, the
+  // arrival plays, or a hover glow is settling — then the loop stops completely (0 frames when idle).
+  // Capped at 60 fps, paused when the tab is hidden or the city is covered by the page below.
+  let tAcc = 0, lastDraw = 0;
+  const ft = new Float32Array(600); let fi = 0, frames = 0;
+  const iP = V(), iT = V(), par = V(), right = V(), dummy = new THREE.Object3D(), roll = new THREE.Quaternion();
+  function invalidate(n = 2) { keep = Math.max(keep, n); if (looping && !raf && !stopped && !document.hidden) { tPrev = performance.now(); raf = requestAnimationFrame(loop); } }
+  on(window, 'scroll', () => invalidate(2), { passive: true });
+  on(document, 'visibilitychange', () => { if (!document.hidden) invalidate(2); });
 
   const sv = V(), hdrEl = document.getElementById('hxHdr');
   function blocked(local, origin) {
@@ -529,52 +517,47 @@ export async function start(ctx) {
     return W / Hh < 0.85 ? sv.y < 0.05 : sv.x > 0.08;
   }
   function loop(now) {
-    if (!running) return;
-    requestAnimationFrame(loop);
-    const frameMs = now - lastNow; lastNow = now;
+    raf = 0;
+    if (stopped || document.hidden) return;
+    if (now - lastDraw < 15.5) { raf = requestAnimationFrame(loop); return; }   // 60 fps cap (120/144 Hz screens)
+    const frameMs = now - lastDraw; lastDraw = now;
     ft[fi++ % ft.length] = frameMs; frames++;
-    if (frameMs > 20 && longK.length < 40) longK.push(+k.toFixed(2));
     const dt = Math.min((now - tPrev) / 1000, 1 / 20); tPrev = now; tAcc += dt; const t = tAcc;
     U.uTime.value = t;
+    let busy = false;
 
     // camera
     kT = mapScroll(scrollY);
-    k = Math.abs(kT - k) < 1e-4 ? kT : damp(k, kT, 3.4, dt);
+    if (Math.abs(kT - k) < 1e-3) k = kT; else { k = damp(k, kT, 3.4, dt); busy = true; }
     poseAt(k, tmpP, tmpT);
     if (intro.t < 1) {
+      intro.t = Math.min(1, intro.t + dt / 2.4); busy = true;
       introPose(intro.t, iP, iT);
       const w = sstep(0.9, 1, intro.t);
       tmpP.lerpVectors(iP, tmpP, w); tmpT.lerpVectors(iT, tmpT, w);
+      if (intro.t >= 1) introDone = true;
     }
-    parX = damp(parX, coarse ? 0 : pX, 2.2, dt); parY = damp(parY, coarse ? 0 : pY, 2.2, dt);
+    const nx = damp(parX, pX, 2.6, dt), ny = damp(parY, pY, 2.6, dt);
+    if (Math.abs(nx - pX) > 1e-3 || Math.abs(ny - pY) > 1e-3) busy = true;
+    parX = nx; parY = ny;
     right.subVectors(tmpT, tmpP).normalize().cross(UP).normalize();
     const pd = tmpP.distanceTo(tmpT) * 0.012 * (introDone ? 1 : intro.t);
-    tmpP.addScaledVector(right, parX * pd * 1.2 + Math.sin(t * 0.21) * 0.25).add(par.set(0, -parY * pd * 0.8 + Math.sin(t * 0.17) * 0.2, 0));
+    tmpP.addScaledVector(right, parX * pd * 1.2).add(par.set(0, -parY * pd * 0.8, 0));
     camera.position.copy(tmpP); camera.lookAt(tmpT);
     if (intro.t < 1) { roll.setFromAxisAngle(V(0, 0, 1), Math.pow(1 - intro.t, 2) * 0.04); camera.quaternion.multiply(roll); }
     sky.position.copy(camera.position);
     camPosU.value.copy(camera.position);
-
-    // active stop -> panels, rail, nav, scrim
-    const near = Math.round(k), act = Math.abs(k - near) < 0.34 && near >= 1 && near <= 4 ? near : 0;
-    if (act !== activeStop && introDone) {
-      activeStop = act;
-      ctx.setActive(act);
-      railBtns.forEach((b, i) => b.classList.toggle('on', i + 1 === act));
-      const cat = act === 2 ? 0 : act === 1 || act === 3 ? 1 : act === 4 ? 2 : -1;
-      navA.forEach((a) => a.classList.toggle('on', +a.dataset.cat === cat));
-    }
-    rail.classList.toggle('on', k > 0.55 && k < 4.6 && introDone);
-    scrim.classList.toggle('on', k < 4.55);
 
     // hover pick
     if (k > 4.5 && hovered) setHover(null);
     if (pointerDirty && introDone && k <= 4.5) { pointerDirty = false; ray.setFromCamera(ndc, camera); const hit = ray.intersectObjects(proxies, false)[0]; setHover(hit ? hit.object.userData.L : null); }
     for (const L of LM) {
       const actW = clamp(1 - Math.abs(k - L.stop) * 2.4, 0, 1);
-      L.hover = damp(L.hover, hovered === L ? 1 : 0, 6, dt);
+      const h = damp(L.hover, hovered === L ? 1 : 0, 6, dt);
+      if (Math.abs(h - (hovered === L ? 1 : 0)) > 2e-3) busy = true;
+      L.hover = h;
       const g = Math.max(L.hover, actW * 0.65);
-      if (Math.abs(g - L.glow) > 1e-3 || L.glow > 0) {
+      if (Math.abs(g - L.glow) > 1e-3) {
         L.glow = g;
         L.obj.position.y = L.base.y + L.hover * 0.55;
         for (const m of L.mats) {
@@ -584,9 +567,10 @@ export async function start(ctx) {
       }
       L.ring.material.uniforms.uOn.value = g;
     }
-    pavCol.lerp(pavTarget, 1 - Math.exp(-3 * dt)); accents[1].color.copy(pavCol);
+    const pc = pavCol.clone(); pavCol.lerp(pavTarget, 1 - Math.exp(-3 * dt)); accents[1].color.copy(pavCol);
+    if (Math.abs(pc.r - pavCol.r) + Math.abs(pc.g - pavCol.g) + Math.abs(pc.b - pavCol.b) > 1e-3) busy = true;
 
-    // life
+    // life (advances only while frames are drawn)
     if (anim.coin) { anim.coin.rotation.y = t * 0.9; anim.coin.position.y = anim.coin.userData.y + Math.sin(t * 1.1) * 0.35; }
     if (anim.suits) anim.suits.rotation.y = t * 0.22;
     anim.suit.forEach((s, i) => s && (s.position.y = s.userData.y + Math.sin(t * 1.25 + i * 1.7) * 0.3));
@@ -595,7 +579,7 @@ export async function start(ctx) {
     if (anim.xo) anim.xo.rotation.y = -t * 0.35;
     if (anim.x) anim.x.rotation.y = t * 1.1;
     if (anim.o) anim.o.rotation.y = -t * 0.9;
-    anim.floats.forEach((f, i) => { f.position.y = f.userData.y + Math.sin(t * 0.35 + i * 1.3) * 0.7; f.rotation.y = t * 0.02 * (i % 2 ? 1 : -1); });
+    anim.floats.forEach((f, i) => { f.position.y = f.userData.y + Math.sin(t * 0.35 + i * 1.3) * 0.7; });
     for (let i = 0; i < coinData.length; i++) {
       const c = coinData[i], a = c.a + t * c.sp;
       dummy.position.set(Math.cos(a) * c.rad, c.y + Math.sin(t * .8 + c.ph) * .5, Math.sin(a) * c.rad);
@@ -610,39 +594,34 @@ export async function start(ctx) {
       g.rotation.set(Math.sin(t * .5 + u.ph) * .25, -a + Math.PI / 2 + Math.sin(t * .3 + u.ph) * .6, Math.sin(t * .4 + u.ph) * .15);
       u.vis = damp(u.vis === undefined ? 1 : u.vis, blocked(g.position, cardGroup.position) ? 0 : 1, 8, dt); g.scale.setScalar(Math.max(u.vis, 0.0001));
     }
-    for (const c of clouds) c.position.x = c.userData.base.x + Math.sin(t * 0.02 * c.userData.sp * 10 + c.userData.base.z) * 3;
 
     const close = k > 0.5 && k < 4.5 ? clamp(1 - Math.abs(k - Math.round(k)) * 2.5, 0, 1) : 0;
-    bloom.strength = Q.bloom * (1 - 0.55 * close); bloom.threshold = 1.0 + 0.3 * close;
-    renderer.toneMappingExposure = 0.95 - 0.1 * close;
-    renderer.info.reset();
-    composer.render(dt);
-
-    // adaptive resolution: step down if the GPU can't hold ~50 fps (never steps up again to avoid oscillation)
-    if (introDone && ++settle > 180 && !document.hidden) {          // skip the first ~3 s after the intro (warm-up hitches)
-      adaptSum += frameMs; adaptN++;
-      if (adaptN >= 120) {
-        const slow = adaptSum / adaptN > 1000 / 47; adaptN = 0; adaptSum = 0;
-        slowRuns = slow ? slowRuns + 1 : 0;
-        if (slowRuns >= 2 && dpr <= 0.75 && bloom.enabled) { slowRuns = 0; bloom.enabled = false; dprLog.push('no-bloom'); }
-        if (slowRuns >= 2 && dpr > 0.75) {    // two slow windows in a row (~5 s) -> step resolution down
-          slowRuns = 0; dpr = Math.max(0.75, dpr - 0.25); renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); composer.setSize(W, Hh);
-          pxScale.value = Hh * dpr / (2 * Math.tan(THREE.MathUtils.degToRad(FOVV / 2))); dprLog.push(dpr);
-        }
-      }
-    }
+    renderer.toneMappingExposure = 1.0 - 0.08 * close;
+    if (k < 4.8) { renderer.info.reset(); renderer.render(scene, camera); }   // below that the page covers the city
+    if (busy) keep = Math.max(keep, 2);
+    if (--keep > 0) raf = requestAnimationFrame(loop);
   }
-  requestAnimationFrame(loop);
+  H.classList.add('h-3d-on');
+  looping = true;
+  invalidate(2);
 
-  // test / QA hooks (no UI)
+  function dispose() {
+    cancelAnimationFrame(raf); raf = 0; ac.abort();
+    scene.traverse(o => { if (o.geometry) o.geometry.dispose(); const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      for (const m of ms) { for (const kk of ['map', 'emissiveMap']) m[kk] && m[kk].dispose(); m.dispose(); } });
+    renderer.dispose(); renderer.forceContextLoss();
+    setHover(null);
+  }
+
+  // QA hooks (no UI)
   window.__H = {
-    get k() { return k; }, get dpr() { return dpr; }, dprLog, renderer, scene, camera,
-    seekIntro(sec) { introCancel = true; master.pause(); master.seek(sec); if (sec >= master.duration()) introDone = true; },
-    bench(n = 40) { const gl = renderer.getContext(), px = new Uint8Array(4); running = false; const t0 = performance.now();
-      for (let i = 0; i < n; i++) { renderer.info.reset(); composer.render(0.016); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); }
-      const ms = (performance.now() - t0) / n; running = true; tPrev = lastNow = performance.now(); requestAnimationFrame(loop); return +ms.toFixed(2); },
-    resetStats() { fi = 0; frames = 0; ft.fill(0); longK.length = 0; }, longK,
-    stats() { const n = Math.min(frames, ft.length), a = [...ft.slice(0, n)].filter(x => x > 0).sort((x, y) => x - y); const avg = a.reduce((s, x) => s + x, 0) / a.length;
-      return { frames: a.length, over20ms: a.filter(x => x > 20).length, over33ms: a.filter(x => x > 33.4).length, avgFps: +(1000 / avg).toFixed(1), p95ms: +a[Math.floor(a.length * .95)].toFixed(2), maxMs: +a[a.length - 1].toFixed(2), dpr, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
+    get k() { return k; }, get dpr() { return dpr; }, renderer, scene, camera, get frames() { return frames; },
+    resetStats() { fi = 0; frames = 0; ft.fill(0); },
+    bench(n = 40) { const gl = renderer.getContext(), px = new Uint8Array(4), t0 = performance.now();
+      for (let i = 0; i < n; i++) { renderer.render(scene, camera); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); }
+      return +((performance.now() - t0) / n).toFixed(2); },
+    stats() { const n = Math.min(frames, ft.length), a = [...ft.slice(0, n)].filter(x => x > 0 && x < 1000).sort((x, y) => x - y); const avg = a.reduce((s, x) => s + x, 0) / (a.length || 1);
+      return { frames, measured: a.length, avgFps: a.length ? +(1000 / avg).toFixed(1) : 0, p95ms: a.length ? +a[Math.floor(a.length * .95)].toFixed(2) : 0, over33ms: a.filter(x => x > 33.4).length, dpr, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
   };
+  return { stop() { stopped = true; H.classList.remove('h-3d-on'); dispose(); } };
 }

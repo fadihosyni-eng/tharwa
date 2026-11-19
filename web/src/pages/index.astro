@@ -1,7 +1,8 @@
 ---
-// Serva Games homepage — «مدينة Serva»: a floating night city in real-time 3D where every game is a landmark.
-// The page paints instantly with real text and a Blender render of the city (public/home/); the 3D world
-// (src/home/world.ts, three.js) is lazy-loaded after first paint and only when WebGL2 + motion are available.
+// Serva Games homepage — «مدينة Serva»: a floating night city where every game is a landmark.
+// Light by default: the city is pre-rendered (Blender stills in public/home/v2, AVIF + WebP, phone and desktop
+// sizes) with CSS-only motion; the tour crossfades between landmark stills as you scroll (IntersectionObserver).
+// The live three.js tour (src/home/world.ts) is an opt-in «جولة 3D» for capable desktops only.
 // Games, live counts and room actions all come from the live registry (/api/site) and the real play API.
 import Base from '../layouts/Base.astro';
 import { CATALOG } from '../components/games/catalog';
@@ -10,28 +11,38 @@ import servaLogo from '../../../public/brand/serva-logo-160.webp?url';
 /** which landmark (stop) shows which game; a game missing here still shows in the index and the search */
 const STOP_OF: Record<string, number> = { tharwa: 1, tarneeb: 2, '400': 2, trix: 2, konkan: 2, ludo: 3, xo: 4, connect4: 4 };
 const STOPS = [
-  { n: 1, id: 'stop-tharwa', kick: 'حي ثروة', label: 'برج ثروة', type: 'لعبة لوح', ico: 'board', img: 'fb-tharwa' },
-  { n: 2, id: 'stop-cards', kick: 'جناح ورق الشدة', label: 'جناح ورق الشدة', type: 'ورق الشدة', ico: 'cards', img: 'fb-cards' },
-  { n: 3, id: 'stop-ludo', kick: 'ساحة اللودو', label: 'ساحة اللودو', type: 'لعبة لوح', ico: 'board', img: 'fb-ludo' },
-  { n: 4, id: 'stop-arcade', kick: 'برج الألعاب السريعة', label: 'برج الألعاب السريعة', type: 'لعبة سريعة', ico: 'bolt', img: 'fb-arcade' },
+  { n: 1, id: 'stop-tharwa', kick: 'حي ثروة', label: 'برج ثروة', type: 'لعبة لوح', ico: 'board', img: 'tharwa' },
+  { n: 2, id: 'stop-cards', kick: 'جناح ورق الشدة', label: 'جناح ورق الشدة', type: 'ورق الشدة', ico: 'cards', img: 'cards' },
+  { n: 3, id: 'stop-ludo', kick: 'ساحة اللودو', label: 'ساحة اللودو', type: 'لعبة لوح', ico: 'board', img: 'ludo' },
+  { n: 4, id: 'stop-arcade', kick: 'برج الألعاب السريعة', label: 'برج الألعاب السريعة', type: 'لعبة سريعة', ico: 'bolt', img: 'arcade' },
 ];
 const gamesOf = (n: number) => CATALOG.filter((g) => STOP_OF[g.slug] === n);
 const players = (min: number, max: number) => (min === max ? `${min}` : `${min}–${max}`);
 const dur = (d: string) => d.replace(/\s*د$/, '');
 const year = new Date().getFullYear();
 const icon = (n: string, cls = 'h-i') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+
+// pre-rendered stills (public/home/v2): <name>-d-<w>.<avif|webp> (16:9) and <name>-p-<w>.* (9:16, phones)
+const V2 = '/home/v2/';
+const srcset = (name: string, kind: 'd' | 'p', ext: string) =>
+  (kind === 'd' ? [1280, 1920] : [600, 900]).map((w) => `${V2}${name}-${kind}-${w}.${ext} ${w}w`).join(', ');
+const SIZES_D = 'max(100vw, 177.78vh)', SIZES_P = 'max(100vw, 56.25vh)';
+// light points of the hero render, as % of the image (projected from the Blender camera, see design-options/h/render.py)
+const FX_D = [['coin', 34.35, 15.55], ['spire', 34.44, 18.39], ['antenna', 41.6, 21.35], ['beacon', 41.66, 25.54], ['finial', 18.72, 34.32],
+  ['xo', 42.56, 36.07], ['obelisk', 29.86, 49.16], ['table', 19.75, 51.43], ['c4', 43.08, 51.64], ['die', 23.08, 54.96]] as const;
+const FX_P = [['coin', 58.99, 14.13], ['spire', 58.94, 15.58], ['antenna', 69.09, 18.39], ['beacon', 68.92, 20.44], ['finial', 34.7, 23.26],
+  ['xo', 69.49, 25.66], ['obelisk', 50.0, 31.02], ['table', 35.27, 31.4], ['c4', 69.24, 33.16], ['die', 40.28, 33.57]] as const;
+const STARS_D = [[8, 9], [16, 4], [27, 7], [47, 5], [55, 12], [63, 3], [72, 9]];
+const STARS_P = [[10, 5], [24, 9], [41, 4], [78, 6], [88, 11]];
+const GOLD = new Set(['coin', 'spire', 'finial', 'die']);
+const fx = (list: readonly (readonly [string, number, number])[], stars: number[][]) =>
+  list.filter(([k]) => k !== 'coin').map(([k, x, y], i) => `<i class="h-tw${GOLD.has(k) ? ' g' : ''}" style="--x:${x}%;--y:${y}%;--d:${(i * 0.73) % 4}s"></i>`).join('') +
+  stars.map(([x, y], i) => `<i class="h-tw s" style="--x:${x}%;--y:${y}%;--d:${(i * 1.1) % 5}s"></i>`).join('') +
+  `<i class="h-glint" style="--x:${list[0][1]}%;--y:${list[0][2]}%"></i>`;
 ---
-<Base bare bodyClass="hx" description="Serva Games — منصّة ألعاب أونلاين: ورق الشدة (طرنيب، أربعمية، تركس، كونكان)، ألعاب لوح (ثروة، لودو) وألعاب سريعة. العب مع صحابك من المتصفح، بلا تنزيل، عالموبايل والكمبيوتر، وببلاش.">
+<Base bare bodyClass="hx" fonts="500;800;900" description="Serva Games — منصّة ألعاب أونلاين: ورق الشدة (طرنيب، أربعمية، تركس، كونكان)، ألعاب لوح (ثروة، لودو) وألعاب سريعة. العب مع صحابك من المتصفح، بلا تنزيل، عالموبايل والكمبيوتر، وببلاش.">
   <Fragment slot="head">
-    <link rel="preload" href="/home/fallback-wide.webp" as="image" media="(min-width: 861px)" />
-    <link rel="preload" href="/home/fallback-tall.webp" as="image" media="(max-width: 860px)" />
-    <script is:inline>
-      (function () {
-        var d = document.documentElement, gl = false, rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-        try { gl = !!document.createElement('canvas').getContext('webgl2'); } catch (e) {}
-        d.classList.add(/[?&]fallback\b/.test(location.search) || rm || !gl ? 'hfb' : 'h3d');
-      })();
-    </script>
+    <script is:inline>document.documentElement.classList.add('h-js');</script>
   </Fragment>
 
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -54,14 +65,34 @@ const icon = (n: string, cls = 'h-i') => `<svg class="${cls}" aria-hidden="true"
     <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.5 4h13L20 9.5M4 9.5h16M4 9.5c0 1.5 1.1 2.5 2.7 2.5S9.3 11 9.3 9.5c0 1.5 1.2 2.5 2.7 2.5s2.7-1 2.7-2.5c0 1.5 1 2.5 2.6 2.5S20 11 20 9.5M5.5 12v8h13v-8"/></symbol>
     <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4.5c0 3 1.4 4.6 3.7 4.9M16 6h3.5c0 3-1.4 4.6-3.7 4.9M12 13v4m-3.5 3h7l-.8-3h-5.4z"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></symbol>
   </svg>
 
+  <!-- the city: pre-rendered stills (scene 0 = hero, 1..4 = landmarks), crossfaded by the tour -->
+  <div class="h-scenes" id="hxScenes" aria-hidden="true">
+    <div class="h-scene is-on ready" data-scene="0"><div class="h-par"><div class="h-art">
+      <picture>
+        <source media="(max-width: 860px)" type="image/avif" srcset={srcset('hero', 'p', 'avif')} sizes={SIZES_P} />
+        <source media="(max-width: 860px)" type="image/webp" srcset={srcset('hero', 'p', 'webp')} sizes={SIZES_P} />
+        <source type="image/avif" srcset={srcset('hero', 'd', 'avif')} sizes={SIZES_D} />
+        <img src={`${V2}hero-d-1920.webp`} srcset={srcset('hero', 'd', 'webp')} sizes={SIZES_D} alt="" width="1920" height="1080" fetchpriority="high" decoding="async" />
+      </picture>
+      <div class="h-fx h-fx-d"><Fragment set:html={fx(FX_D, STARS_D)} /></div>
+      <div class="h-fx h-fx-p"><Fragment set:html={fx(FX_P, STARS_P)} /></div>
+    </div></div></div>
+    {STOPS.map((st) => (
+      <div class="h-scene" data-scene={st.n}><div class="h-par"><div class="h-art">
+        <picture data-lazy>
+          <source media="(max-width: 860px)" type="image/avif" data-srcset={srcset(st.img, 'p', 'avif')} sizes={SIZES_P} />
+          <source media="(max-width: 860px)" type="image/webp" data-srcset={srcset(st.img, 'p', 'webp')} sizes={SIZES_P} />
+          <source type="image/avif" data-srcset={srcset(st.img, 'd', 'avif')} sizes={SIZES_D} />
+          <img data-srcset={srcset(st.img, 'd', 'webp')} sizes={SIZES_D} alt="" width="1920" height="1080" decoding="async" />
+        </picture>
+      </div></div></div>
+    ))}
+  </div>
   <canvas id="hxWorld" aria-hidden="true"></canvas>
-  <picture id="hxPoster">
-    <source media="(max-width: 860px)" srcset="/home/fallback-tall.webp" />
-    <img src="/home/fallback-wide.webp" alt="مدينة Serva: جزيرة طايرة بالليل فيها برج ثروة وجناح ورق الشدة وساحة اللودو وبرج الألعاب السريعة" width="1920" height="1080" fetchpriority="high" decoding="async" />
-  </picture>
   <div class="h-veil" aria-hidden="true"></div>
   <div class="h-scrim" id="hxScrim" aria-hidden="true"></div>
   <div class="h-grain" aria-hidden="true"></div>
@@ -70,7 +101,7 @@ const icon = (n: string, cls = 'h-i') => `<svg class="${cls}" aria-hidden="true"
   <header class="h-hdr" id="hxHdr">
     <div class="h-hdr-row">
       <a class="h-brand" href="/" aria-label="Serva Games، الصفحة الرئيسية">
-        <img src={servaLogo} alt="" width="42" height="42" decoding="async" />
+        <img src={servaLogo} alt="" width="42" height="42" decoding="async" fetchpriority="low" />
         <b dir="ltr"><span>Serva</span> Games</b>
       </a>
       <nav class="h-nav" aria-label="أنواع الألعاب">
@@ -105,6 +136,9 @@ const icon = (n: string, cls = 'h-i') => `<svg class="${cls}" aria-hidden="true"
   <nav class="h-rail" id="hxRail" aria-label="خريطة المدينة">
     {STOPS.map((s) => <button type="button" data-fly={s.n}><span>{s.label}</span></button>)}
   </nav>
+  <button class="h-3dbtn" id="hx3d" type="button" hidden aria-pressed="false" title="جولة حيّة ثلاثية الأبعاد (بتحمّل أكتر)">
+    <Fragment set:html={icon('cube')} /><span>جولة 3D</span><i aria-hidden="true"></i>
+  </button>
   <div class="h-tag" id="hxTag" aria-hidden="true"><b></b><small>اضغط لتطير لهون</small></div>
 
   <main id="main" class="h-main">
@@ -133,7 +167,6 @@ const icon = (n: string, cls = 'h-i') => `<svg class="${cls}" aria-hidden="true"
       return (
         <section class="h-stop" id={s.id} data-stop={s.n} aria-label={s.label}>
           <div class="h-stage">
-            <div class="h-fb-img"><img loading="lazy" decoding="async" src={`/home/${s.img}.webp`} alt={s.label} width="1280" height="800" /></div>
             <div class="h-panel" data-stop={s.n} data-type={s.type} data-ico={s.ico}>
               <div class="h-p-top"><span class="h-p-kick">{s.kick}</span><span class="h-p-line"></span><span class="h-p-idx" dir="ltr"><b>{`0${s.n}`}</b> / 04</span></div>
               {list.length > 1 && (
@@ -230,7 +263,6 @@ const icon = (n: string, cls = 'h-i') => `<svg class="${cls}" aria-hidden="true"
 :root{--h-bg:#030816;--h-ink:#eef4ff;--h-ink2:#c3d1ea;--h-muted:#8799ba;--h-line:rgba(170,205,255,.14);
   --h-cyan:#2fe2ff;--h-cyan2:#7ff0ff;--h-gold:#ffc53d;--h-gold2:#ffe39a;--h-green:#3be39a;
   --h-ease:cubic-bezier(.16,1,.3,1);--h-ease2:cubic-bezier(.65,0,.35,1);--h-pad:clamp(20px,4.2vw,72px);--h-hdr:76px}
-html.h3d,html.hfb{scroll-behavior:auto}
 body.hx{background:var(--h-bg);line-height:1.6}
 body.hx::before,body.hx::after{display:none}
 .hx bdi{unicode-bidi:isolate}
@@ -239,8 +271,6 @@ body.hx::before,body.hx::after{display:none}
 .hx a:hover{text-decoration:none}
 .hx .h-main a:not(.h-btn):not(.ml-row),.hx .h-foot a{color:inherit}
 /* ---------------------------------------------------------------- world layers */
-#hxWorld{position:fixed;inset:0;z-index:0;width:100%;height:100%;display:block;outline:none;opacity:0;transition:opacity 1.2s var(--h-ease)}
-.h-live #hxWorld{opacity:1}
 .h-veil{position:fixed;inset:0;z-index:1;pointer-events:none;
   background:
    radial-gradient(120% 90% at 50% 45%,transparent 55%,rgba(1,4,12,.55) 100%),
@@ -251,7 +281,6 @@ body.hx::before,body.hx::after{display:none}
 .h-scrim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .9s var(--h-ease);
   background:linear-gradient(270deg,rgba(2,6,17,.9) 0,rgba(2,6,17,.74) 28%,rgba(2,6,17,.3) 46%,rgba(2,6,17,0) 60%)}
 .h-scrim.on{opacity:1}
-#hxPoster{display:none}
 
 /* ---------------------------------------------------------------- header */
 .h-hdr{position:fixed;inset:0 0 auto 0;z-index:30;padding:0 var(--h-pad);
@@ -319,7 +348,7 @@ body.hx::before,body.hx::after{display:none}
 .h-meta li{display:flex;align-items:center;gap:8px}
 .h-meta .h-i{width:18px;height:18px;color:var(--h-cyan)}
 .h-liveline{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:14.5px;font-weight:700;color:var(--h-muted)}
-.h-liveline i{width:8px;height:8px;border-radius:50%;background:var(--h-green);box-shadow:0 0 0 0 rgba(59,227,154,.6);animation:pulse 2s infinite}
+.h-liveline i{width:8px;height:8px;border-radius:50%;background:var(--h-green);box-shadow:0 0 0 3px rgba(59,227,154,.18)}
 .h-liveline.h-soon i{background:#a58bff;animation:none}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(59,227,154,.55)}70%{box-shadow:0 0 0 9px rgba(59,227,154,0)}100%{box-shadow:0 0 0 0 rgba(59,227,154,0)}}
 .h-p-ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
@@ -400,18 +429,6 @@ body.hx::before,body.hx::after{display:none}
 .h-pal-foot{display:flex;gap:16px;padding:10px 18px;border-top:1px solid rgba(255,255,255,.07);font-size:12.5px;color:var(--h-muted);font-weight:700}
 
 /* ---------------------------------------------------------------- fallback (no WebGL / reduced motion) */
-.hfb #hxWorld,.hfb .h-rail,.hfb .h-tag,.hfb .h-scrim{display:none}
-.hfb #hxPoster{display:block;position:fixed;inset:0;z-index:0}
-.hfb #hxPoster img{width:100%;height:100%;object-fit:cover;object-position:30% 50%}
-.hfb .h-veil{background:linear-gradient(270deg,rgba(2,6,17,.86) 0,rgba(2,6,17,.45) 45%,rgba(2,6,17,.1) 75%),linear-gradient(180deg,rgba(2,6,17,.5),transparent 25%,transparent 70%,rgba(2,6,17,.6))}
-.hfb .h-stop{height:auto;background:rgba(2,6,17,.9);border-top:1px solid rgba(255,255,255,.06)}
-.hfb .h-stage{position:relative;height:auto;min-height:0;padding:72px var(--h-pad);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:clamp(24px,4vw,64px);align-items:center}
-.hfb .h-panel{width:auto}
-.hfb .h-fb-img{display:block;border-radius:22px;overflow:hidden;border:1px solid var(--h-line);aspect-ratio:16/10;background:#06112b}
-.hfb .h-fb-img img{width:100%;height:100%;object-fit:cover}
-.hfb .h-how::before{background:rgba(2,6,17,.92)}
-.h-fb-img{display:none}
-.hfb .h-cue{display:none}
 
 /* ---------------------------------------------------------------- responsive */
 @media (max-width:1180px){
@@ -466,9 +483,6 @@ body.hx::before,body.hx::after{display:none}
   .h-index{grid-template-columns:1fr;margin-top:52px;gap:28px}
   .h-cat a{font-size:19px}
   .h-pal{padding-top:10vh}
-  .hfb .h-stage{grid-template-columns:1fr;padding:48px var(--h-pad)}
-  .hfb .h-fb-img{order:-1}
-  .hfb #hxPoster img{object-position:28% 50%}
 }
 @media (max-width:860px) and (max-height:700px){.h-lead{display:none}}
 @media (min-width:861px) and (max-height:760px){
@@ -479,14 +493,6 @@ body.hx::before,body.hx::after{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-/* ---------------------------------------------------------------- live 3D: the poster crossfades into the canvas */
-#hxPoster{position:fixed;inset:0;z-index:0;transition:opacity 1.4s var(--h-ease)}
-#hxPoster img{width:100%;height:100%;object-fit:cover;object-position:30% 50%}
-.h3d #hxPoster{display:block}
-.h-live #hxPoster{opacity:0;pointer-events:none}
-.h-live .h-panel>*{opacity:0;will-change:transform,opacity}
-.h3d:not(.h-live) .h-scrim{opacity:1}
-.h-live .h-p-name{will-change:transform}
 
 /* ---------------------------------------------------------------- header: real site links + account */
 .h-hdr-row{height:var(--h-hdr);display:flex;align-items:center;gap:18px}
@@ -584,42 +590,133 @@ body.hx::before,body.hx::after{display:none}
   .h-libbtn{width:100%}
   .h-resume{font-size:13.5px}
 }
-@media (max-width:400px){.h-brand b{font-size:16.5px}.h-brand img{width:32px;height:32px}}
 
+
+
+/* ---------------------------------------------------------------- the city: pre-rendered stills, CSS-only motion */
+.h-scenes{position:fixed;inset:0;z-index:0;overflow:hidden;background:#030816;transition:opacity .9s var(--h-ease)}
+.h-scene{position:absolute;inset:0;opacity:0;transition:opacity 1.1s var(--h-ease)}
+.h-scene.is-on{opacity:1}
+.h-par{position:absolute;inset:0}
+.h-art{--ar:1.7778;--fx:.3;--aw:max(100vw,calc(100lvh * var(--ar)));position:absolute;width:var(--aw);height:calc(var(--aw) / var(--ar));
+  left:calc((100vw - var(--aw)) * var(--fx));top:calc((100lvh - var(--aw) / var(--ar)) * .5);transform:scale(1.045);transition:transform 2.4s var(--h-ease)}
+.h-scene.is-on .h-art{transform:none}
+.h-art picture,.h-art img{display:block;width:100%;height:100%}
+.h-scene[data-scene="0"] .h-art{animation:h-drift 38s ease-in-out infinite alternate}
+@keyframes h-drift{from{transform:translate3d(0,0,0) scale(1.015)}to{transform:translate3d(-.7%,-.5%,0) scale(1.05)}}
+@supports (animation-timeline: scroll()){
+  .h-scene[data-scene="0"] .h-par{animation:h-par linear both;animation-timeline:scroll(root);animation-range:0 100vh}
+  @keyframes h-par{to{transform:translate3d(0,-6vh,0) scale(1.04)}}
+}
+.h-fx{position:absolute;inset:0}
+.h-fx-p{display:none}
+.h-tw{position:absolute;left:var(--x);top:var(--y);width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;opacity:.2;
+  background:radial-gradient(circle,rgba(190,245,255,.95) 0,rgba(90,220,255,.45) 32%,rgba(60,200,255,0) 70%);
+  animation:h-tw 3.8s ease-in-out var(--d) infinite;will-change:opacity,transform}
+.h-tw.g{background:radial-gradient(circle,rgba(255,240,200,.95) 0,rgba(255,200,90,.45) 32%,rgba(255,190,60,0) 70%)}
+.h-tw.s{width:7px;height:7px;margin:-3.5px 0 0 -3.5px;animation-duration:5.2s}
+@keyframes h-tw{0%,100%{opacity:.18;transform:scale(.7)}50%{opacity:1;transform:scale(1.15)}}
+.h-glint{position:absolute;left:var(--x);top:var(--y);width:76px;height:76px;margin:-38px 0 0 -38px;opacity:0;
+  background:radial-gradient(circle,rgba(255,252,230,.95) 0,rgba(255,215,120,.32) 16%,transparent 58%),
+    linear-gradient(90deg,transparent 47%,rgba(255,242,205,.85) 50%,transparent 53%),linear-gradient(0deg,transparent 47%,rgba(255,242,205,.85) 50%,transparent 53%);
+  animation:h-glint 6.5s ease-in-out 1.5s infinite;will-change:opacity,transform}
+@keyframes h-glint{0%,60%,100%{opacity:0;transform:scale(.3) rotate(0)}70%{opacity:1;transform:scale(1) rotate(22deg)}82%{opacity:0;transform:scale(.45) rotate(45deg)}}
+
+/* opt-in live 3D replaces the stills */
+#hxWorld{position:fixed;inset:0;z-index:0;width:100%;height:100%;display:block;outline:none;opacity:0;visibility:hidden;transition:opacity .9s var(--h-ease),visibility 0s .9s}
+.h-3d-on #hxWorld{opacity:1;visibility:visible;transition:opacity .9s var(--h-ease)}
+.h-3d-on .h-scenes{opacity:0}
+.h-3dbtn{position:fixed;z-index:20;left:var(--h-pad);bottom:26px;display:flex;align-items:center;gap:9px;min-height:44px;padding:0 16px 0 14px;border-radius:999px;
+  border:1px solid rgba(47,226,255,.32);background:rgba(6,16,40,.8);color:var(--h-ink);font-size:14.5px;font-weight:800;transition:border-color .3s,background .3s}
+.h-3dbtn .h-i{width:18px;height:18px;color:var(--h-cyan)}
+.h-3dbtn i{width:8px;height:8px;border-radius:50%;background:#53627f}
+.h-3dbtn[data-state="on"] i{background:var(--h-green);box-shadow:0 0 10px var(--h-green)}
+.h-3dbtn[data-state="loading"] i{background:var(--h-gold)}
+.h-3dbtn:hover{border-color:var(--h-cyan);background:rgba(10,26,60,.9)}
+.h-3dbtn[hidden]{display:none}
+.h-cue{bottom:clamp(96px,14vh,140px)}
+
+/* panels reveal with CSS when their landmark is in the middle of the screen */
+.h-js .h-panel>*{opacity:0;transform:translate3d(0,14px,0);transition:opacity .3s ease,transform .4s ease}
+.h-js .h-stop.is-on .h-panel>*{opacity:1;transform:none;transition:opacity .8s var(--h-ease),transform 1s var(--h-ease)}
+.h-js .h-stop.is-on .h-panel>:nth-child(2){transition-delay:.05s}
+.h-js .h-stop.is-on .h-panel>:nth-child(3){transition-delay:.1s}
+.h-js .h-stop.is-on .h-panel>:nth-child(4){transition-delay:.16s}
+.h-js .h-stop.is-on .h-panel>:nth-child(5){transition-delay:.22s}
+.h-js .h-stop.is-on .h-panel>:nth-child(6){transition-delay:.28s}
+.h-js .h-stop.is-on .h-panel>:nth-child(n+7){transition-delay:.34s}
+.h-js .h-p-name{transform:translate3d(0,108%,0);transition:transform .35s ease}
+.h-js .h-stop.is-on .h-p-name{transform:none;transition:transform 1.05s var(--h-ease) .12s}
+.h-js .h-p-line{transform:scaleX(0);transition:transform .3s ease}
+.h-js .h-stop.is-on .h-p-line{transform:none;transition:transform 1s var(--h-ease) .08s}
+.h-panel .h-p-name,.h-panel .h-p-pitch,.h-panel .h-meta,.h-panel .h-liveline,.h-panel .h-p-ctas{transition:opacity .2s ease,transform .25s ease}
+.h-js .h-stop.is-on .h-panel.swap .h-p-name{transform:translate3d(0,-40%,0);opacity:0;transition:transform .2s ease,opacity .2s ease}
+.h-js .h-stop.is-on .h-panel.swap :is(.h-p-pitch,.h-meta,.h-liveline,.h-p-ctas){opacity:0}
+.h-pal.open .h-pal-box{animation:h-pop .45s var(--h-ease)}
+@keyframes h-pop{from{opacity:0;transform:translate3d(0,-14px,0) scale(.98)}}
+
+@media (max-width:860px){
+  .h-art{--ar:.5625;--fx:.5}
+  .h-fx-d{display:none}.h-fx-p{display:block}
+  .h-3dbtn{display:none}
+}
+@media (prefers-reduced-motion:reduce){.h-scene,.h-art,.h-tw,.h-glint{animation:none!important;transition:none!important}.h-art{transform:none}}
+
+/* phones: every tap target at least 44 px */
+@media (max-width:860px){
+  .hx{--h-hdr:112px}
+  .h-brand{min-height:44px}
+  .h-sbtn,.h-menu summary{width:44px;height:44px}
+  .h-nav a{min-height:44px;display:inline-flex;align-items:center}
+  .h-hdr .acct .btn{min-height:44px}
+  .h-tab{height:44px}
+  .h-p-more{min-height:44px;margin-top:6px}
+  .h-box-link{display:inline-flex;align-items:center;min-height:44px;padding:0 6px}
+  .h-foot nav a,.h-foot .h-by{display:inline-flex;align-items:center;min-height:44px}
+  .h-foot nav{gap:4px 18px}
+}
+
+@media (max-width:860px){.h-nav a{white-space:nowrap}}
+@media (max-width:410px){
+  .hx{--h-pad:14px}
+  .h-hdr-row{gap:6px 8px}
+  .h-brand{gap:8px}
+  .h-brand img{width:30px;height:30px}
+  .h-brand b{font-size:16px}
+  .h-hdr .acct .btn{padding:0 10px;font-size:13px;gap:6px}
+  .h-nav a{font-size:13.5px;padding-inline:4px}
+}
 </style>
 
 <script>
-  import { gsap } from 'gsap';
-  import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
   import { $, $$, esc, fmtN, ui, api, toast, avatarHTML, loadSession, session, mountAds, modal } from '../lib/client';
   import { mountChrome } from '../lib/chrome';
   import { liveGames, norm, type LiveGame } from '../components/games/catalog';
   import { start, askName, playError, openRooms, roomItemHTML, myRooms, findRoom, roomUrl, join, rememberName, savedName, isTharwa, type OpenRoom, type Mode } from '../components/games/play';
 
-  gsap.registerPlugin(ScrollToPlugin);
   mountChrome();
 
   const H = document.documentElement;
   const STOP_OF: Record<string, number> = { tharwa: 1, tarneeb: 2, '400': 2, trix: 2, konkan: 2, ludo: 3, xo: 4, connect4: 4 };
-  const STOP_ID = ['', 'stop-tharwa', 'stop-cards', 'stop-ludo', 'stop-arcade'];
   const CAT_OF = (g: LiveGame) => (STOP_OF[g.slug] === 2 || g.tags.includes('cards') ? 'cards' : STOP_OF[g.slug] === 4 ? 'quick' : 'board');
   const CAT_LABEL: Record<string, string> = { cards: 'ورق الشدة', board: 'ألعاب لوح', quick: 'ألعاب سريعة' };
   const ico = (n: string, cls = 'h-i') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const pl = (g: LiveGame) => `<bdi dir="ltr">${g.minPlayers === g.maxPlayers ? g.minPlayers : `${g.minPlayers}–${g.maxPlayers}`}</bdi> لاعبين`;
-  const is3d = () => H.classList.contains('h-live');
+  const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const onIdle = (cb: () => void, timeout = 2000) => ('requestIdleCallback' in window ? (window as any).requestIdleCallback(cb, { timeout }) : setTimeout(cb, 200));
 
   let games: LiveGame[] = [];
   const bySlug = (s: string) => games.find((g) => g.slug === s);
   const rooms: Record<string, number> = {};
 
   // ---------------------------------------------------------------- panels (one per landmark)
-  type Panel = { el: HTMLElement; stop: number; ids: string[]; cur: string; shown: boolean; tl: gsap.core.Timeline | null };
+  type Panel = { el: HTMLElement; sec: HTMLElement; stop: number; ids: string[]; cur: string; shown: boolean };
   const panels: Panel[] = [];
   $$<HTMLElement>('.h-panel').forEach((el) => {
     const stop = +(el.dataset.stop || 0);
     const ids = $$<HTMLElement>('.h-tab', el).map((t) => t.dataset.g || '');
     const first = $<HTMLElement>('[data-act]', el)?.dataset.slug || '';
-    panels[stop] = { el, stop, ids: ids.length ? ids : [first], cur: first, shown: false, tl: null };
+    panels[stop] = { el, sec: el.closest('.h-stop') as HTMLElement, stop, ids: ids.length ? ids : [first], cur: first, shown: false };
     const tabs = $('.h-tabs', el);
     tabs?.addEventListener('click', (e) => { const t = (e.target as Element).closest<HTMLElement>('.h-tab'); if (t) select(panels[stop], t.dataset.g || ''); });
     tabs?.addEventListener('keydown', (e) => {
@@ -634,7 +731,7 @@ body.hx::before,body.hx::after{display:none}
   function liveLine(g: LiveGame | undefined) {
     if (!g) return '';
     const parts: string[] = [];
-    if (rooms[g.slug] > 0) parts.push(`<bdi dir="ltr">${fmtN(rooms[g.slug])}</bdi> ${rooms[g.slug] === 1 ? 'غرفة مفتوحة' : rooms[g.slug] >= 11 ? 'غرفة مفتوحة' : 'غرف مفتوحة'}`);
+    if (rooms[g.slug] > 0) parts.push(`<bdi dir="ltr">${fmtN(rooms[g.slug])}</bdi> ${rooms[g.slug] === 1 || rooms[g.slug] >= 11 ? 'غرفة مفتوحة' : 'غرف مفتوحة'}`);
     if (g.live > 0) parts.push(`<bdi dir="ltr">${fmtN(g.live)}</bdi> عم يلعبوا هلق`);
     return parts.join(' · ');
   }
@@ -651,8 +748,7 @@ body.hx::before,body.hx::after{display:none}
     off.hidden = true; ctas.hidden = false; more.hidden = false;
     $('.h-p-name', el)!.textContent = g.name;
     $('.h-p-pitch', el)!.textContent = g.description;
-    const meta = $('.h-meta', el)!;
-    meta.innerHTML = `<li>${ico('users')}<span>${pl(g)}</span></li>` +
+    $('.h-meta', el)!.innerHTML = `<li>${ico('users')}<span>${pl(g)}</span></li>` +
       (g.duration ? `<li>${ico('clock')}<span><bdi dir="ltr">${esc(g.duration.replace(/\s*د$/, ''))}</bdi> دقيقة</span></li>` : '') +
       `<li>${ico(el.dataset.ico || 'board')}${esc(el.dataset.type || '')}</li>`;
     $$<HTMLElement>('[data-act]', el).forEach((b) => { b.dataset.slug = g.slug; });
@@ -661,35 +757,59 @@ body.hx::before,body.hx::after{display:none}
     live.hidden = !line; $('span', live)!.innerHTML = line;
     onGameCb?.(P.stop, g.accent);
   }
+  // tab switch: a short CSS fade (class «swap»), then the new game's text
   function select(P: Panel, slug: string) {
     if (!P || P.cur === slug) return;
-    const parts = ['.h-p-name', '.h-p-pitch', '.h-meta', '.h-liveline', '.h-p-ctas'].map((s) => $(s, P.el)!);
-    if (!is3d()) { fill(P, slug); return; }
-    gsap.killTweensOf(parts);
-    gsap.timeline()
-      .to(parts[0], { yPercent: -105, duration: .3, ease: 'power2.in' })
-      .to(parts.slice(1), { opacity: 0, y: -8, duration: .2, stagger: .03, ease: 'power2.in' }, 0)
-      .add(() => fill(P, slug))
-      .fromTo(parts[0], { yPercent: 105 }, { yPercent: 0, duration: .75, ease: 'expo.out' })
-      .fromTo(parts.slice(1), { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .6, stagger: .05, ease: 'power3.out' }, '<0.08');
+    if (!P.shown || reduce()) { fill(P, slug); return; }
+    P.el.classList.add('swap');
+    setTimeout(() => { fill(P, slug); P.el.classList.remove('swap'); }, 200);
   }
-  function showPanel(P: Panel | undefined, on: boolean) {
-    if (!P || P.shown === on) return;
-    P.shown = on;
-    const kids = [...P.el.children] as HTMLElement[];
-    P.tl?.kill();
-    if (on) {
-      P.tl = gsap.timeline()
-        .set(kids, { opacity: 1, y: 0 })
-        .fromTo($$('.h-p-kick,.h-p-idx', P.el), { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .7, ease: 'power3.out', stagger: .06 }, 0)
-        .fromTo($('.h-p-line', P.el), { scaleX: 0 }, { scaleX: 1, duration: 1, ease: 'expo.out' }, .05)
-        .fromTo($('.h-p-name', P.el), { yPercent: 108 }, { yPercent: 0, duration: 1.05, ease: 'expo.out' }, .1)
-        .fromTo(kids.filter((k) => !k.matches('.h-p-top,.h-p-name-w')), { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: .8, ease: 'power3.out', stagger: .07 }, .22);
-    } else {
-      P.tl = gsap.timeline().to(kids, { opacity: 0, y: -10, duration: .3, ease: 'power2.in', stagger: .02 });
-    }
+
+  // ---------------------------------------------------------------- the city: lazy stills + crossfade
+  const scenes = $$<HTMLElement>('.h-scene');
+  function loadScene(n: number) {
+    const sc = scenes[n], pic = sc && $('picture[data-lazy]', sc);
+    if (!pic) return;
+    pic.removeAttribute('data-lazy');
+    $$<HTMLSourceElement>('source', pic).forEach((s) => { s.srcset = s.dataset.srcset || ''; });
+    const img = $<HTMLImageElement>('img', pic)!;
+    img.srcset = img.dataset.srcset || '';
+    const done = () => { sc.classList.add('ready'); if (want === n) showScene(n); };
+    if (img.complete && img.naturalWidth) done(); else img.addEventListener('load', done, { once: true });
   }
-  function setActive(act: number) { panels.forEach((P, i) => P && showPanel(P, i === act)); }
+  let want = 0;
+  function showScene(n: number) {
+    want = n;
+    if (!scenes[n]?.classList.contains('ready')) { loadScene(n); return; } // keep the current still until the next one is decoded
+    scenes.forEach((s, i) => s.classList.toggle('is-on', i === n));
+  }
+
+  // ---------------------------------------------------------------- the tour: which section is in the middle of the screen
+  const rail = $('#hxRail')!, railBtns = $$<HTMLElement>('button', rail), navA = $$<HTMLElement>('.h-nav a[data-cat]'), scrim = $('#hxScrim')!;
+  const sections = [$('#hero')!, ...panels.filter(Boolean).map((P) => P.sec), $('#how')!];
+  let active = -1;
+  function setActive(act: number) {
+    if (act === active) return;
+    active = act;
+    panels.forEach((P, i) => { if (!P) return; P.shown = i === act; P.sec.classList.toggle('is-on', i === act); });
+    showScene(act >= 1 && act <= 4 ? act : 0);
+    if (act >= 1 && act <= 3) loadScene(act + 1);
+    railBtns.forEach((b, i) => b.classList.toggle('on', i + 1 === act));
+    rail.classList.toggle('on', act >= 1 && act <= 4);
+    const cat = act === 2 ? 0 : act === 1 || act === 3 ? 1 : act === 4 ? 2 : -1;
+    navA.forEach((a) => a.classList.toggle('on', +(a.dataset.cat || -1) === cat));
+    scrim.classList.toggle('on', act <= 4);
+  }
+  const inBand = new Set<number>();
+  const bandIO = new IntersectionObserver((ents) => {
+    for (const e of ents) { const i = sections.indexOf(e.target as HTMLElement); if (e.isIntersecting) inBand.add(i); else inBand.delete(i); }
+    if (inBand.size) setActive(Math.max(...inBand));
+  }, { rootMargin: '-48% 0px -48% 0px' });
+  sections.forEach((s) => bandIO.observe(s));
+  setActive(0);
+  // the first landmark still is fetched only once the visitor starts moving (not on first load)
+  const warm = () => { loadScene(1); ['scroll', 'wheel', 'touchstart', 'keydown', 'pointerdown'].forEach((t) => removeEventListener(t, warm)); };
+  ['scroll', 'wheel', 'touchstart', 'keydown', 'pointerdown'].forEach((t) => addEventListener(t, warm, { passive: true }));
 
   // ---------------------------------------------------------------- real play actions
   async function act(btn: HTMLButtonElement) {
@@ -702,7 +822,7 @@ body.hx::before,body.hx::after{display:none}
     catch (e) { toast(playError(e, slug)); btn.disabled = false; btn.classList.remove('loading'); }
   }
 
-  // ---------------------------------------------------------------- navigation (fly = scroll along the camera path)
+  // ---------------------------------------------------------------- navigation
   let geo = { vh: innerHeight, tops: [0] as number[], holds: [0] as number[], how: 0 };
   function measure() {
     const vh = innerHeight, sy = scrollY, stops = $$<HTMLElement>('.h-stop');
@@ -713,18 +833,9 @@ body.hx::before,body.hx::after{display:none}
   }
   function flyTo(i: number) {
     measure();
-    const y = i <= 0 ? 0 : i <= 4 ? geo.tops[i] + (is3d() ? geo.vh * 0.04 : -70) : geo.how;
-    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) { scrollTo(0, y); return; }
-    const dist = Math.abs(y - scrollY) / geo.vh;
-    gsap.to(window, { scrollTo: { y, autoKill: true }, duration: Math.min(2.6, Math.max(0.9, 0.55 + dist * 0.42)), ease: 'power2.inOut' });
-  }
-  function goGame(slug: string) {
-    const stop = STOP_OF[slug];
-    if (!stop || !bySlug(slug)) { location.href = '/games/' + encodeURIComponent(slug); return; }
-    const P = panels[stop];
-    if (P) (P.shown ? select(P, slug) : fill(P, slug));
-    flyTo(stop);
+    if (i >= 1 && i <= 4) loadScene(i);
+    const y = i <= 0 ? 0 : i <= 4 ? geo.tops[i] + geo.vh * 0.04 : geo.how;
+    scrollTo({ top: y, behavior: reduce() ? 'auto' : 'smooth' });
   }
   document.addEventListener('click', (e) => {
     const t = e.target as Element;
@@ -757,7 +868,6 @@ body.hx::before,body.hx::after{display:none}
   function palOpen() {
     lastFocus = document.activeElement; pal.classList.add('open'); palq.value = ''; palSel = 0; palRender();
     requestAnimationFrame(() => palq.focus());
-    gsap.fromTo('.h-pal-box', { opacity: 0, y: -14, scale: .98 }, { opacity: 1, y: 0, scale: 1, duration: .45, ease: 'expo.out' });
   }
   function palClose() { pal.classList.remove('open'); (lastFocus as HTMLElement | null)?.focus?.(); }
   $('#hxOpenPal')!.addEventListener('click', palOpen);
@@ -801,7 +911,7 @@ body.hx::before,body.hx::after{display:none}
   // ---------------------------------------------------------------- open rooms (real, refreshed while visible)
   let failed = 0, lastRefresh = 0;
   async function refreshRooms() {
-    if (document.hidden || !games.length || Date.now() - lastRefresh < 2000) return;
+    if (document.hidden || !games.length || Date.now() - lastRefresh < 4000) return;
     lastRefresh = Date.now();
     const box = $('#roomList')!;
     const results = await Promise.all(games.map((g) => openRooms(g.slug).then((r) => r || [], () => null)));
@@ -881,36 +991,85 @@ body.hx::before,body.hx::after{display:none}
     } catch { box.innerHTML = `<li class="state state-error">${ui('warn')}<span>ما قدرنا نجيب القائمة</span></li>`; }
   }
 
-  // the fixed header may grow (banners): keep the content clear of it
-  function syncHeader() { H.style.setProperty('--h-hdr-real', ($('#hxHdr') as HTMLElement).offsetHeight + 'px'); }
-  document.addEventListener('tharwa:banners', syncHeader);
-  // once the hero is scrolled away, content passes under the header: give it a solid navy backing
+
+  // ---------------------------------------------------------------- the fixed header: solid once the hero is gone, height for content
   const hdr = $('#hxHdr')!;
-  const solid = () => hdr.classList.toggle('solid', scrollY > ($('#hero') as HTMLElement).offsetHeight - hdr.offsetHeight);
-  addEventListener('scroll', solid, { passive: true }); solid();
-  addEventListener('resize', syncHeader);
+  function syncHeader() { H.style.setProperty('--h-hdr-real', hdr.offsetHeight + 'px'); }
+  document.addEventListener('tharwa:banners', syncHeader);
+  addEventListener('resize', syncHeader, { passive: true });
   syncHeader();
+  const heroEnd = document.createElement('div');
+  heroEnd.style.cssText = 'position:absolute;inset:auto 0 0 0;height:1px;pointer-events:none';
+  $('#hero')!.appendChild(heroEnd);
+  new IntersectionObserver(([e]) => hdr.classList.toggle('solid', !e.isIntersecting && e.boundingClientRect.top < innerHeight),
+    { rootMargin: '0px 0px 0px 0px' }).observe(heroEnd);
+
+  // ---------------------------------------------------------------- live data: registry first, the rest when it's needed
+  let roomsSeen = false;
+  const roomsBox = $('#roomList')!;
+  new IntersectionObserver(([e]) => { roomsSeen = e.isIntersecting; if (roomsSeen) refreshRooms(); }, { rootMargin: '300px 0px' }).observe(roomsBox);
+  let leadersDone = false;
+  new IntersectionObserver(([e]) => { if (e.isIntersecting && !leadersDone) { leadersDone = true; drawLeaders(); } }, { rootMargin: '600px 0px' }).observe($('#miniLeaders')!);
 
   loadSession().then(() => {
     games = liveGames(session.site.games);
     applyGames(); mountAds();
-    refreshRooms(); drawResume();
-    setInterval(refreshRooms, 8000);
-    document.addEventListener('visibilitychange', refreshRooms);
+    onIdle(() => { refreshRooms(); drawResume(); }, 3000);
+    // poll open rooms only while their list (or a landmark panel showing counts) is on screen
+    setInterval(() => { if (roomsSeen || (active >= 1 && active <= 4)) refreshRooms(); }, 10000);
   });
-  drawLeaders();
 
-  // ---------------------------------------------------------------- the 3D world: after first paint, only when allowed
-  function boot3d() {
-    if (!H.classList.contains('h3d')) return;
-    import('../home/world').then((m) => m.start({
-      panels, measure, flyTo, setActive,
-      onGame: (cb: (stop: number, tint: string) => void) => { onGameCb = cb; },
-    })).catch((err) => {
-      console.warn('3D city unavailable, showing the static city', err);
-      H.classList.remove('h3d', 'h-live'); H.classList.add('hfb');
-    });
+  // ---------------------------------------------------------------- «جولة 3D»: the live city, opt-in on capable desktops only
+  const LS = 'serva_home_3d';
+  const btn3d = $<HTMLButtonElement>('#hx3d')!;
+  let world: { stop(): void } | null = null, booting = false;
+  function capable() {
+    if (!matchMedia('(min-width: 1100px) and (pointer: fine) and (hover: hover)').matches || reduce()) return false;
+    const nav = navigator as any, c = nav.connection;
+    if (c && (c.saveData || /2g|3g/.test(c.effectiveType || '') || c.rtt > 300)) return false;   // Save-Data or a slow link
+    if (nav.deviceMemory && nav.deviceMemory < 4) return false;
+    if (nav.hardwareConcurrency && nav.hardwareConcurrency < 4) return false;
+    try {
+      const gl = document.createElement('canvas').getContext('webgl2');
+      if (!gl) return false;
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const gpu = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      if (/Intel|UHD|Iris|Radeon\(TM\) Graphics|Vega \d+ Graphics|Mali|Adreno|PowerVR|SwiftShader|llvmpipe|Software|Basic Render/i.test(gpu)) return false;
+    } catch { return false; }
+    return true;
   }
-  const idle = (cb: () => void) => ('requestIdleCallback' in window ? (window as any).requestIdleCallback(cb, { timeout: 1500 }) : setTimeout(cb, 300));
-  if (document.readyState === 'complete') idle(boot3d); else addEventListener('load', () => idle(boot3d), { once: true });
+  function set3dUI(state: 'off' | 'loading' | 'on') {
+    btn3d.setAttribute('aria-pressed', String(state === 'on'));
+    btn3d.setAttribute('aria-busy', String(state === 'loading'));
+    btn3d.dataset.state = state;
+    $('span', btn3d)!.textContent = state === 'on' ? 'إيقاف 3D' : state === 'loading' ? 'عم نجهّز…' : 'جولة 3D';
+  }
+  async function start3d() {
+    if (world || booting) return;
+    booting = true; set3dUI('loading');
+    try {
+      const m = await import('../home/world');
+      world = await m.start({ measure, flyTo, onGame: (cb: (stop: number, tint: string) => void) => { onGameCb = cb; } });
+      try { localStorage.setItem(LS, '1'); } catch { /* private mode */ }
+      set3dUI('on');
+    } catch (err) {
+      console.warn('3D tour unavailable', err);
+      H.classList.remove('h-3d-on'); world = null; set3dUI('off'); toast('الجولة ثلاثية الأبعاد مو متاحة على هالجهاز');
+    }
+    booting = false;
+  }
+  function stop3d() {
+    world?.stop(); world = null; onGameCb = null;
+    try { localStorage.setItem(LS, '0'); } catch { /* private mode */ }
+    set3dUI('off');
+  }
+  btn3d.addEventListener('click', () => (world ? stop3d() : start3d()));
+  addEventListener('load', () => onIdle(() => {
+    if (!capable()) return;
+    btn3d.hidden = false; set3dUI('off');
+    let saved = '';
+    try { saved = localStorage.getItem(LS) || ''; } catch { /* private mode */ }
+    if (saved === '1' || /[?&]3d\b/.test(location.search)) start3d();
+  }, 4000), { once: true });
 </script>
