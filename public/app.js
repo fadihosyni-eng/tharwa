@@ -563,7 +563,9 @@
       el.classList.toggle('owned', !!owner);
       el.classList.toggle('mortgaged', !!(pr && pr.mortgaged));
       if (owner) el.style.setProperty('--owner', owner.color); else el.style.removeProperty('--owner');
-      const focus = g && st.status === 'playing' && ((g.auction && g.auction.idx === i) || (g.phase === 'buy' && g.pendingBuy === i));
+      // the tile to buy / auction lights up only once the piece has walked there — never before (it would tell where the roll lands)
+      const arrived = !S.running && !((g && g.moveSeq) > S.walked);
+      const focus = g && st.status === 'playing' && arrived && ((g.auction && g.auction.idx === i) || (g.phase === 'buy' && g.pendingBuy === i));
       el.classList.toggle('focus', !!focus);
       if (t.type === 'city') {
         const h = pr ? pr.houses : 0, bld = el.querySelector('.bld');
@@ -643,6 +645,7 @@
       S.room.players.forEach((p) => { S.disp[p.id] = p.pos ?? 0; });
       layoutTokens();
       if (S.room.game && (S.room.game.moveSeq || 0) > S.walked) walkDone(S.room.game.moveSeq);
+      updateBoard(S.room);
       updateCenter(S.room);
       updateSide(S.room);
     }
