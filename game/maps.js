@@ -22,7 +22,7 @@ const MAPS = [
     theme: {
       boardBg: 'linear-gradient(180deg, #0b1230, #05081a)', tile: '#0e1733', tile2: '#152150', line: 'rgba(255, 197, 61, .42)',
       accent: '#ffc53d', accent2: '#ffe08a', text: '#fff7e0', centerBg: 'radial-gradient(circle at 50% 30%, #1a2350, #070b1f 72%)',
-      sets: ['#8c6b3f', '#2fb5a8', '#c8584f', '#d9823a', '#7d5bd6', '#4f8fe0', '#3f9a4a', '#f4d27a'],
+      sets: ['#8c6b3f', '#2fb5a8', '#c8584f', '#d9823a', '#7d5bd6', '#4f8fe0', '#3f9a4a', '#e0e6ef'],
     },
     sets: [
       // Yemen (not a Gulf state, flag like Iraq's) and Bahrain (flag like Qatar's) became two Gulf landmark sets.
@@ -45,7 +45,7 @@ const MAPS = [
     theme: {
       boardBg: 'linear-gradient(180deg, #2c2218, #1b140d)', tile: '#3a2d20', tile2: '#4a3a29', line: 'rgba(214, 180, 120, .45)',
       accent: '#c9a45c', accent2: '#e9d3a0', text: '#f6ead4', centerBg: 'radial-gradient(circle at 50% 30%, #4a3a27, #241a11 72%)',
-      sets: ['#7a5236', '#5f8f6f', '#c0583a', '#c98d3c', '#7a8f3a', '#8e4a78', '#4f7b8f', '#efd27a'],
+      sets: ['#7a5236', '#5f8f6f', '#c0583a', '#d4892a', '#7a8f3a', '#8e4a78', '#4f7b8f', '#3fc1c9'],
     },
     sets: [
       // Yemen, Egypt and Jordan have flags like Iraq's and Palestine's, so they are shown as
@@ -69,7 +69,7 @@ const MAPS = [
     theme: {
       boardBg: 'linear-gradient(180deg, #14021f, #05010d)', tile: '#0d0422', tile2: '#170833', line: 'rgba(0, 240, 255, .5)',
       accent: '#ff2fd6', accent2: '#00f0ff', text: '#f3eaff', centerBg: 'radial-gradient(circle at 50% 30%, #2a0742, #07010f 72%)',
-      sets: ['#7b2cff', '#00e5ff', '#ff2fd6', '#ffe600', '#39ff88', '#ff6a00', '#00a2ff', '#ff3864'],
+      sets: ['#7b2cff', '#00ffd0', '#ff8fe8', '#ffe600', '#39ff88', '#ff6a00', '#00a2ff', '#ff3864'],
     },
     sets: [
       { name: 'حي الخردة', cities: ['زقاق الأسلاك', 'سوق القطع', 'مخزن الروبوتات'] },

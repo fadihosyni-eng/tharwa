@@ -110,9 +110,30 @@ function checkCountryMap(label, map) {
   checkBoard(label, B.tilesFor(map));
 }
 
+// ---------------------------------------------------------------- tile names fit their tile
+// A tile shows a name on at most 2 lines and never splits a word (public/app.js fitNames). Measured in the
+// browser (4-maps audit): a word of up to 12 letters, or a name of up to 22 letters, still fits every tile at
+// 1280x800 with a font of 9px or more. Longer names need a new layout check first.
+const letters = (s) => [...String(s).replace(/[ً-ْـ\s]/g, '')].length;
+function checkNameLength(label, name) {
+  assert(letters(name) <= 22, `${label}: «${name}» is too long for a tile (${letters(name)} letters, max 22)`);
+  for (const w of String(name).split(/\s+/)) assert(letters(w) <= 12, `${label}: the word «${w}» in «${name}» is too long for a tile (max 12 letters)`);
+  assert(String(name).split(/\s+/).length <= 3, `${label}: «${name}» has more than 3 words`);
+}
+for (const t of B.TILES) checkNameLength('board', t.name);
+for (const [code, c] of Object.entries(B.COUNTRIES)) c.cities.forEach((n) => checkNameLength(`classic ${code}`, n));
+for (const m of M.MAPS) {
+  for (const s of m.sets || []) s.cities.forEach((n) => checkNameLength(m.name, n));
+  for (const n of [...(m.ports || []), ...(m.utils || [])]) checkNameLength(m.name, n);
+}
+
 // ---------------------------------------------------------------- themed maps
 for (const m of M.MAPS) {
   checkColours(m.name, (m.theme && m.theme.sets) || Object.values(B.SETS).map((s) => s.color));
+  // a set colour never looks like the map's own accent colours (borders, prices, hover glow)
+  for (const a of [m.theme.accent, m.theme.accent2].filter(Boolean)) {
+    for (const [i, c] of m.theme.sets.entries()) assert(dE(a, c) >= 20, `${m.name}: set colour ${i + 1} (${c}) looks like the accent ${a} (ΔE ${dE(a, c).toFixed(1)})`);
+  }
   if (!m.sets) continue;
   assert.strictEqual(m.sets.length, 8, `${m.name}: 8 sets`);
   for (const s of m.sets) assert(s.name && Array.isArray(s.cities) && s.cities.length === 3, `${m.name}: set «${s.name}» needs 3 cities`);
@@ -190,12 +211,14 @@ for (const slot of B.SLOTS) {
     if (moved && moved !== slot) assert.strictEqual(after[moved], before[slot], `setCountry swapped ${code} with ${before[slot]}`);
   }
 }
-// random chains of picks (refused ones leave the board as it was)
-for (let i = 0; i < 300; i++) {
+// random chains of picks: 800 x 25 = 20,000 random picks (refused ones leave the board as it was, with the
+// picker's Arabic reason); every board stays full, no duplicate or look-alike flag, Syria/Jordan/Iraq in place
+for (let i = 0; i < 800; i++) {
   let map = B.randomMap();
   for (let k = 0; k < 25; k++) {
     const slot = B.SLOTS[Math.floor(Math.random() * 8)], code = B.ARAB[Math.floor(Math.random() * B.ARAB.length)];
-    try { map = B.setCountry(map, slot, code); } catch (e) { assert.strictEqual(e.status, 409, e.message); }
+    try { map = B.setCountry(map, slot, code); } catch (e) { assert.strictEqual(e.status, 409, e.message); assert.strictEqual(e.userMsg, B.pickRefusal(slot, code)); }
+    assert.deepStrictEqual(Object.keys(map).sort(), [...B.SLOTS].sort(), 'classic swaps: 8 slots');
     checkCountryMap('classic swaps', map);
     hasFixed('classic swaps', map);
   }

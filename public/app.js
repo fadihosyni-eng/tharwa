@@ -280,7 +280,7 @@
       if (S.built) {
         $$('#board .tile').forEach((el) => {
           const i = Number(el.dataset.i), t = T(i);
-          if (t.type === 'city' || t.type === 'port' || t.type === 'util') { el.innerHTML = tileInner(t, i); el.title = t.name + (t.countryName ? ' — ' + t.countryName : ''); }
+          if (t.type === 'city' || t.type === 'port' || t.type === 'util') { el.innerHTML = tileInner(t, i); el.title = t.name + (t.countryName ? ' — ' + t.countryName : ''); delete el.dataset.fit; }
           const bld = el.querySelector('.bld'); if (bld) delete bld.dataset.h;
           const bown = el.querySelector('.bown'); if (bown) delete bown.dataset.k;
         });
@@ -464,6 +464,9 @@
     if (window.ResizeObserver) new ResizeObserver(() => { layoutTokens(); fitNames(); }).observe($('#board'));
     dockChat();
     fitNames();
+    // a web font that arrives late changes every name's width: fit all tiles again
+    const refit = () => { $$('#board .tile').forEach((t) => { delete t.dataset.fit; }); fitNames(); };
+    if (document.fonts) { document.fonts.ready.then(refit); document.fonts.addEventListener('loadingdone', refit); }
     setInterval(tick, 250);
   }
 
@@ -506,7 +509,8 @@
     if (i % 10 === 0) return `<div class="ticon">${ART.cornerIcon(iconName(t))}</div><div class="tname">${esc(t.name)}</div>${t.type === 'vacation' ? '<div class="pot" data-pot></div>' : ''}${t.type === 'start' ? `<div class="pot">+${fmt(S.board.goSalary)}</div>` : ''}${t.type === 'jail' ? '<div class="visit">زيارة</div>' : ''}`;
     // Property strip: transparent with the price while for sale; filled with the
     // owner's colour (and their piece + buildings) once someone buys it.
-    const band = `<div class="band"><span class="bprice">${fmt(t.price)}</span><span class="bown"></span><span class="bld"></span></div>`;
+    // .mlabel: «مرهونة» on the striped strip (shown only while mortgaged; a mortgaged tile never has buildings)
+    const band = `<div class="band"><span class="bprice">${fmt(t.price)}</span><span class="bown"></span><span class="bld"></span><span class="mlabel">مرهونة</span></div>`;
     // .towner: the owner's name in their colour (filled by updateBoard once someone buys it)
     if (t.type === 'city') return `${band}<div class="tbody">${mark(t, 'on-tile')}<div class="tname">${esc(t.name)}</div><div class="towner"></div></div>`;
     if (t.price) return `${band}<div class="tbody">${tileIcon(t)}<div class="tname">${esc(t.name)}</div><div class="towner"></div></div>`;
@@ -648,27 +652,65 @@
     if (!tk) return;
     tk.classList.remove('hop'); void tk.offsetWidth; tk.classList.add('hop');
   }
-  // Phones: tile names break only between words (CSS keep-all). A word that is still wider than its tile,
-  // or a name that needs more than 2 lines, gets a smaller font on that tile only — never split inside a word.
+  // Every tile name is shown in full: it breaks only between words (CSS keep-all), on at most 2 lines, never with «…».
+  // When a tile is too small (an owned tile also has the owner line), its flag / icon gets smaller first (desktop),
+  // then that tile's name font — never split inside a word. Phones only lower the font (the flag keeps its size there).
   const PHONE = '(max-width: 820px)';
   let fitQueued = false;
+  function fitTile(tile, phone) {
+    const n = tile.querySelector('.tname');
+    if (!n) return;
+    const body = n.parentElement; // .tbody, or the corner tile itself
+    const mk = phone ? null : body.querySelector(':scope > .flag, :scope > .ticon');
+    const own = tile.querySelector('.towner');
+    // nothing that changes the room a name has → keep the last fit
+    const key = [phone, tile.offsetWidth, tile.offsetHeight, n.textContent, own ? own.textContent : '', tile.classList.contains('mortgaged')].join('|');
+    if (tile.dataset.fit === key) return;
+    n.style.fontSize = '';
+    if (own) own.style.fontSize = '';
+    if (mk) { mk.style.removeProperty('--fs'); mk.style.width = mk.style.height = ''; }
+    if (!n.clientWidth) { delete tile.dataset.fit; return; }
+    // the owner's name: a slightly smaller font before it is cut with «…» (desktop; phones hide it)
+    if (own && own.textContent && own.clientWidth) {
+      let os = parseFloat(getComputedStyle(own).fontSize);
+      while (os > 7.5 && own.scrollWidth > own.clientWidth + 0.5) { os -= 0.25; own.style.fontSize = os + 'px'; }
+    }
+    const tr = tile.getBoundingClientRect();
+    const br = body === tile ? tr : body.getBoundingClientRect();
+    const top = Math.max(br.top, tr.top) + 1.5, bottom = Math.min(br.bottom, tr.bottom) - 1.5; // clear of the tile's rounded border
+    const out = () => { // the name (or anything above / below it) pushed out of its tile
+      for (const c of body.children) {
+        if (c.classList.contains('band') || getComputedStyle(c).position === 'absolute') continue;
+        const r = c.getBoundingClientRect();
+        if (r.height && (r.top < top - 0.5 || r.bottom > bottom + 0.5)) return true;
+      }
+      return false;
+    };
+    const wide = () => n.scrollWidth > n.clientWidth + 0.5;     // a word wider than the tile
+    const tall = () => n.scrollHeight > n.clientHeight + 0.5;   // more than 2 lines
+    let fs = parseFloat(getComputedStyle(n).fontSize);
+    const min = phone ? 4.1 : 8;
+    const smaller = () => { fs -= 0.25; n.style.fontSize = fs + 'px'; };
+    while (fs > min && (wide() || tall())) smaller();
+    if (mk) {
+      let ms = mk.getBoundingClientRect().height;
+      const mmin = tile.classList.contains('corner') ? 22 : 14;
+      while (ms > mmin && out()) {
+        ms -= 1;
+        if (mk.classList.contains('flag')) mk.style.setProperty('--fs', ms + 'px'); else mk.style.width = mk.style.height = ms + 'px';
+      }
+    }
+    while (fs > min && out()) smaller();
+    tile.dataset.fit = key;
+  }
   function fitNames() {
     if (fitQueued) return;
     fitQueued = true;
     requestAnimationFrame(() => {
       fitQueued = false;
       const phone = matchMedia(PHONE).matches;
-      for (const n of $$('#board .tile .tname')) {
-        n.style.fontSize = '';
-        if (!phone || !n.clientWidth) continue;
-        const tile = n.closest('.tile');
-        const cut = () => n.getBoundingClientRect().bottom > tile.getBoundingClientRect().bottom + 0.5; // pushed out of its tile
-        let fs = parseFloat(getComputedStyle(n).fontSize);
-        while (fs > 4.1 && (n.scrollWidth > n.clientWidth + 0.5 || n.scrollHeight > n.clientHeight + 0.5 || cut())) {
-          fs -= 0.25;
-          n.style.fontSize = fs + 'px';
-        }
-      }
+      for (const tile of $$('#board .tile')) fitTile(tile, phone);
+      layoutTokens(); // tokens stand next to the names, which may have moved
     });
   }
   // Phones: the chat button sits in the top bar (next to sound/account) instead of floating over the controls.
@@ -680,10 +722,25 @@
     else if (!phone && fab.parentNode === bar) $('#chatDrawer').before(fab);
   }
 
+  // Where tokens stand on a tile (desktop), in board coordinates: on the property strip of the left/right columns,
+  // else in the part of the tile above the name (the strip + flag on the bottom row, the flag / icon elsewhere).
+  // null = no room there (the token goes back to the tile centre).
+  function tokenZone(board, tile) {
+    const b = board.getBoundingClientRect(), ox = b.left + board.clientLeft, oy = b.top + board.clientTop;
+    const band = tile.querySelector('.band');
+    if (band && (tile.classList.contains('side-l') || tile.classList.contains('side-r'))) {
+      const r = band.getBoundingClientRect();
+      return r.width >= 14 ? { x: r.left - ox, y: r.top - oy, w: r.width, h: r.height, vertical: true } : null;
+    }
+    const n = tile.querySelector('.tname');
+    if (!n) return null;
+    const t = tile.getBoundingClientRect(), top = n.getBoundingClientRect().top - 2;
+    return top - t.top >= 14 ? { x: t.left - ox, y: t.top - oy, w: t.width, h: top - t.top, vertical: false } : null;
+  }
   function layoutTokens() {
     const board = $('#board'), layer = $('#tokens');
     if (!board || !layer || !S.room) return;
-    const st = S.room, g = st.game;
+    const st = S.room, g = st.game, phone = matchMedia(PHONE).matches;
     const alive = st.players.filter((p) => !p.bankrupt && !p.left);
     const groups = {};
     alive.forEach((p) => { const d = S.disp[p.id] ?? 0; (groups[d] = groups[d] || []).push(p); });
@@ -707,9 +764,23 @@
       const tile = board.querySelector(`.tile[data-i="${d}"]`);
       if (!tile) continue;
       const grp = groups[d], k = grp.indexOf(p), n = grp.length;
+      const tw = tile.offsetWidth, th = tile.offsetHeight;
+      // Desktop: the tokens stand beside the name, never on it (see tokenZone), in one row shrunk to fit.
+      const z = !phone && tokenZone(board, tile);
+      if (z) {
+        const along = z.vertical ? z.h : z.w, across = z.vertical ? z.w : z.h;
+        // a piece is drawn ~28% taller than its box (upwards): on the side columns it must not reach the tile above
+        const stacked = !z.vertical && (tile.classList.contains('side-l') || tile.classList.contains('side-r'));
+        const size = Math.max(14, Math.min(40, Math.max(22, Math.min(tw, th) * 0.6), z.vertical ? across * 0.84 : stacked ? across / 1.28 : across, along / (1 + 0.8 * (n - 1))));
+        const step = n > 1 ? Math.max(0, Math.min(size * 0.8, (along - size) / (n - 1))) : 0;
+        const a = (along - step * (n - 1)) / 2 + k * step, c = across / 2 + (stacked ? size * 0.14 : 0);
+        const cx = z.x + (z.vertical ? c : a), cy = z.y + (z.vertical ? a : c);
+        el.style.width = el.style.height = size + 'px';
+        el.style.transform = `translate(${cx - size / 2}px, ${cy - size / 2}px)`;
+        continue;
+      }
       const per = n > 4 ? 3 : 2, rows = Math.ceil(n / per), cols = Math.min(n, per);
       // Big glowing tokens: clamp(22, tile*0.6, 40), shrunk only as much as needed so a group fits its tile.
-      const tw = tile.offsetWidth, th = tile.offsetHeight;
       const fit = Math.min(tw / (1 + 0.8 * (cols - 1)), th / (1 + 0.8 * (rows - 1)));
       const size = Math.max(16, Math.min(Math.max(22, Math.min(40, Math.min(tw, th) * 0.6)), n > 1 ? fit : Infinity));
       const col = k % per, row = Math.floor(k / per);
