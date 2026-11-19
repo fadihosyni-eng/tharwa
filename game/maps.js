@@ -4,6 +4,8 @@
 //   classic — the Arab-countries board (countries picked per room, see board.js)
 //   others  — fixed set lists; each set may show a real flag (`flag`) or a neon emblem (no flag).
 // Prices are in account points; admins can change price/enabled in «الخرائط» (stored in settings).
+// Rules (checked by test/maps.js): no country or name twice on a board, no two look-alike flags
+// (board.js LOOKALIKE), a flag always matches its set name, and the 8 set colours are easy to tell apart.
 const B = require('./board');
 
 const MAPS = [
@@ -20,12 +22,13 @@ const MAPS = [
     theme: {
       boardBg: 'linear-gradient(180deg, #0b1230, #05081a)', tile: '#0e1733', tile2: '#152150', line: 'rgba(255, 197, 61, .42)',
       accent: '#ffc53d', accent2: '#ffe08a', text: '#fff7e0', centerBg: 'radial-gradient(circle at 50% 30%, #1a2350, #070b1f 72%)',
-      sets: ['#8c6b3f', '#2fb5a8', '#c8584f', '#d99a3a', '#7d5bd6', '#e0b84a', '#2d8f5f', '#f4d27a'],
+      sets: ['#8c6b3f', '#2fb5a8', '#c8584f', '#d9823a', '#7d5bd6', '#4f8fe0', '#3f9a4a', '#f4d27a'],
     },
     sets: [
-      { flag: 'ye', name: 'اليمن', cities: ['المكلا', 'عدن', 'صنعاء'] },
-      { flag: 'bh', name: 'البحرين', cities: ['الرفاع', 'المحرق', 'المنامة'] },
-      { flag: 'om', name: 'عُمان', cities: ['نزوى', 'صلالة', 'مسقط'] },
+      // Yemen (not a Gulf state, flag like Iraq's) and Bahrain (flag like Qatar's) became two Gulf landmark sets.
+      { name: 'الربع الخالي', cities: ['مخيم الكثبان', 'رمال الشيبة', 'واحة ليوا'] },
+      { name: 'جزر اللؤلؤ', cities: ['قلعة عراد', 'طريق اللؤلؤ', 'المنامة'] },
+      { flag: 'om', name: 'سلطنة عُمان', cities: ['نزوى', 'صلالة', 'مسقط'] },
       { flag: 'kw', name: 'الكويت', cities: ['الجهراء', 'الفروانية', 'أبراج الكويت'] },
       { flag: 'iq', name: 'العراق', cities: ['الفاو', 'أم قصر', 'البصرة'] },
       { flag: 'qa', name: 'قطر', cities: ['الخور', 'لوسيل', 'الدوحة'] },
@@ -36,20 +39,22 @@ const MAPS = [
     utils: ['شركة الطاقة', 'شركة الاتصالات'],
   },
   {
-    id: 'levant', name: 'الشام القديمة', price: 750,
-    description: 'حجر ورمل وزيتون: دمشق والقدس وبيروت والبتراء وبغداد والقاهرة بنقشة عربية أصيلة.',
+    id: 'levant', name: 'الشرق القديم', price: 750,
+    description: 'حجر ورمل وزيتون: دمشق والقدس وبيروت وبغداد، والبتراء والأهرامات وسبأ، بنقشة عربية أصيلة.',
     bg: '/bg/map-levant.svg',
     theme: {
       boardBg: 'linear-gradient(180deg, #2c2218, #1b140d)', tile: '#3a2d20', tile2: '#4a3a29', line: 'rgba(214, 180, 120, .45)',
       accent: '#c9a45c', accent2: '#e9d3a0', text: '#f6ead4', centerBg: 'radial-gradient(circle at 50% 30%, #4a3a27, #241a11 72%)',
-      sets: ['#8a5a3a', '#5f8f6f', '#b0563f', '#c98d3c', '#7a8f3a', '#a8443a', '#4f7b8f', '#d4a64a'],
+      sets: ['#7a5236', '#5f8f6f', '#c0583a', '#c98d3c', '#7a8f3a', '#8e4a78', '#4f7b8f', '#efd27a'],
     },
     sets: [
-      { flag: 'ye', name: 'اليمن', cities: ['مأرب', 'شبام', 'صنعاء القديمة'] },
+      // Yemen, Egypt and Jordan have flags like Iraq's and Palestine's, so they are shown as
+      // ancient-site sets with an emblem instead of a flag.
+      { name: 'مملكة سبأ', cities: ['شبام حضرموت', 'سد مأرب', 'عرش بلقيس'] },
       { flag: 'sa', name: 'السعودية', cities: ['تبوك', 'الجوف', 'مدائن صالح'] },
-      { flag: 'eg', name: 'مصر', cities: ['أسوان', 'الإسكندرية', 'القاهرة'] },
+      { name: 'الأهرامات', cities: ['سقارة', 'أبو الهول', 'هرم خوفو'] },
       { flag: 'iq', name: 'العراق', cities: ['الموصل', 'أربيل', 'بغداد'] },
-      { flag: 'jo', name: 'الأردن', cities: ['وادي رم', 'جرش', 'البتراء'] },
+      { name: 'البتراء', cities: ['وادي موسى', 'السيق', 'الدير'] },
       { flag: 'lb', name: 'لبنان', cities: ['صور', 'بعلبك', 'بيروت'] },
       { flag: 'ps', name: 'فلسطين', cities: ['نابلس', 'عكا', 'القدس'] },
       { flag: 'sy', name: 'سوريا', cities: ['قلعة حلب', 'سوق الحميدية', 'الجامع الأموي'] },
@@ -68,16 +73,16 @@ const MAPS = [
     },
     sets: [
       { name: 'حي الخردة', cities: ['زقاق الأسلاك', 'سوق القطع', 'مخزن الروبوتات'] },
-      { name: 'المرفأ المعلّق', cities: ['رصيف الدرونز', 'برج الشحن', 'بوابة المدار'] },
+      { name: 'المرفأ المعلّق', cities: ['رصيف المناطيد', 'برج الشحن', 'بوابة النجوم'] },
       { name: 'شارع البكسل', cities: ['ممر الهولوغرام', 'ساحة الشاشات', 'قاعة الألعاب'] },
       { name: 'وادي الشرائح', cities: ['مصنع المعالجات', 'مختبر الكم', 'مركز البيانات'] },
       { name: 'سوق النيون', cities: ['بازار الليزر', 'حي الأضواء', 'برج الإعلانات'] },
       { name: 'المدينة العائمة', cities: ['جسر الضباب', 'الحديقة المعلّقة', 'قصر السحاب'] },
       { name: 'حي الذكاء', cities: ['أكاديمية الآلة', 'عقل المدينة', 'برج الخوارزميات'] },
-      { name: 'قمة 2077', cities: ['منصة الإطلاق', 'مدار المجرّة', 'عرش النيون'] },
+      { name: 'قمة 2077', cities: ['منصة الإطلاق', 'قبة المجرّة', 'عرش المستقبل'] },
     ],
     ports: ['محطة المدار', 'بوابة الهايبرلوب', 'ميناء الدرونز', 'مهبط الصواريخ'],
-    utils: ['مفاعل الاندماج', 'شبكة الكم'],
+    utils: ['مفاعل الاندماج', 'شبكة الألياف'],
   },
 ];
 const BY_ID = Object.fromEntries(MAPS.map((m) => [m.id, m]));

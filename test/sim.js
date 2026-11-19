@@ -38,6 +38,15 @@ function check(room) {
     assert(ln && br && !ln.bankrupt && !br.bankrupt, 'loans only between live players');
   }
   if (g.auction && g.auction.seller) assert.strictEqual(g.props[g.auction.idx].owner, g.auction.seller, 'seller still owns auctioned property');
+  for (const d of g.debts) {
+    assert(d.amount > 0, 'a debt is always a positive amount');
+    if (d.to) { const c = room.players.find((p) => p.id === d.to); assert(c && !c.bankrupt, 'debts only to live players'); }
+  }
+  for (const o of g.debtOffers || []) {
+    assert(room.status === 'playing' && g.debts.length, 'buy offers only while someone is in debt');
+    assert.strictEqual(o.to, E.current(room).id, 'buy offers are made to the debtor');
+    assert(g.props[o.idx] && g.props[o.idx].owner === o.to, 'offered property belongs to the debtor');
+  }
   if (room.status === 'playing') {
     if (g.debts.length) assert.strictEqual(g.phase, 'debt');
     assert(!E.current(room).bankrupt, 'current player is alive');
@@ -86,6 +95,24 @@ for (let n = 0; n < GAMES; n++) {
           stats.sellAuctions = (stats.sellAuctions || 0) + 1;
         } catch (e) { if (!e.userMsg) throw e; }
       }
+    }
+    // debt phase: another player offers to buy a debtor's property or sends money (never creates money)
+    if (!process.env.NOTRADE && g.phase === 'debt' && Math.random() < 0.35) {
+      const debtor = E.current(room), others = E.active(room).filter((x) => x !== debtor);
+      const o = others[Math.floor(Math.random() * others.length)];
+      const theirs = Object.keys(g.props).map(Number).filter((i) => g.props[i].owner === debtor.id);
+      const total = () => room.players.reduce((s2, p) => s2 + p.money, 0) + g.pot;
+      const before = total();
+      try {
+        if (theirs.length && Math.random() < 0.7) {
+          E.act(room, o.id, 'debtOffer', { idx: theirs[Math.floor(Math.random() * theirs.length)], price: 10 * (1 + Math.floor(Math.random() * 40)) });
+          stats.debtOffers = (stats.debtOffers || 0) + 1;
+        } else {
+          E.act(room, o.id, 'debtRelief', { amount: 10 * (1 + Math.floor(Math.random() * 20)) });
+          stats.reliefs = (stats.reliefs || 0) + 1;
+        }
+      } catch (e) { if (!e.userMsg) throw e; }
+      assert(total() <= before, 'debt help never creates money');
     }
     let acted = false;
     const order = [E.current(room), ...room.players.filter((p) => p !== E.current(room))];

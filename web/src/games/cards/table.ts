@@ -516,7 +516,7 @@ export function createCardGame(slug: string, el: HTMLElement, under: HTMLElement
         case 'redeal': showPop(`<h3>${ui('refresh')}توزيع جديد</h3><p class="muted">${slug === '400' ? `مجموع الطلبات ${e.total} أقل من 11` : 'كل اللاعبين قالوا باس'}</p>`, 1800); await wait(500); break;
         case 'hand': showPop(handSummary(e), slug === 'trix' ? 3800 : 4500); ctx.sound(e.delta && meSeat() >= 0 && e.delta[teams && slug === 'tarneeb' ? meSeat() % 2 : meSeat()] >= 0 ? 'cash' : 'pay'); await wait(500); break;
         case 'deal': dealt = true; paintTrick([]); await dealAnim(); break;
-        case 'left': bubble(e.seat!, 'طلع — الكمبيوتر بيلعب عنه', 2500); break;
+        case 'left': bubble(e.seat!, `${e.forfeit ? 'انسحب' : 'طلع'} — الكمبيوتر بيلعب عنه`, 2500); break;
         default: break;
       }
     }

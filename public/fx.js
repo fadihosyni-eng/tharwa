@@ -60,13 +60,15 @@
   }
 
   let spins = 0;
-  function setDice(root, values, animate) {
+  // opts (board dice): { from: {x, y} screen direction of the thrower from the board centre, onImpact() at the first bounce }
+  function setDice(root, values, animate, opts = {}) {
     if (!root) return;
     if (root.id === 'dice') {
       root._vals = values.map(val);
       attach3D(root);
-      if (root._d3) { if (animate) root._d3.roll(root._vals); else root._d3.show(root._vals); return; }
+      if (root._d3) { if (animate) root._d3.roll(root._vals, opts); else root._d3.show(root._vals); return; }
     }
+    if (animate && opts.onImpact) opts.onImpact(); // CSS dice: the sound goes with the tumble
     if (animate && calm()) animate = false;
     if (animate) spins++;
     const cubes = root.querySelectorAll('.cube');
@@ -122,14 +124,55 @@
     })(t0);
   }
 
-  // ---------------------------------------------------------------- sound (WebAudio synth)
+  // ---------------------------------------------------------------- sound
+  // Real sounds: Kenney CC0 samples in /tharwa/sfx (sfx.json: action -> variations), played with Web Audio.
+  // They load after the first click/key (browsers block audio before that); until a sample is decoded,
+  // the old synth tone plays instead. Everything is silent while the mute toggle is off (tharwa_sound = '0').
+  // Old synth names map onto sample actions here.
+  const ALIAS = { dice: 'dice-roll', coin: 'receive', cash: 'receive', bankrupt: 'lose' };
+  // per-action volume on top of the master (the files are all normalised to the same loudness)
+  const VOL = { 'dice-shake': 0.55, 'dice-roll': 0.6, step: 0.32, click: 0.4, chat: 0.6, bid: 0.7, turn: 0.8 };
+  const MASTER = 0.5;
+  const Samples = {
+    map: null, buf: {}, loading: null, gain: null,
+    load(ctx) {
+      if (this.loading) return this.loading;
+      this.gain = ctx.createGain(); this.gain.gain.value = MASTER; this.gain.connect(ctx.destination);
+      this.loading = fetch('/tharwa/sfx/sfx.json').then((r) => r.json()).then((j) => {
+        this.map = j.sounds || {};
+        // decode one action at a time (light on the CPU); the most used ones first
+        const first = ['dice-roll', 'dice-shake', 'step', 'buy', 'pay', 'receive', 'card', 'turn', 'click'];
+        const keys = [...first.filter((k) => this.map[k]), ...Object.keys(this.map).filter((k) => !first.includes(k))];
+        return keys.reduce((p, k) => p.then(() => this.fetchKey(ctx, k)), Promise.resolve());
+      }).catch(() => { /* no samples: synth only */ });
+      return this.loading;
+    },
+    fetchKey(ctx, k) {
+      return Promise.all((this.map[k] || []).map((f) => fetch('/tharwa/sfx/' + f).then((r) => r.arrayBuffer())
+        .then((ab) => new Promise((ok, bad) => ctx.decodeAudioData(ab, ok, bad))).catch(() => null)))
+        .then((list) => { const l = list.filter(Boolean); if (l.length) this.buf[k] = l; });
+    },
+    play(ctx, k) {
+      const l = this.buf[k];
+      if (!l || !this.gain) return false;
+      const src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = l[Math.floor(Math.random() * l.length)];
+      src.playbackRate.value = 0.96 + Math.random() * 0.08; // a little variation so repeats don't sound copied
+      g.gain.value = VOL[k] ?? 0.85;
+      src.connect(g).connect(this.gain);
+      src.start();
+      return true;
+    },
+  };
+  const trace = [];
+  window.__sfxTrace = trace; // test hook: every sound request, even when muted
   const Sound = {
     on: (() => { try { return localStorage.getItem('tharwa_sound') !== '0'; } catch (e) { return true; } })(),
     ctx: null,
     toggle() {
       this.on = !this.on;
       try { localStorage.setItem('tharwa_sound', this.on ? '1' : '0'); } catch (e) { /* ignore */ }
-      if (this.on) this.play('coin');
+      if (this.on) { this.unlock(); this.play('click'); }
       return this.on;
     },
     ac() {
@@ -153,17 +196,31 @@
       f.type = type; f.frequency.value = freq; s.buffer = buf; g.gain.value = vol;
       s.connect(f).connect(g).connect(ac.destination); s.start(ac.currentTime + when);
     },
+    // Called on the first user gesture: start the audio context and load the samples (only when sound is on).
+    unlock() {
+      if (!this.on) return;
+      const ac = this.ac();
+      if (ac) Samples.load(ac);
+    },
     play(name) {
+      const key = ALIAS[name] || name;
+      trace.push({ name: key, t: Date.now(), muted: !this.on });
+      if (trace.length > 200) trace.splice(0, trace.length - 200);
+      if (window.__sfxLog) console.log('[sfx]', key, this.on ? '' : '(muted)');
       if (!this.on || document.hidden) return;
       try {
-        switch (name) {
-          case 'dice': for (let k = 0; k < 6; k++) this.noise(0.05, 0.16, k * 0.09 + Math.random() * 0.03); break;
+        const ac = this.ac();
+        if (ac) { Samples.load(ac); if (Samples.play(ac, key)) return; }
+      } catch (e) { /* fall back to the synth */ }
+      try {
+        switch (key) {
+          case 'dice-roll': case 'dice-shake': for (let k = 0; k < 6; k++) this.noise(0.05, 0.16, k * 0.09 + Math.random() * 0.03); break;
           // Soft, round tones (sine/triangle) at ~0.08-0.12 so they are audible but not harsh.
-          case 'coin': this.tone(1319, 0.1, 'sine', 0.1); this.tone(1760, 0.2, 'sine', 0.09, 0.07); this.tone(2637, 0.12, 'sine', 0.03, 0.07); break;
-          case 'pay': this.tone(523, 0.12, 'triangle', 0.1, 0, 392); this.tone(392, 0.18, 'triangle', 0.08, 0.1, 294); break;
+          case 'receive': case 'salary': case 'trade-ok': this.tone(1319, 0.1, 'sine', 0.1); this.tone(1760, 0.2, 'sine', 0.09, 0.07); this.tone(2637, 0.12, 'sine', 0.03, 0.07); break;
+          case 'pay': case 'trade-no': case 'error': this.tone(523, 0.12, 'triangle', 0.1, 0, 392); this.tone(392, 0.18, 'triangle', 0.08, 0.1, 294); break;
           case 'buy': [523, 659, 784, 1047].forEach((f, k) => this.tone(f, 0.24, 'triangle', 0.09, k * 0.065)); break;
           // Hammer: three wooden knocks (pitch-dropping thud + short low noise), the last a bit stronger.
-          case 'build': [0, 0.15, 0.3].forEach((w, k) => {
+          case 'build': case 'hotel': [0, 0.15, 0.3].forEach((w, k) => {
             const v = k === 2 ? 0.12 : 0.1;
             this.tone(170, 0.11, 'sine', v, w, 70); this.tone(340, 0.05, 'triangle', v * 0.45, w, 160);
             this.noise(0.05, v * 0.9, w, 900, 'lowpass');
@@ -174,17 +231,22 @@
             this.tone(f, 0.09, 'sine', 0.09, w); this.tone(f * 1.5, 0.06, 'sine', 0.035, w + 0.005);
             this.noise(0.03, 0.05, w, 3200);
           } this.tone(2093, 0.3, 'sine', 0.07, 0.44); break;
-          case 'turn': this.tone(880, 0.12, 'sine', 0.1); this.tone(1175, 0.22, 'sine', 0.09, 0.1); break;
+          case 'turn': case 'trade-send': case 'chat': this.tone(880, 0.12, 'sine', 0.1); this.tone(1175, 0.22, 'sine', 0.09, 0.1); break;
           case 'card': this.tone(600, 0.25, 'sine', 0.06, 0, 1200); break;
           case 'jail': this.tone(220, 0.3, 'sawtooth', 0.06, 0, 110); this.tone(196, 0.35, 'sawtooth', 0.05, 0.2, 98); break;
           case 'bid': this.tone(740, 0.08, 'square', 0.05); break;
           case 'win': [523, 659, 784, 1047, 784, 1047].forEach((f, k) => this.tone(f, 0.28, 'triangle', 0.1, k * 0.13)); break;
-          case 'bankrupt': [392, 330, 262, 196].forEach((f, k) => this.tone(f, 0.3, 'triangle', 0.08, k * 0.16)); break;
+          case 'lose': [392, 330, 262, 196].forEach((f, k) => this.tone(f, 0.3, 'triangle', 0.08, k * 0.16)); break;
           default: break;
         }
       } catch (e) { /* audio not available */ }
     },
   };
+
+  // the first click / key press unlocks audio and starts loading the samples
+  const unlockOnce = () => { Sound.unlock(); if (Sound.on) { removeEventListener('pointerdown', unlockOnce, true); removeEventListener('keydown', unlockOnce, true); } };
+  // (fx.js also runs at build time in web/src/lib/art-build.ts, where there are no events)
+  if (typeof addEventListener === 'function') { addEventListener('pointerdown', unlockOnce, true); addEventListener('keydown', unlockOnce, true); }
 
   window.FX = { diceHTML, setDice, floatText, confetti, Sound };
 })();

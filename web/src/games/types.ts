@@ -1,7 +1,9 @@
 // Shapes of the room state streamed by /api/g/events (see lib/minigames.js publicRoom()).
 export type Player = {
   id: string; name: string; avatar: string | null; color: string; isBot: boolean; connected: boolean;
-  left: boolean; auto: boolean; username: string | null; points: number | null; seat: number;
+  left: boolean; auto: boolean;
+  /** gave up mid-game («انسحاب») and stays in the room as a spectator (left is true too) */
+  forfeit?: boolean; username: string | null; points: number | null; seat: number;
 };
 export type GameEvent = { t: string; pid?: string; seat?: number; [k: string]: any };
 export type Room = {

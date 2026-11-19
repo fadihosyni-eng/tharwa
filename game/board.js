@@ -1,8 +1,9 @@
 'use strict';
 // «ثروة» board: 40 tiles, 8 colour sets (price tiers), 4 ports, 2 companies.
 // Each room fills the 8 sets with Arab countries only: Syria, Jordan and Iraq are
-// always on the board (the three most valuable sets, in that order); the other five
-// are drawn at random from the remaining 19 Arab League countries.
+// on the board by default (the three most valuable sets, in that order); the other five
+// are drawn at random from the remaining Arab League countries. A board never shows
+// two countries whose flags look alike (LOOKALIKE), so every set is easy to tell apart.
 
 // Colour of each price tier (cheap -> expensive).
 const SETS = {
@@ -30,7 +31,7 @@ const COUNTRIES = {
   iq: { name: 'العراق', cities: ['أربيل', 'البصرة', 'بغداد'] },
   sa: { name: 'السعودية', cities: ['الدمام', 'جدة', 'الرياض'] },
   bh: { name: 'البحرين', cities: ['الرفاع', 'المحرق', 'المنامة'] },
-  om: { name: 'عُمان', cities: ['نزوى', 'صلالة', 'مسقط'] },
+  om: { name: 'سلطنة عُمان', cities: ['نزوى', 'صلالة', 'مسقط'] },
   ye: { name: 'اليمن', cities: ['تعز', 'عدن', 'صنعاء'] },
   ps: { name: 'فلسطين', cities: ['نابلس', 'غزة', 'القدس'] },
   dz: { name: 'الجزائر', cities: ['قسنطينة', 'وهران', 'الجزائر العاصمة'] },
@@ -38,12 +39,17 @@ const COUNTRIES = {
   sd: { name: 'السودان', cities: ['بورتسودان', 'أم درمان', 'الخرطوم'] },
   so: { name: 'الصومال', cities: ['كيسمايو', 'هرجيسا', 'مقديشو'] },
   mr: { name: 'موريتانيا', cities: ['كيفة', 'نواذيبو', 'نواكشوط'] },
-  dj: { name: 'جيبوتي', cities: ['تاجورة', 'علي صبيح', 'مدينة جيبوتي'] },
+  dj: { name: 'جيبوتي', cities: ['تاجورة', 'أوبوك', 'مدينة جيبوتي'] },
   km: { name: 'جزر القمر', cities: ['موتسامودو', 'فومبوني', 'موروني'] },
 };
 // The 22 Arab League countries.
 const ARAB = ['sy', 'eg', 'jo', 'lb', 'iq', 'sa', 'ae', 'qa', 'kw', 'bh', 'om', 'ye', 'ps', 'dz', 'ma', 'tn', 'ly', 'sd', 'so', 'mr', 'dj', 'km'];
 const FIXED = { c8: 'sy', c7: 'jo', c6: 'iq' };
+// Countries whose flags look almost the same as a small round badge: at most one of each
+// group may be on a board (Iraq/Egypt/Yemen: red-white-black stripes; Jordan/Palestine:
+// the same flag but a tiny star; Bahrain/Qatar: a white serrated band on red/maroon).
+const LOOKALIKE = [['iq', 'eg', 'ye'], ['jo', 'ps'], ['bh', 'qa']];
+const lookAlike = (a, b) => !!a && !!b && a !== b && LOOKALIKE.some((g) => g.includes(a) && g.includes(b));
 const POOL = Object.keys(COUNTRIES).filter((k) => !Object.values(FIXED).includes(k));
 const RANDOM_SLOTS = ['c1', 'c2', 'c3', 'c4', 'c5'];
 const SLOTS = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8'];
@@ -123,21 +129,51 @@ function shuffled(a) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-// Syria, Jordan, Iraq on top (c8, c7, c6) + 5 random Arab countries.
+// Can `code` go into `slot` of `map` (not on the board elsewhere, no look-alike flag)?
+function fits(map, slot, code) {
+  return SLOTS.every((s) => s === slot || !map[s] || (map[s] !== code && !lookAlike(map[s], code)));
+}
+// Syria, Jordan, Iraq on top (c8, c7, c6) + 5 random Arab countries, no look-alike flags.
 function randomMap() {
   const pool = shuffled(POOL);
   const map = { ...FIXED };
-  RANDOM_SLOTS.forEach((slot, k) => { map[slot] = pool[k]; });
+  for (const slot of RANDOM_SLOTS) map[slot] = pool.find((c) => fits(map, slot, c));
   return map;
 }
-// Put a chosen country in a slot (swaps if it is already on the board).
+// Syria, Jordan and Iraq never leave their slots, so the host can't pick a country that would move
+// or remove one of them. Returns the reason in Arabic (shown by the picker and sent as a 409), or null.
+const fixedWord = (c) => (c === 'sy' ? 'ثابتة' : 'ثابت'); // سوريا is feminine, العراق / الأردن masculine
+const its = (c) => (c === 'sy' ? 'ها' : 'ه');
+function pickRefusal(slot, code) {
+  const f = FIXED[slot];
+  if (f && f !== code) return `${COUNTRIES[f].name} ${fixedWord(f)} باللوح — ما فيك تغيّر${its(f)}`;
+  const home = Object.keys(FIXED).find((k) => FIXED[k] === code);
+  if (home && home !== slot) return `${COUNTRIES[code].name} ${fixedWord(code)} بمكان${its(code)} باللوح`;
+  const twin = Object.values(FIXED).find((x) => lookAlike(x, code));
+  if (twin) return `علم ${COUNTRIES[code].name} بيشبه علم ${COUNTRIES[twin].name}، و${COUNTRIES[twin].name} ${fixedWord(twin)} باللوح`;
+  return null;
+}
+// Countries the picker shows as unavailable for every free slot: { code: reason }.
+const UNAVAILABLE = Object.fromEntries(ARAB.map((c) => [c, pickRefusal(RANDOM_SLOTS[0], c)]).filter(([, r]) => r));
+// Put a chosen country in a slot. If it is already on the board the two slots swap; a country
+// whose flag looks like the chosen one leaves the board (it gets the country that was replaced,
+// or else the first Arab country that fits), so the board stays free of duplicates and look-alikes.
 function setCountry(map, slot, code) {
   if (!SLOTS.includes(slot)) throw new Error('bad slot');
   if (!COUNTRIES[code] || !ARAB.includes(code)) throw new Error('bad country');
+  const refused = pickRefusal(slot, code);
+  if (refused) throw Object.assign(new Error(refused), { userMsg: refused, status: 409 });
   const next = { ...map };
-  const other = SLOTS.find((s) => next[s] === code);
-  if (other) next[other] = next[slot];
+  let spare = next[slot] !== code ? next[slot] : null;
+  const other = SLOTS.find((s) => s !== slot && next[s] === code);
   next[slot] = code;
+  if (other) { next[other] = spare; spare = null; }
+  for (const s of SLOTS) {
+    if (s === slot || (next[s] && SLOTS.every((t) => t === s || (next[t] !== next[s] && !lookAlike(next[t], next[s]))))) continue;
+    next[s] = null;
+    next[s] = spare && fits(next, s, spare) ? spare : ARAB.find((c) => fits(next, s, c));
+    spare = null;
+  }
   return next;
 }
 // Room-specific copy of the board with city and country names filled in.
@@ -206,12 +242,12 @@ const isProp = (t) => t.type === 'city' || t.type === 'port' || t.type === 'util
 
 function publicBoard() {
   return {
-    tiles: TILES, sets: SETS, setTiles: SET_TILES, portRent: PORT_RENT, countries: COUNTRIES, fixed: FIXED, arab: ARAB,
+    tiles: TILES, sets: SETS, setTiles: SET_TILES, portRent: PORT_RENT, countries: COUNTRIES, fixed: FIXED, arab: ARAB, lookalike: LOOKALIKE, unavailable: UNAVAILABLE,
     jailFine: JAIL_FINE, goSalary: GO_SALARY, cashOptions: CASH_OPTIONS,
   };
 }
 
 module.exports = {
   SETS, TILES, SET_TILES, COUNTRIES, FIXED, PORT_RENT, PORTS, JAIL, JAIL_FINE, GO_SALARY,
-  CASH_OPTIONS, CHANCE, CHEST, isProp, publicBoard, randomMap, tilesFor, setCountry, ARAB, SLOTS,
+  CASH_OPTIONS, CHANCE, CHEST, isProp, publicBoard, randomMap, tilesFor, setCountry, ARAB, SLOTS, LOOKALIKE, lookAlike, pickRefusal, UNAVAILABLE,
 };

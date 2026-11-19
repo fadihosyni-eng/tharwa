@@ -188,7 +188,7 @@
     '👤': 'user', '📢': 'megaphone', '📣': 'megaphone', '⚡': 'bolt', '🔄': 'refresh', '👑': 'crown', '📴': 'offline', '📌': 'pin',
     '📈': 'chartUp', '🙏': 'hand', '👀': 'eye', '👁': 'eye', '🏖': 'beach', '⚖': 'scale', '⚙': 'gear', '🛡': 'shield', '👋': 'wave',
     '🔑': 'key', '📊': 'chart', '📜': 'scroll', '🚪': 'logout', '✨': 'sparkle', '📅': 'calendar', '✏': 'pencil', '🗑': 'trash',
-    '🎉': 'party', '🚓': 'siren', '🧾': 'receipt', '🎴': 'cards', '🧰': 'chest', '➡': 'arrow', '⚓': 'anchor', '🏷': 'tag', '⛔': 'xmark',
+    '🎉': 'party', '🚓': 'siren', '🧾': 'receipt', '🎴': 'cards', '🧰': 'chest', '➡': 'arrow', '⬅': 'arrow', '⚓': 'anchor', '🏷': 'tag', '⛔': 'xmark',
     '🛒': 'store', '🪙': 'coins', '🥇': 'medal', '🙂': 'user', '🎁': 'party', '▶': 'play', '📧': 'mail', '✉': 'mail',
   };
   const EMOJI_RE = new RegExp('(' + Object.keys(EMOJI).map((e) => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')️?', 'gu');

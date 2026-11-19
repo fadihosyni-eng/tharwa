@@ -146,6 +146,34 @@ function roomPage(code: string) {
     try { await navigator.clipboard.writeText(inviteUrl()); toast('انسخ رابط الدعوة — ابعته لأصحابك', 'ok'); } catch { window.prompt('انسخ الرابط:', inviteUrl()); }
   };
   $('#mgInvite')!.addEventListener('click', copyInvite);
+  // «انسحاب»: give up this game but stay in the room and watch (shown only while I play).
+  const forfeitBtn = document.createElement('button');
+  forfeitBtn.type = 'button';
+  forfeitBtn.className = 'btn sm btn-danger mg-forfeit';
+  forfeitBtn.id = 'mgForfeit';
+  forfeitBtn.hidden = true;
+  forfeitBtn.innerHTML = `${ui('hand')}<span>انسحاب</span>`;
+  $('#mgLeave')!.before(forfeitBtn);
+  forfeitBtn.addEventListener('click', async () => {
+    if (!cur || cur.status !== 'playing') return;
+    if (!(await confirmBox(forfeitText(cur), 'انسحب'))) return;
+    busy(forfeitBtn, true);
+    const ok = await ctx.act('forfeit');
+    busy(forfeitBtn, false);
+    if (ok) toast('انسحبت من اللعبة — فيك تضل تتفرّج، أو تطلع من الغرفة', 'ok');
+  });
+  // What giving up means in this game (games/*.js `leave`).
+  function forfeitText(r: Room) {
+    const st = r.state || {};
+    const others = r.players.filter((p) => p.id !== r.me && !p.left && p.seat >= 0
+      && !(st.finished && st.finished.includes(p.id))).length;
+    const what = meta.cards
+      ? 'الكمبيوتر بيكمل عنك لآخر اللعبة، وإنت بتطلع بالمرتبة الأخيرة وما بتربح.'
+      : r.game === 'ludo' && others > 1
+        ? 'قطعك بتطلع من اللوح، والباقيين بيكملوا اللعب.'
+        : 'بتخسر اللعبة وخصمك بيربح.';
+    return `أكيد بدك تنسحب؟ ${what} بتضل بالغرفة تتفرّج لحد ما تطلع.`;
+  }
   $('#mgLeave')!.addEventListener('click', async () => {
     const meP = cur && cur.me ? ctx.player(cur.me) : null;
     if (meP && cur && cur.status === 'playing' && !meP.left) {
@@ -250,7 +278,7 @@ function roomPage(code: string) {
         p.isBot ? '<span class="badge muted">كمبيوتر</span>' : '',
         !p.isBot && !p.connected && !p.left ? `<span class="badge muted">${ui('offline')}مو متصل</span>` : '',
         p.auto && !p.left ? '<span class="badge muted">تلقائي</span>' : '',
-        p.left ? '<span class="badge muted">طلع</span>' : '',
+        p.forfeit ? `<span class="badge muted">${ui('hand')}انسحب</span>` : p.left ? '<span class="badge muted">طلع</span>' : '',
         r.status === 'ended' && r.rematch.includes(p.id) ? `<span class="badge green">${ui('check')}جاهز</span>` : '',
       ].join('');
       const pts = r.result && r.result.points && p.id in r.result.points ? r.result.points[p.id] : null;
@@ -270,7 +298,7 @@ function roomPage(code: string) {
     else if (r.status === 'playing' && r.turn) {
       const tp = ctx.player(r.turn.pid);
       const mine = r.turn.pid === r.me;
-      const hint = mine && board && board.hint ? board.hint(r) : '';
+      const hint = mine && board && board.hint ? board.hint(r) : me && me.forfeit ? 'انسحبت — عم تتفرّج' : '';
       status.innerHTML = `<span class="mg-st-dot" style="--c:${tp ? tp.color : '#fff'}"></span>
         <span class="mg-st-txt">${mine ? '<b class="mg-yours">دورك!</b>' : `دور <b>${esc(tp ? tp.name : '')}</b>`}${hint ? `<small>${esc(hint)}</small>` : ''}</span>
         ${r.turn.endsAt ? '<span class="mg-timer" aria-hidden="true"><i></i></span><span class="mg-secs"></span>' : ''}`;
@@ -282,6 +310,7 @@ function roomPage(code: string) {
     }
     if (r.status !== 'playing') status.classList.remove('mine');
     lastTurnPid = r.turn ? r.turn.pid : null;
+    forfeitBtn.hidden = !(r.status === 'playing' && me && !me.left && me.seat >= 0);
 
     // overlay: lobby card / result card
     // (re-drawn only when it changed, so a half-typed name in the join box survives chat messages)
@@ -390,7 +419,7 @@ function roomPage(code: string) {
     const won = !!me && isWinner(r, me.id);
     const title = res.draw ? 'تعادل!' : won ? 'مبروك، ربحت!' : me && !me.left ? 'المرة الجاية إلك' : `ربح ${esc((ctx.player(res.winner) || { name: '' }).name)}`;
     const rank = res.ranking.length > 2 || r.game === 'ludo'
-      ? `<ol class="mg-rank">${res.ranking.map((pid, i) => { const p = ctx.player(pid); return p ? `<li style="--c:${p.color}"><span class="mg-place">${i + 1}</span>${avatar(p, 30)}<b>${esc(p.name)}</b>${p.left ? '<small class="muted">طلع</small>' : ''}</li>` : ''; }).join('')}</ol>`
+      ? `<ol class="mg-rank">${res.ranking.map((pid, i) => { const p = ctx.player(pid); return p ? `<li style="--c:${p.color}"><span class="mg-place">${i + 1}</span>${avatar(p, 30)}<b>${esc(p.name)}</b>${p.left ? `<small class="muted">${p.forfeit ? 'انسحب' : 'طلع'}</small>` : ''}</li>` : ''; }).join('')}</ol>`
       : '';
     let pts = '';
     if (me && res.points && me.id in res.points) {
@@ -399,8 +428,8 @@ function roomPage(code: string) {
     } else if (me && !session.me && !me.isBot) pts = `<p class="muted mg-small"><a href="/login?next=${encodeURIComponent(location.pathname)}">سجّل دخول</a> لتجمع نقاط من كل لعبة بتربحها.</p>`;
     else if (me && session.me && !res.points) pts = '<p class="muted mg-small">عم نحسب النقاط…</p>';
     const voted = me && r.rematch.includes(me.id);
-    const waiting = r.players.filter((p) => !p.isBot && !p.left && !r.rematch.includes(p.id)).map((p) => p.name);
-    const again = me && !me.left
+    const waiting = r.players.filter((p) => !p.isBot && (!p.left || p.forfeit) && !r.rematch.includes(p.id)).map((p) => p.name);
+    const again = me && (!me.left || me.forfeit)
       ? `<button type="button" class="btn btn-gold big" data-again ${voted ? 'disabled' : ''}>${ui('refresh')}${voted ? 'ناطرين الباقيين' : 'جولة كمان'}</button>`
       : '';
     return `<div class="mg-ov-card result ${won ? 'won' : ''}">

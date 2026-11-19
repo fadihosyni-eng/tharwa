@@ -21,6 +21,7 @@ function run(file, args = []) {
   run('cards.js');
   run('maps.js');
   run('sim.js', ['150']);
+  run('turn-timer.js'); // «ثروة»: a player back after the turn timer keeps the turn (own server on TEST_PORT+2)
   const srv = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env: { ...process.env, PORT, DATA_FILE, DATABASE_URL: '', ADMIN_USERS: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '' }, stdio: 'ignore' });
   try {
     for (let k = 0; k < 40; k++) {
@@ -47,6 +48,7 @@ function run(file, args = []) {
     // Last: it runs a while, and this runner's own pooled connection would go stale meanwhile.
     run('minigames.js', [BASE]); // إكس أو، أربعة بخط، لودو: rules, bots, room API
     run('cards-games.js', [BASE]); // طرنيب، أربعمية، تركس: deck, rules, scoring, bots, AFK, room API
+    run('forfeit.js', [BASE]); // «انسحاب» in every small game
     console.log('ALL TESTS PASSED');
   } finally {
     srv.kill();
