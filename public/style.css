@@ -1169,18 +1169,20 @@ a { color: var(--cyan2); }
    Assets: public/tharwa/img (tools/blender/tharwa_assets.py), public/tharwa/dice3d.js (web/scripts/build-tharwa-dice.mjs). */
 
 /* --- player pieces: rendered chrome/crystal miniatures. Round chips (player list, picker…) keep a colour disc. */
-.tk img.piece-img { width: 92%; height: 92%; object-fit: contain; display: block; pointer-events: none;
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .55)); }
-.tk:has(img.piece-img) { background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--pc) 45%, #0b1d45), #050d24 75%);
-  border-color: color-mix(in srgb, var(--pc) 75%, #fff); }
-.band .bown img.piece-img { width: 135%; height: 135%; object-fit: contain; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6)); }
-/* on the board: a miniature standing on a glowing ring in the player's colour (no disc) */
-.token .tk { position: relative; background: none; border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
-.token .tk::before { content: ''; position: absolute; left: 4%; right: 4%; bottom: 2%; height: 34%; border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--pc) 55%, transparent), transparent);
-  box-shadow: 0 0 0 2px var(--pc), 0 0 10px 3px var(--pc), inset 0 0 6px 1px var(--pc); opacity: .95; }
-.token .tk img.piece-img { position: absolute; left: -24%; top: -46%; width: 148%; height: 148%; max-width: none;
-  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .55)); }
+.tk img.piece-img { width: 108%; height: 108%; max-width: none; object-fit: contain; display: block; pointer-events: none; margin-top: -6%; }
+/* round chips (players list, picker, rent pill…): the miniature on a glossy disc lit in the player's colour */
+.tk:has(img.piece-img) { overflow: hidden; border: 2px solid color-mix(in srgb, var(--pc) 80%, #fff);
+  background: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--pc) 70%, #fff) 0%, color-mix(in srgb, var(--pc) 55%, #0a1a44) 45%, #071433 100%);
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, .35), inset 0 -4px 8px rgba(0, 0, 0, .45), 0 0 10px color-mix(in srgb, var(--pc) 55%, transparent); }
+.band .bown img.piece-img { width: 150%; height: 150%; max-width: none; margin: -25% 0 0; object-fit: contain; }
+/* on the board: the miniature (transparent PNG, chrome base) stands on a glowing ring in the player's colour.
+   No disc, border or box behind it — the selector beats the round-chip rule above. */
+.token .tk.tk { position: relative; background: none; border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+.token .tk::before { content: ''; position: absolute; left: 6%; right: 6%; bottom: 3%; height: 32%; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--pc) 60%, transparent), transparent);
+  box-shadow: 0 0 0 2px var(--pc), 0 0 10px 3px var(--pc); opacity: .95; }
+.token .tk img.piece-img { position: absolute; left: -24%; top: -42%; width: 148%; height: 148%; max-width: none; margin: 0;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .45)); }
 .token.current .tk { animation: none; }
 .token.current .tk::before { animation: ringPulse 1.3s ease-in-out infinite; }
 .token.current .tk.hop { animation: hop .2s ease-out; }
@@ -1215,9 +1217,12 @@ a { color: var(--cyan2); }
 @media (min-width: 821px) and (min-height: 700px) { .center::after { background-image: url('/tharwa/img/hero-600.webp'); } }
 
 /* --- 3D dice: the canvas covers the centre area; the CSS dice keep their slot (and stay as the fallback) */
-.dice3d-canvas { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; }
-.dice3.d3 { height: calc(var(--d) * 1.7); align-items: center; filter: none; }
+.dice3.d3 { position: relative; width: calc(var(--d) * 3.7); height: calc(var(--d) * 2.25); align-items: center; justify-content: center; filter: none; flex: 0 0 auto;
+  border-radius: calc(var(--d) * .38); overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(0, 180, 255, .16), transparent 65%), linear-gradient(180deg, rgba(6, 20, 52, .78), rgba(3, 8, 22, .88));
+  border: 1px solid rgba(47, 226, 255, .45); box-shadow: inset 0 2px 10px rgba(0, 0, 0, .6), inset 0 0 18px rgba(0, 180, 255, .18), 0 0 16px rgba(0, 180, 255, .2); }
 .dice3.d3 .die3d { visibility: hidden; }
+.dice3d-canvas { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; }
 
 /* --- money fly-out: rendered coin + banknote */
 .cash-fly img.money-img { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -1257,3 +1262,256 @@ a { color: var(--cyan2); }
 @media (prefers-reduced-motion: reduce) {
   .card2.flip3, .card2.flip3 .c3-inner, .token.current .tk::before, .bld img.pop { animation: none; }
 }
+
+/* ================================================================ owner's list (Nov 2026): colours, owners, debts, deals, offers, chat
+   No flash over the tiles: buying a city only nudges that one tile (no light sweep). */
+.tile.flash { animation: tileNudge .5s ease-out; }
+@keyframes tileNudge { 0% { transform: scale(1); } 40% { transform: scale(1.04); } 100% { transform: scale(1); } }
+.tile { transition: none; }
+
+/* --- (2) owner's name on the tile, in their colour */
+.tile .towner { font-size: clamp(8px, 1.1vh, 11.5px); font-weight: 900; line-height: 1.1; color: var(--oc, #fff); max-width: 100%;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 2px;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--oc, #fff) 65%, transparent), 0 1px 1px rgba(0, 0, 0, .85); }
+.tile .towner:empty { display: none; }
+.tile.owned .tname { -webkit-line-clamp: 1; }
+.side-l .tile .towner, .side-r .towner { font-size: clamp(8px, 1vh, 10.5px); }
+/* deed / property card: «ملك فلان» strip */
+.deed-owner { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 14px; color: #1d2530;
+  background: color-mix(in srgb, var(--oc) 22%, #fbf7ec); border-bottom: 2px solid var(--oc); }
+.deed-owner b { color: color-mix(in srgb, var(--oc) 55%, #000); }
+.deed-owner .tk.do-av { width: 26px; height: 26px; box-shadow: 0 0 0 2px #fff, 0 0 8px var(--pc); }
+.do-tag { margin-inline-start: auto; font-style: normal; font-size: 11px; font-weight: 800; background: #ffe1e2; color: #a3222b; padding: 0 8px; border-radius: 99px; }
+.modal-body > .deed-owner { border-radius: 12px; border: 1px solid var(--oc); box-shadow: 0 0 14px color-mix(in srgb, var(--oc) 35%, transparent); }
+
+/* --- (6) deed cards and «حظ/خزنة» cards 30% bigger on desktop (they still fit the board centre at 1440x900) */
+@media (min-width: 821px) {
+  .deed { width: 312px; border-radius: 15px; }
+  .deed-head { padding: 13px 16px; gap: 13px; }
+  .dh-text b { font-size: 22px; }
+  .dh-text small { font-size: 16px; }
+  .dh-icon { width: 50px; height: 50px; }
+  .deed-head .flag.mid { --fs: 44px; }
+  .deed-body { padding: 9px 17px 4px; font-size: 17.5px; }
+  .drow { padding: 3px 0; }
+  .deed-price { font-size: 31px; padding: 6px 0 12px; }
+  .deed-owner { font-size: 17px; padding: 8px 15px; }
+  .deed-owner .tk.do-av { width: 32px; height: 32px; }
+  .center.compact .offer2 .deed { width: 312px; }
+  .card2.flip3 { width: min(430px, 88%); }
+  .card2.flip3 .c3-front { min-height: 220px; padding: 21px 21px 23px; gap: 12px; }
+  .card2.flip3 .c2-head b { font-size: 26px; }
+  .card2.flip3 .c2-head small { font-size: 16px; }
+  .card2.flip3 .c2-icon { width: 47px; height: 47px; }
+  .card2.flip3 .c2-text { font-size: 22px; }
+  .card2.flip3 .c2-effect { font-size: 19px; padding: 6px 18px; }
+  .card2 { top: 9%; }
+  .modal.tile-card { width: min(546px, 100%); }
+  .modal.tile-card .modal-head { font-size: 25px; }
+  .modal.tile-card table.rent, .modal.tile-card .kv, .modal.tile-card .modal-body { font-size: 17px; }
+  .modal.tile-card .flag.lg { --fs: 36px; }
+}
+
+/* --- (1) lobby colour picker */
+.color-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px 4px; }
+.color-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; border: 0; cursor: pointer; padding: 2px; font: inherit; color: var(--muted); min-width: 0; }
+.color-btn i { width: 34px; height: 34px; border-radius: 50%; transition: transform .12s, box-shadow .12s;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 55%, #fff), var(--c) 60%, color-mix(in srgb, var(--c) 60%, #000));
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .18), 0 0 12px color-mix(in srgb, var(--c) 55%, transparent); }
+.color-btn:hover:not(:disabled) i { transform: scale(1.1); }
+.color-btn.on i { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--c), 0 0 18px 4px var(--c); }
+.color-btn.taken { cursor: not-allowed; }
+.color-btn.taken i { opacity: .28; filter: grayscale(.5); box-shadow: none; }
+.color-btn small { font-size: 10.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.color-btn.on small { color: var(--text); font-weight: 800; }
+
+/* --- rent / tax / sale / bankruptcy notice: grows for the extra lines */
+.rent-pill { height: auto; min-height: 52px; padding: 6px 10px; }
+.rent-pill.bankrupt, .rent-pill.debtsale { max-width: min(480px, 94%); }
+.rp-name { color: var(--nc); font-weight: 900; text-shadow: 0 0 8px color-mix(in srgb, var(--nc) 55%, transparent); }
+.rp-mid small.rp-owe { color: #ff9aa5; font-weight: 800; white-space: normal; }
+.rp-mid small.rp-sub { color: var(--cyan2); font-weight: 800; white-space: normal; }
+.rp-bust { color: var(--danger); text-shadow: 0 0 12px rgba(255, 107, 122, .5); direction: rtl; }
+.rp-bank { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: radial-gradient(circle at 40% 30%, #1d3f7a, #0a1838); color: var(--gold); --pc: #ffc53d; }
+.rp-bank .ui-ico { width: 60%; height: 60%; }
+
+/* --- (22/23) debt panel in the board centre */
+.debt-box { width: min(470px, 96%); display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 16px; text-align: start;
+  background: linear-gradient(180deg, rgba(255, 107, 122, .13), rgba(10, 21, 48, .92) 60%); border: 1px solid rgba(255, 107, 122, .55);
+  box-shadow: 0 0 22px rgba(255, 107, 122, .18), 0 14px 30px rgba(0, 0, 0, .45); }
+.debt-box.watch { border-color: rgba(255, 197, 61, .5); background: linear-gradient(180deg, rgba(255, 197, 61, .1), rgba(10, 21, 48, .92) 60%); box-shadow: 0 0 22px rgba(255, 197, 61, .14), 0 14px 30px rgba(0, 0, 0, .45); }
+.debt-head { display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 800; font-size: 16px; }
+.debt-head > .ui-ico { width: 24px; height: 24px; color: var(--danger); }
+.debt-head b { font-size: 26px; color: var(--danger); direction: ltr; text-shadow: 0 0 12px rgba(255, 107, 122, .45); }
+.watch .debt-head b { color: var(--gold); text-shadow: 0 0 12px rgba(255, 197, 61, .45); }
+.debt-rows { display: flex; flex-direction: column; gap: 4px; }
+.debt-row { display: flex; align-items: center; gap: 8px; background: rgba(3, 8, 22, .55); border-radius: 10px; padding: 5px 9px; font-size: 13px; }
+.dr-why { color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-num { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+.dr-num b { color: var(--danger); direction: ltr; font-size: 15px; }
+.dr-num small { color: var(--ok); font-size: 11px; font-weight: 800; }
+.who-chip { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; color: color-mix(in srgb, var(--pc, #cfe9ff) 75%, #fff); white-space: nowrap; }
+.who-chip .tk { width: 22px; height: 22px; }
+.who-chip.bank { color: var(--gold); }
+.who-chip.bank .tk { background: radial-gradient(circle at 40% 30%, #1d3f7a, #0a1838); border-color: #3b5a8f; color: var(--gold); }
+.who-chip.bank .tk .ui-ico { width: 62%; height: 62%; }
+.debt-offers { display: flex; flex-direction: column; gap: 5px; }
+.do-title { font-size: 12px; font-weight: 900; color: var(--gold); }
+.debt-offer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: rgba(255, 197, 61, .08); border: 1px dashed rgba(255, 197, 61, .55); border-radius: 10px; padding: 6px 9px; font-size: 13px; }
+.debt-offer > span:not(.who-chip):not(.row) { flex: 1; min-width: 150px; }
+.debt-offer small { display: block; color: var(--muted); font-size: 11.5px; }
+.debt-offer .row { gap: 6px; }
+.debt-offer.mine { border-color: rgba(47, 226, 255, .5); background: rgba(0, 180, 255, .07); }
+.gold-t { color: var(--gold); direction: ltr; unicode-bidi: isolate; }
+.debt-mine { font-size: 13px; text-align: center; color: #ffe6a8; }
+.debt-box .hint { text-align: center; font-size: 12px; }
+.debt-buy-view { display: flex; gap: 16px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.dbv-side { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.dbv-price { font-size: 34px; font-weight: 900; color: var(--gold); direction: ltr; text-shadow: 0 0 16px rgba(255, 197, 61, .45); }
+.dbv-line { font-size: 14px; font-weight: 800; color: #cfe9ff; background: rgba(0, 180, 255, .1); border: 1px solid rgba(47, 226, 255, .35); border-radius: 99px; padding: 3px 12px; }
+
+/* --- (25) offers everybody sees: chips under the dice */
+.center > .dice-spot, .center > .c-offers { position: relative; z-index: 2; }
+.dice-spot { flex: 0 0 auto; display: flex; justify-content: center; }
+.c-offers { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 94%; margin-top: -4px; }
+.c-offers:empty { display: none; }
+.offer-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 4px; border-radius: 99px; cursor: pointer; font: inherit; font-size: 12px;
+  color: var(--text); background: rgba(7, 16, 42, .88); border: 1px solid rgba(255, 197, 61, .55); box-shadow: 0 0 10px rgba(255, 197, 61, .2); animation: chipIn .3s ease-out; }
+.offer-chip:hover { border-color: var(--gold); box-shadow: 0 0 16px rgba(255, 197, 61, .45); }
+.offer-chip .tk { width: 20px; height: 20px; }
+.offer-chip > .ui-ico { width: 12px; height: 12px; color: var(--gold); }
+.oc-tag { background: linear-gradient(180deg, var(--gold), var(--gold2)); color: #1b1203; font-weight: 900; border-radius: 99px; padding: 0 7px; font-size: 11px; line-height: 18px; }
+.offer-chip small { color: var(--muted); font-weight: 800; }
+.offer-chip.mine { border-color: var(--cyan2); animation: chipIn .3s ease-out, mineGlow 1.6s ease-in-out infinite; }
+.offer-more { font-size: 12px; color: var(--muted); align-self: center; }
+@keyframes chipIn { from { opacity: 0; transform: translateY(-6px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes mineGlow { 0%, 100% { box-shadow: 0 0 8px rgba(47, 226, 255, .35); } 50% { box-shadow: 0 0 18px 3px rgba(47, 226, 255, .65); } }
+.offer-view .offer-btns .btn { min-width: 120px; }
+
+/* --- (24) deal window: tabs, partner, «بتعطي» / «بتاخد», amount chips, preview, one big button */
+.deal-tabs { display: flex; gap: 6px; background: var(--bg2); padding: 4px; border-radius: 12px; border: 1px solid var(--line); }
+.dtab { flex: 1; display: flex; gap: 8px; align-items: center; justify-content: center; padding: 10px; border-radius: 9px; border: 0; background: none;
+  color: var(--muted); font: inherit; font-weight: 800; font-size: 15px; cursor: pointer; }
+.dtab .ui-ico { width: 20px; height: 20px; }
+.dtab.on { background: linear-gradient(135deg, rgba(0, 180, 255, .28), rgba(47, 226, 255, .1)); color: var(--text); box-shadow: inset 0 0 0 1px rgba(47, 226, 255, .55), 0 0 14px rgba(0, 180, 255, .2); }
+.deal-partners { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; justify-content: center; }
+.dp { display: flex; align-items: center; gap: 6px; padding: 4px 12px 4px 5px; border-radius: 99px; border: 1px solid var(--line2); background: var(--bg2); color: var(--text); font: inherit; cursor: pointer; }
+.dp .tk { width: 26px; height: 26px; }
+.dp small { color: var(--ok); direction: ltr; font-weight: 800; }
+.dp.on { border-color: var(--pc); box-shadow: 0 0 0 1px var(--pc), 0 0 14px color-mix(in srgb, var(--pc) 50%, transparent); }
+.dp:disabled:not(.on) { opacity: .4; cursor: default; }
+.deal2 { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.dside { border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; border: 1px solid; }
+.dside.give { border-color: rgba(255, 107, 122, .5); background: linear-gradient(180deg, rgba(255, 107, 122, .1), rgba(255, 107, 122, .02) 45%); }
+.dside.get { border-color: rgba(40, 211, 145, .5); background: linear-gradient(180deg, rgba(40, 211, 145, .1), rgba(40, 211, 145, .02) 45%); }
+.dside h4 { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dtag { font-size: 18px; font-weight: 900; padding: 2px 14px; border-radius: 99px; }
+.give .dtag { background: rgba(255, 107, 122, .2); color: #ffadb6; box-shadow: 0 0 12px rgba(255, 107, 122, .25); }
+.get .dtag { background: rgba(40, 211, 145, .2); color: #8ff5cc; box-shadow: 0 0 12px rgba(40, 211, 145, .25); }
+.dside h4 small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.dside .mdeeds { max-height: 210px; }
+.deal-mid { display: flex; align-items: center; color: var(--gold); }
+.deal-mid .ui-ico { width: 30px; height: 30px; filter: drop-shadow(0 0 8px rgba(255, 197, 61, .5)); }
+.money-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: var(--bg2); border: 1px solid var(--line2); border-radius: 12px; padding: 8px; }
+.money-box .mb-ico { display: inline-flex; color: var(--gold); }
+.money-box .mb-ico .ui-ico { width: 22px; height: 22px; }
+.money-box input { flex: 1 1 90px; font-size: 18px; font-weight: 900; padding: 6px 10px; min-width: 0; }
+.money-box .chips-row { flex-basis: 100%; margin: 0; }
+.money-box.big input { font-size: 22px; }
+.money-box .chip small { display: block; font-size: 10px; opacity: .85; font-weight: 700; direction: rtl; }
+.money-box .chip.ghost { opacity: .75; }
+.deal-preview { background: linear-gradient(180deg, rgba(0, 180, 255, .11), rgba(0, 180, 255, .03)); border: 1px solid rgba(47, 226, 255, .35); border-radius: 14px;
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.pv-title { font-size: 12px; font-weight: 900; color: var(--cyan2); }
+.pv-cols, .pv-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.pv-col, .pv-step { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 6px; border-radius: 10px; background: rgba(3, 8, 22, .55); text-align: center; min-width: 0; }
+.pv-col { border-top: 3px solid var(--pc); }
+.pv-col > b { color: color-mix(in srgb, var(--pc) 70%, #fff); }
+.pv-col small, .pv-step small { color: var(--muted); font-size: 12px; }
+.pv-money { display: flex; align-items: center; gap: 6px; font-size: 16px; }
+.pv-money s { color: var(--muted); font-size: 13px; direction: ltr; }
+.pv-money b { font-size: 19px; color: var(--text); direction: ltr; }
+.pv-money b.neg { color: var(--danger); }
+.pv-money .ui-ico, .pv-who .ui-ico { width: 14px; height: 14px; color: var(--gold); }
+.pv-step > b { font-size: 21px; color: var(--gold); direction: ltr; }
+.pv-who { display: flex; align-items: center; gap: 4px; }
+.pv-who .tk { width: 26px; height: 26px; }
+.deal-go { width: 100%; font-size: 18px; padding: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.deal-go .ui-ico { width: 22px; height: 22px; }
+.loan-role { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.role-btn { display: flex; flex-direction: column; gap: 2px; align-items: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; font: inherit;
+  background: var(--bg2); border: 1px solid var(--line2); color: var(--text); }
+.role-btn b { font-size: 16px; }
+.role-btn small { color: var(--muted); font-size: 12px; }
+.role-btn.on { border-color: var(--gold); background: linear-gradient(180deg, rgba(255, 197, 61, .16), rgba(255, 197, 61, .04)); box-shadow: 0 0 14px rgba(255, 197, 61, .3); }
+.loan-grid { display: flex; flex-direction: column; gap: 10px; }
+.lg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lg-l { width: 104px; font-weight: 800; color: var(--muted); }
+.lg-row input { width: 130px; font-size: 18px; font-weight: 900; }
+.lg-row .chips-row { margin: 0; }
+.lg-row .chips-row .chip { padding: 5px 10px; font-size: 13px; }
+.lg-note { flex-basis: 100%; text-align: start; padding-inline-start: 112px; }
+@media (max-width: 820px) {
+  .deal2 { grid-template-columns: 1fr; }
+  .deal-mid { justify-content: center; }
+  .lg-l { width: auto; flex-basis: 100%; }
+  .lg-note { padding-inline-start: 0; }
+  .debt-box { padding: 8px 10px; gap: 6px; }
+  .debt-head b { font-size: 20px; }
+  .tile .towner { display: none; }
+  .tile.owned .tname { -webkit-line-clamp: 2; }
+}
+
+/* --- (26) chat: glowing bubbles, names in the player's neon colour */
+.chat-drawer .chat-list { gap: 8px; padding: 4px 2px 6px; }
+.chat-msg { align-self: flex-start; max-width: 88%; padding: 6px 12px 8px; border-radius: 15px 15px 15px 5px; position: relative;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--nc) 16%, rgba(10, 21, 48, .92)), rgba(6, 14, 36, .94));
+  border: 1px solid color-mix(in srgb, var(--nc) 50%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--nc) 34%, transparent), 0 0 2px color-mix(in srgb, var(--nc) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, .08); }
+.chat-msg:last-child { animation: chatIn .28s ease-out both; } /* the list re-renders: only the newest bubble slides in */
+.chat-msg.me { align-self: flex-end; border-radius: 15px 15px 5px 15px; }
+.cm-head { display: flex; align-items: baseline; gap: 8px; }
+.cm-name { color: color-mix(in srgb, var(--nc) 80%, #fff); font-weight: 900; font-size: 13px; letter-spacing: .2px;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--nc) 85%, transparent), 0 0 16px color-mix(in srgb, var(--nc) 55%, transparent); }
+.cm-head time { font-size: 10px; color: var(--muted); direction: ltr; margin-inline-start: auto; opacity: .8; }
+.cm-text { color: #f4f9ff; font-size: 14.5px; line-height: 1.55; text-shadow: 0 0 10px rgba(47, 226, 255, .22), 0 1px 1px rgba(0, 0, 0, .6); word-wrap: break-word; }
+@keyframes chatIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .chat-msg, .offer-chip { animation: none; } }
+
+/* --- (11) the centre never overlaps: dice, offers and buttons keep their full height, only the log gives way */
+.center > #cTop, .center > .dice-spot, .center > .c-offers, .center > .c-actions { flex-shrink: 0; }
+.center > .c-log { flex: 0 1 auto; min-height: 0; }
+/* mini deeds keep their height in a scrolling list (overflow:hidden items would otherwise squash to 0) */
+.mdeeds { grid-auto-rows: max-content; }
+/* the send button stays in view at the bottom of a long deal window */
+.modal.deal .deal-go { position: sticky; bottom: 0; z-index: 2; box-shadow: 0 -10px 24px rgba(10, 21, 48, .95), 0 8px 24px rgba(0, 180, 255, .3); }
+.modal.deal .modal-body { gap: 10px; }
+
+/* --- 3D dice (pro throw): one transparent canvas over the whole board centre; the dice fly over it and then rest
+   in the #dice placeholder next to «دور …» (no tray, no frame). Placeholder sizes = the resting dice (~44px each). */
+.dice3.d3 { position: relative; width: 112px; height: 52px; background: none; border: 0; box-shadow: none; border-radius: 0; overflow: visible; filter: none; flex: 0 0 auto; }
+.center > .dice3d-canvas, .dice3d-canvas { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; }
+@media (max-width: 820px) { .dice3.d3 { width: 80px; height: 38px; } .center.compact .dice3.d3 { width: 64px; height: 30px; } }
+
+/* country picker: a pick that pushes a look-alike flag off the board says so */
+.cpick { flex-wrap: wrap; }
+.cpick.twin { border-color: rgba(255, 197, 61, .45); }
+.cp-out { flex-basis: 100%; display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; color: var(--gold); }
+.cp-out .ui-ico { width: 13px; height: 13px; }
+
+/* --- (26) chat, round 2: the words themselves glow — neon names in the sender's colour, softly lit cyan text,
+   gradient glass bubbles, a gentle fade-in for the newest one; system lines are dimmer and plain */
+.chat-drawer .chat-list { gap: 9px; }
+.chat-msg { padding: 7px 13px 9px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--nc) 22%, rgba(12, 26, 60, .9)) 0%, rgba(8, 18, 46, .92) 55%, color-mix(in srgb, var(--nc) 10%, rgba(4, 10, 28, .95)) 100%);
+  border: 1px solid color-mix(in srgb, var(--nc) 55%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--nc) 30%, transparent), inset 0 1px 0 rgba(255, 255, 255, .1), inset 0 0 14px color-mix(in srgb, var(--nc) 12%, transparent); }
+.cm-name { font-size: 14px; color: color-mix(in srgb, var(--nc) 70%, #fff);
+  text-shadow: 0 0 4px color-mix(in srgb, var(--nc) 95%, transparent), 0 0 10px color-mix(in srgb, var(--nc) 80%, transparent), 0 0 22px color-mix(in srgb, var(--nc) 55%, transparent); }
+.cm-text { font-size: 15.5px; font-weight: 500; color: #f2fbff;
+  text-shadow: 0 0 6px rgba(47, 226, 255, .55), 0 0 14px rgba(0, 180, 255, .35), 0 1px 1px rgba(0, 0, 0, .7); }
+.chat-msg:last-child { animation: chatGlowIn .55s ease-out both; }
+@keyframes chatGlowIn { 0% { opacity: 0; transform: translateY(8px) scale(.97); filter: brightness(1.6); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; filter: none; } }
+.chat-msg.sys { align-self: center; max-width: 94%; background: rgba(255, 255, 255, .03); border: 1px dashed rgba(127, 155, 189, .35); box-shadow: none; padding: 3px 12px; border-radius: 99px; }
+.chat-msg.sys .cm-text { font-size: 12.5px; color: var(--muted); text-shadow: none; font-weight: 400; }
+@media (prefers-reduced-motion: reduce) { .chat-msg:last-child { animation: none; } }

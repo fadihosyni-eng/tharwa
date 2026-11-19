@@ -188,7 +188,7 @@
     '👤': 'user', '📢': 'megaphone', '📣': 'megaphone', '⚡': 'bolt', '🔄': 'refresh', '👑': 'crown', '📴': 'offline', '📌': 'pin',
     '📈': 'chartUp', '🙏': 'hand', '👀': 'eye', '👁': 'eye', '🏖': 'beach', '⚖': 'scale', '⚙': 'gear', '🛡': 'shield', '👋': 'wave',
     '🔑': 'key', '📊': 'chart', '📜': 'scroll', '🚪': 'logout', '✨': 'sparkle', '📅': 'calendar', '✏': 'pencil', '🗑': 'trash',
-    '🎉': 'party', '🚓': 'siren', '🧾': 'receipt', '🎴': 'cards', '🧰': 'chest', '➡': 'arrow', '⚓': 'anchor', '🏷': 'tag', '⛔': 'xmark',
+    '🎉': 'party', '🚓': 'siren', '🧾': 'receipt', '🎴': 'cards', '🧰': 'chest', '➡': 'arrow', '⬅': 'arrow', '⚓': 'anchor', '🏷': 'tag', '⛔': 'xmark',
     '🛒': 'store', '🪙': 'coins', '🥇': 'medal', '🙂': 'user', '🎁': 'party', '▶': 'play', '📧': 'mail', '✉': 'mail',
   };
   const EMOJI_RE = new RegExp('(' + Object.keys(EMOJI).map((e) => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')️?', 'gu');
@@ -305,10 +305,10 @@
   }
 
   // ---------------------------------------------------------------- Blender renders (public/tharwa/img, tools/blender/tharwa_assets.py)
-  // Chrome / crystal miniatures with a soft contact shadow; 2 sizes each (srcset), WebP, lazy decoded.
+  // Chrome / crystal miniatures with a soft baked contact shadow; transparent PNG, 2 sizes each (srcset).
   const IMG = '/tharwa/img/';
   const RENDERS = typeof window !== 'undefined' && !!window.THARWA_RENDERS;
-  const rimg = (name, s1, s2, cls, alt = '') => `<img class="${cls}" src="${IMG}${name}-${s1}.webp" srcset="${IMG}${name}-${s1}.webp 1x, ${IMG}${name}-${s2}.webp 2x" alt="${alt}" draggable="false" decoding="async">`;
+  const rimg = (name, s1, s2, cls, alt = '') => `<img class="${cls}" src="${IMG}${name}-${s1}.png" srcset="${IMG}${name}-${s1}.png 1x, ${IMG}${name}-${s2}.png 2x" alt="${alt}" draggable="false" decoding="async">`;
   const RENDER_ICONS = { start: 'corner-start', jail: 'corner-jail', vacation: 'corner-vacation', gotojail: 'corner-gotojail' };
   const HOUSE_IMG = rimg('house', 64, 128, 'house bimg');
   const HOTEL_IMG = rimg('hotel', 64, 128, 'hotel bimg');

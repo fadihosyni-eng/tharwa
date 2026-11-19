@@ -19,7 +19,8 @@ const PORT = Number(process.env.PORT) || 8700;
 const PUB = path.join(__dirname, 'public');
 const rooms = new Map();
 
-const COLORS = ['#f5c04a', '#38d4c0', '#f0585e', '#a78bfa', '#5ad06b', '#f472b6', '#4f9df7', '#fb923c'];
+// Player colours: each player picks one in the lobby (unique per room); bots and newcomers get a free one.
+const COLORS = ['#f5c04a', '#38d4c0', '#f0585e', '#a78bfa', '#5ad06b', '#f472b6', '#4f9df7', '#fb923c', '#e2e8f0', '#a3e635'];
 const PIECES = ['car', 'plane', 'ship', 'crown', 'rocket', 'diamond', 'star', 'hat'];
 const BOT_NAMES = ['سامي', 'ليلى', 'كريم', 'هدى', 'ماهر', 'رنا', 'زيد', 'نور'];
 const DEFAULTS = {
@@ -101,7 +102,6 @@ function addPlayer(room, name, isBot, user) {
   };
   if (user) {
     Object.assign(p, { userId: user.id, username: user.username, points: user.points, avatar: user.avatar });
-    if (user.color && !room.players.some((x) => x.color === user.color)) p.color = user.color;
     if (user.piece && !room.players.some((x) => x.piece === user.piece)) p.piece = user.piece;
   }
   room.players.push(p);
@@ -127,7 +127,7 @@ function removePlayer(room, pid) {
 function publicRoom(room) {
   const g = room.game;
   return {
-    code: room.code, hostId: room.hostId, settings: room.settings, status: room.status, now: Date.now(),
+    code: room.code, hostId: room.hostId, settings: room.settings, status: room.status, now: Date.now(), colors: COLORS,
     map: room.map, mapId: room.mapId || 'classic',
     players: room.players.map((p) => ({
       id: p.id, name: p.name, color: p.color, piece: p.piece, isBot: p.isBot, connected: p.isBot || p.conns > 0,
@@ -245,6 +245,14 @@ function roomAct(room, p, type, data) {
       p.piece = k;
       return true;
     }
+    case 'color': {
+      needLobby();
+      const c = String((data && data.color) || '').toLowerCase();
+      if (!COLORS.includes(c)) throw httpErr(400, 'لون غير معروف');
+      if (room.players.some((x) => x.id !== p.id && x.color === c)) throw httpErr(409, 'هاللون مأخود — اختار غيره');
+      p.color = c;
+      return true;
+    }
     case 'setCountry': {
       needHost(); needLobby();
       const slot = String((data && data.slot) || ''), code = String((data && data.code) || '');
@@ -304,7 +312,7 @@ function roomAct(room, p, type, data) {
 // ---------------------------------------------------------------- HTTP
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.webp': 'image/webp',
+  '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.webp': 'image/webp',
 };
 function json(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -470,7 +478,7 @@ async function api(req, pathname, body, res) {
     if (type === 'setMap') { await setMap(room, p, body.data || {}); afterChange(room); return json(res, 200, { ok: true }); }
     const handled = roomAct(room, p, type, body.data || {});
     if (handled === null) {
-      if (room.game && room.game.autopilot && E.current(room) === p) room.game.autopilot = false; // player is back
+      if (room.game && room.game.autopilot && E.current(room) === p) Object.assign(room.game, { autopilot: false, turnEndsAt: Date.now() + room.settings.turnTimer * 1000 }); // player is back: a fresh turn window, or the next tick hands the turn to the autopilot again
       E.act(room, p.id, type, body.data || {});
     }
     if (rooms.has(room.code)) afterChange(room);

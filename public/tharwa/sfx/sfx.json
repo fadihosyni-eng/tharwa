@@ -1,0 +1,105 @@
+{
+ "note": "Kenney CC0 sounds, normalized to -24 LUFS. action -> variations (pick one at random).",
+ "sounds": {
+  "dice-shake": [
+   "dice-shake-1.mp3",
+   "dice-shake-2.mp3",
+   "dice-shake-3.mp3"
+  ],
+  "dice-roll": [
+   "dice-roll-1.mp3",
+   "dice-roll-2.mp3",
+   "dice-roll-3.mp3",
+   "dice-roll-4.mp3",
+   "dice-roll-5.mp3",
+   "dice-roll-6.mp3",
+   "dice-roll-7.mp3"
+  ],
+  "step": [
+   "step-1.mp3",
+   "step-2.mp3",
+   "step-3.mp3"
+  ],
+  "buy": [
+   "buy-1.mp3",
+   "buy-2.mp3",
+   "buy-3.mp3"
+  ],
+  "pay": [
+   "pay-1.mp3",
+   "pay-2.mp3",
+   "pay-3.mp3"
+  ],
+  "receive": [
+   "receive-1.mp3",
+   "receive-2.mp3",
+   "receive-3.mp3"
+  ],
+  "salary": [
+   "salary-1.mp3",
+   "salary-2.mp3"
+  ],
+  "bid": [
+   "bid-1.mp3",
+   "bid-2.mp3",
+   "bid-3.mp3"
+  ],
+  "card": [
+   "card-1.mp3",
+   "card-2.mp3",
+   "card-3.mp3"
+  ],
+  "trade-send": [
+   "trade-send-1.mp3",
+   "trade-send-2.mp3",
+   "trade-send-3.mp3"
+  ],
+  "trade-ok": [
+   "trade-ok-1.mp3",
+   "trade-ok-2.mp3"
+  ],
+  "trade-no": [
+   "trade-no-1.mp3",
+   "trade-no-2.mp3"
+  ],
+  "build": [
+   "build-1.mp3",
+   "build-2.mp3",
+   "build-3.mp3"
+  ],
+  "hotel": [
+   "hotel-1.mp3",
+   "hotel-2.mp3"
+  ],
+  "mortgage": [
+   "mortgage-1.mp3",
+   "mortgage-2.mp3"
+  ],
+  "jail": [
+   "jail-1.mp3",
+   "jail-2.mp3"
+  ],
+  "turn": [
+   "turn-1.mp3",
+   "turn-2.mp3"
+  ],
+  "chat": [
+   "chat-1.mp3",
+   "chat-2.mp3"
+  ],
+  "click": [
+   "click-1.mp3",
+   "click-2.mp3"
+  ],
+  "error": [
+   "error-1.mp3",
+   "error-2.mp3"
+  ],
+  "win": [
+   "win-1.mp3"
+  ],
+  "lose": [
+   "lose-1.mp3"
+  ]
+ }
+}

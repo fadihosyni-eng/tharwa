@@ -99,6 +99,20 @@ function decide(room, p, opt = {}) {
     return next <= cap ? { type: 'bid', data: { amount: next } } : null;
   }
 
+  // A creditor (computer player) offers to buy one of the debtor's free properties, the debt counting as payment.
+  if (!auto && g.phase === 'debt' && E.current(room) !== p && E.owedTo(room, p.id) > 0 && !(g.debtOffers || []).some((o) => o.from === p.id)) {
+    const debtor = E.current(room), owed = E.owedTo(room, p.id);
+    let best = null;
+    for (const [k, pr] of Object.entries(g.props)) {
+      const i = Number(k), t = B.TILES[i];
+      if (pr.owner !== debtor.id || (g.auction && g.auction.idx === i) || (g.debtNo || []).includes(p.id + ':' + i)) continue;
+      if (t.type === 'city' && B.SET_TILES[t.set].some((j) => g.props[j] && g.props[j].houses > 0)) continue;
+      const price = Math.round(Math.min(t.price * (pr.mortgaged ? 0.5 : 0.9), owed + Math.max(0, p.money - 200)) / 10) * 10;
+      if (price >= t.mortgage && (!best || t.price > best.t.price)) best = { i, t, price };
+    }
+    if (best) return { type: 'debtOffer', data: { idx: best.i, price: best.price } };
+  }
+
   if (E.current(room) !== p) return null;
 
   switch (g.phase) {
@@ -127,6 +141,10 @@ function decide(room, p, opt = {}) {
         }
       }
       if (best !== null) return { type: 'sell', data: { idx: best } };
+      // an offer to buy one of my properties that pays at least what the bank would lend on it
+      const offers = (g.debtOffers || []).filter((o) => o.to === p.id).sort((a, b) => b.price - a.price);
+      const fair = offers.find((o) => o.price >= B.TILES[o.idx].mortgage);
+      if (fair) return { type: 'debtOfferAccept', data: { id: fair.id } };
       const cands = Object.keys(g.props).map(Number).filter((i) => !E.cannotMortgage(room, p, i));
       if (cands.length) {
         const score = (i) => {
@@ -136,6 +154,7 @@ function decide(room, p, opt = {}) {
         cands.sort((a, b) => score(a) - score(b));
         return { type: 'mortgage', data: { idx: cands[0] } };
       }
+      if (offers.length) return { type: 'debtOfferAccept', data: { id: offers[0].id } };
       return { type: 'bankrupt' };
     }
 

@@ -42,7 +42,7 @@ function newGame(room) {
     props: {}, pot: 0,
     chance: shuffle(B.CHANCE.map((_, i) => i)),
     chest: shuffle(B.CHEST.map((_, i) => i)),
-    pendingBuy: null, auction: null, auctionQueue: [], debts: [],
+    pendingBuy: null, auction: null, auctionQueue: [], debts: [], debtOffers: [], debtOfferSeq: 1,
     card: null, cardSeq: 0,
     notice: null, noticeSeq: 0,
     moves: [], moveSeq: 0,
@@ -63,7 +63,7 @@ function startTurn(room) {
   const g = room.game;
   Object.assign(g, {
     phase: 'roll', rolled: false, again: false, doubles: 0, pendingBuy: null,
-    autopilot: false, debtExtended: false,
+    autopilot: false, debtExtended: false, debtOffers: [], debtNo: [],
   });
   g.turnEndsAt = room.settings.turnTimer ? Date.now() + room.settings.turnTimer * 1000 : null;
   // Loans that fall due are collected at the start of the borrower's turn.
@@ -105,17 +105,19 @@ function bankReceive(room, amount, toPot) {
   if (toPot && room.settings.vacationCash) room.game.pot += amount;
 }
 
-// Charge the CURRENT player. Pays what it can; the rest becomes a debt.
+// Charge the CURRENT player. Pays what it can now (the creditor gets that part at once);
+// the rest becomes a debt that is paid as soon as money comes in. Returns the amount paid now.
 function charge(room, p, amount, to, toPot, reason) {
   amount = Math.max(0, Math.round(amount));
-  if (!amount) return;
+  if (!amount) return 0;
   const pay = Math.min(amount, Math.max(0, p.money));
   p.money -= pay;
   if (to) to.money += pay; else bankReceive(room, pay, toPot);
   if (pay < amount) {
-    room.game.debts.push({ to: to ? to.id : null, toPot: !!toPot, amount: amount - pay, reason });
-    log(room, `⚠️ ${p.name} ما معه كفاية — عليه دين ${fmt(amount - pay)}`);
+    room.game.debts.push({ to: to ? to.id : null, toPot: !!toPot, amount: amount - pay, total: amount, paid: pay, reason });
+    log(room, `⚠️ ${p.name} ما معه كفاية — دفع ${fmt(pay)} وضل عليه دين ${fmt(amount - pay)}${to ? ` لـ ${to.name}` : ' للبنك'}`);
   }
+  return pay;
 }
 
 function payDebts(room, p) {
@@ -123,12 +125,26 @@ function payDebts(room, p) {
   while (g.debts.length && p.money > 0) {
     const d = g.debts[0];
     const pay = Math.min(d.amount, p.money);
-    p.money -= pay; d.amount -= pay;
+    p.money -= pay; d.amount -= pay; d.paid = (d.paid || 0) + pay;
     const to = d.to ? P(room, d.to) : null;
     if (to && !to.bankrupt) to.money += pay; else if (!d.to) bankReceive(room, pay, d.toPot);
     if (d.amount <= 0) g.debts.shift();
   }
-  if (!g.debts.length) log(room, `✅ ${p.name} سدّد ديونه`);
+  if (!g.debts.length) { g.debtOffers = []; log(room, `✅ ${p.name} سدّد ديونه`); }
+}
+// How much the current player still owes `pid` (debts only, not loans).
+function owedTo(room, pid) { return room.game.debts.filter((d) => d.to === pid).reduce((s, d) => s + d.amount, 0); }
+// Cancel up to `amount` of the debts owed to `pid` (the creditor forgives it / it counts as payment). Returns the amount cancelled.
+function forgive(room, pid, amount) {
+  const g = room.game;
+  let left = amount;
+  for (const d of g.debts) {
+    if (d.to !== pid || left <= 0) continue;
+    const k = Math.min(d.amount, left);
+    d.amount -= k; d.paid = (d.paid || 0) + k; left -= k;
+  }
+  g.debts = g.debts.filter((d) => d.amount > 0);
+  return amount - left;
 }
 
 // ---------------------------------------------------------------- ownership & rent
@@ -189,23 +205,29 @@ function resolve(room, p, diceSum, opt = {}) {
     if (pr.owner === p.id) return;
     if (pr.mortgaged) { log(room, `${t.name} مرهونة — ما في إيجار`); return; }
     const owner = P(room, pr.owner);
+    // Notices carry `moveSeq`: the move they follow. Clients show them (and the money fly)
+    // only after that walk has finished on screen, never while the piece is still on its way.
     if (s.noRentInJail && owner.inJail) {
       log(room, `🔒 ${owner.name} بالسجن — ما في إيجار على ${t.name}`);
       // shown to everyone like a rent notice, so it is clear why nothing was paid
-      g.notice = { kind: 'norent', from: p.id, to: owner.id, amount: 0, tile: t.name, seq: ++g.noticeSeq };
+      g.notice = { kind: 'norent', from: p.id, to: owner.id, amount: 0, tile: t.name, seq: ++g.noticeSeq, moveSeq: g.moveSeq };
       return;
     }
     const rent = rentFor(room, idx, diceSum) * (opt.mult || 1);
     log(room, `💸 ${p.name} دفع إيجار ${fmt(rent)} لـ ${owner.name} (${t.name})`);
+    const paid = charge(room, p, rent, owner, false, 'إيجار ' + t.name);
     // Big centred notice for everyone (clients show it once per seq, like cards).
-    g.notice = { kind: 'rent', from: p.id, to: owner.id, amount: rent, tile: t.name, seq: ++g.noticeSeq };
-    charge(room, p, rent, owner, false, 'إيجار ' + t.name);
+    g.notice = { kind: 'rent', from: p.id, to: owner.id, amount: rent, paid, tile: t.name, seq: ++g.noticeSeq, moveSeq: g.moveSeq };
     return;
   }
   switch (t.type) {
     case 'tax': {
       const amt = t.percent ? Math.floor((Math.max(0, p.money) * t.percent) / 100) : t.amount;
-      if (amt > 0) { log(room, `🧾 ${p.name} دفع ${t.name} ${fmt(amt)}`); charge(room, p, amt, null, true, t.name); }
+      if (amt > 0) {
+        log(room, `🧾 ${p.name} دفع ${t.name} ${fmt(amt)}`);
+        const paid = charge(room, p, amt, null, true, t.name);
+        g.notice = { kind: 'tax', from: p.id, to: null, amount: amt, paid, tile: t.name, seq: ++g.noticeSeq, moveSeq: g.moveSeq };
+      }
       break;
     }
     case 'chance': case 'chest': drawCard(room, p, t.type, diceSum); break;
@@ -222,7 +244,7 @@ function drawCard(room, p, deck, diceSum) {
   if (!g[deck].length) g[deck] = shuffle(list.map((_, i) => i));
   const c = list[g[deck].shift()];
   const text = c.text.replace(/\{(\d+)\}/g, (_, n) => TT(room, Number(n)).name);
-  g.card = { deck, text, kind: c.kind, pid: p.id, seq: ++g.cardSeq, effect: '' };
+  g.card = { deck, text, kind: c.kind, pid: p.id, seq: ++g.cardSeq, effect: '', moveSeq: g.moveSeq };
   log(room, `${deck === 'chance' ? '🎴 حظ' : '🧰 خزنة'} لـ ${p.name}: ${text}`);
   const entry = room.log[room.log.length - 1];
   const from = p.pos;
@@ -388,6 +410,7 @@ function endAuction(room) {
   const c = current(room);
   if (g.debts.length && c && c.money > 0) payDebts(room, c);
   pruneTrades(room);
+  pruneDebtOffers(room);
   settle(room);
 }
 
@@ -567,35 +590,130 @@ function declineTrade(room, p, id) {
   log(room, tr.to === p.id ? `❌ ${p.name} رفض صفقة ${other ? other.name : ''}` : `${p.name} سحب عرضه`);
 }
 
+// ---------------------------------------------------------------- debt: partial payment, help, buying from the debtor
+// While the current player is in debt (phase 'debt'), any other player — normally the creditor — can:
+//  - offer to buy one of the debtor's properties (`debtOffer`). If the debtor accepts, the price first cancels what
+//    the debtor owes the buyer, and only the rest is paid in cash (which then pays the debtor's other debts);
+//  - send money (`debtRelief`): it first cancels the debt owed to the sender, the rest arrives as cash.
+// Money is never created: cancelled debt is money the creditor agreed not to receive.
+const MAX_DEBT_OFFERS = 3;
+function needDebtor(room, p) {
+  const g = room.game, d = current(room);
+  if (!g.debts.length || !d || d.bankrupt) throw err('ما حدا عليه دين هلق');
+  if (d === p) throw err('هاد دينك إنت');
+  return d;
+}
+function checkDebtProp(room, debtor, idx) {
+  const g = room.game, t = TT(room, idx), pr = g.props[idx];
+  if (!t || !pr || pr.owner !== debtor.id) throw err('هالعقار مو ملك ' + debtor.name);
+  if (g.auction && g.auction.idx === idx) throw err(`${t.name} معروضة بالمزاد هلق`);
+  if (t.type === 'city' && setHouses(room, t.set).some((h) => h > 0)) throw err(`لازم تنباع الأبنية بـ ${t.countryName} أول`);
+}
+function debtOffer(room, p, data) {
+  const g = room.game, debtor = needDebtor(room, p);
+  const idx = Number(data && data.idx), price = Math.floor(Number(data && data.price));
+  checkDebtProp(room, debtor, idx);
+  if (!Number.isFinite(price) || price < 10 || price > 100000) throw err('السعر لازم يكون $10 أو أكتر');
+  const cash = Math.max(0, price - owedTo(room, p.id));
+  if (cash > p.money) throw err(`ما معك ${fmt(cash)} (بعد ما ينحسب الدين اللي إلك)`);
+  g.debtOffers = (g.debtOffers || []).filter((o) => !(o.from === p.id && o.idx === idx));
+  if (g.debtOffers.filter((o) => o.from === p.id).length >= MAX_DEBT_OFFERS) throw err('عندك 3 عروض معلّقة — استنى الرد');
+  g.debtOfferSeq = (g.debtOfferSeq || 1) + 1;
+  g.debtOffers.push({ id: g.debtOfferSeq, from: p.id, to: debtor.id, idx, price, at: Date.now() });
+  log(room, `🏷️ ${p.name} عرض يشتري ${TT(room, idx).name} من ${debtor.name} بـ ${fmt(price)}`);
+}
+function debtOfferAccept(room, p, id) {
+  const g = room.game, o = (g.debtOffers || []).find((x) => x.id === Number(id));
+  if (!o || o.to !== p.id) throw err('العرض مو موجود');
+  g.debtOffers = g.debtOffers.filter((x) => x !== o);
+  const buyer = P(room, o.from);
+  if (!buyer || buyer.bankrupt) throw err('اللاعب طلع من اللعبة');
+  checkDebtProp(room, p, o.idx);
+  const owed = owedTo(room, buyer.id), cancel = Math.min(owed, o.price), cash = o.price - cancel;
+  if (cash > buyer.money) throw err(`${buyer.name} ما معه ${fmt(cash)} هلق`);
+  forgive(room, buyer.id, cancel);
+  buyer.money -= cash; p.money += cash;
+  g.props[o.idx].owner = buyer.id;
+  const t = TT(room, o.idx);
+  log(room, `🤝 ${buyer.name} اشترى ${t.name} من ${p.name} بـ ${fmt(o.price)}${cancel ? ` (${fmt(cancel)} انحسبوا من الدين${cash ? ` و ${fmt(cash)} مصاري` : ''})` : ''}`);
+  g.notice = { kind: 'debtsale', from: p.id, to: buyer.id, amount: o.price, paid: cash, cancel, tile: t.name, seq: ++g.noticeSeq, moveSeq: g.moveSeq };
+}
+function debtOfferDecline(room, p, id) {
+  const g = room.game, o = (g.debtOffers || []).find((x) => x.id === Number(id));
+  if (!o || (o.to !== p.id && o.from !== p.id)) throw err('العرض مو موجود');
+  g.debtOffers = g.debtOffers.filter((x) => x !== o);
+  // remembered for this turn, so a computer player doesn't offer the same thing again
+  if (o.from !== p.id) (g.debtNo = g.debtNo || []).push(o.from + ':' + o.idx);
+  log(room, o.from === p.id ? `${p.name} سحب عرض الشراء` : `❌ ${p.name} رفض يبيع ${TT(room, o.idx).name}`);
+}
+function debtRelief(room, p, data) {
+  const debtor = needDebtor(room, p);
+  const amount = Math.floor(Number(data && data.amount));
+  if (!Number.isFinite(amount) || amount < 1 || amount > 100000) throw err('المبلغ غير صحيح');
+  const cancel = Math.min(owedTo(room, p.id), amount), cash = amount - cancel;
+  if (cash > p.money) throw err('ما معك ' + fmt(cash));
+  forgive(room, p.id, cancel);
+  p.money -= cash; debtor.money += cash;
+  log(room, cancel && !cash ? `💵 ${p.name} سامح ${debtor.name} بـ ${fmt(cancel)} من دينه`
+    : `💵 ${p.name} بعت ${fmt(amount)} لـ ${debtor.name}${cancel ? ` (${fmt(cancel)} منهن من الدين اللي إله)` : ''}`);
+}
+// Drop buy offers that can no longer happen.
+function pruneDebtOffers(room) {
+  const g = room.game, d = current(room);
+  if (!g.debts.length || !d) { g.debtOffers = []; return; }
+  g.debtOffers = (g.debtOffers || []).filter((o) => {
+    const b = P(room, o.from);
+    if (o.to !== d.id || !b || b.bankrupt) return false;
+    try { checkDebtProp(room, d, o.idx); } catch (e) { return false; }
+    return Math.max(0, o.price - owedTo(room, b.id)) <= b.money;
+  });
+}
+
 // ---------------------------------------------------------------- bankruptcy
+// The player's cash goes to whoever he owes (in order: the debts of this turn, then his loans, as far as it goes).
+// ALL his properties go back to the bank and are free to buy again: unowned, no buildings, not mortgaged.
+// Nothing goes to the creditor except that cash.
 function bankrupt(room, p) {
   const g = room.game, isCur = current(room) === p;
   let cash = Math.max(0, p.money);
-  for (const [i, pr] of Object.entries(g.props)) {
-    if (pr.owner === p.id && pr.houses) { cash += Math.floor(TT(room, i).houseCost / 2) * pr.houses; pr.houses = 0; }
-  }
-  let heir = null;
+  const paid = []; // [{ to: pid|null, amount }]
+  const give = (toId, amount, toPot) => {
+    const k = Math.min(cash, amount);
+    if (k <= 0) return 0;
+    cash -= k;
+    const to = toId ? P(room, toId) : null;
+    if (to && !to.bankrupt) to.money += k; else if (!toId) bankReceive(room, k, toPot);
+    const row = paid.find((x) => x.to === (toId || null));
+    if (row) row.amount += k; else paid.push({ to: toId || null, amount: k });
+    return k;
+  };
   if (isCur && g.debts.length) {
-    const biggest = g.debts.filter((d) => d.to).sort((a, b) => b.amount - a.amount)[0];
-    if (biggest) heir = P(room, biggest.to);
-    for (const d of g.debts) {
-      const pay = Math.min(cash, d.amount); cash -= pay;
-      const to = d.to ? P(room, d.to) : null;
-      if (to && !to.bankrupt) to.money += pay; else if (!d.to) bankReceive(room, pay, d.toPot);
-    }
+    for (const d of g.debts) give(d.to, d.amount, d.toPot);
     g.debts = [];
+  } else {
+    // the current player owed this player money: that debt is dropped (the creditor is out of the game)
+    g.debts = g.debts.filter((d) => d.to !== p.id);
   }
+  // loans he still owes are settled as far as the cash goes
+  for (const l of g.loans.filter((x) => x.state === 'active' && x.borrower === p.id)) give(l.lender, l.repay, false);
+  let freed = 0;
   for (const [i, pr] of Object.entries(g.props)) {
     if (pr.owner !== p.id) continue;
-    if (heir && !heir.bankrupt) pr.owner = heir.id; else delete g.props[i];
+    delete g.props[i];
+    freed++;
   }
   Object.assign(p, { money: 0, bankrupt: true, inJail: false, jailCards: 0 });
   g.trades = g.trades.filter((t) => t.from !== p.id && t.to !== p.id);
   g.loans = g.loans.filter((l) => l.lender !== p.id && l.borrower !== p.id);
+  g.debtOffers = (g.debtOffers || []).filter((o) => o.from !== p.id && o.to !== p.id);
   if (g.auction && g.auction.seller === p.id) g.auction = null;
   if (g.auctionQueue && g.auctionQueue.some((l) => l.seller === p.id)) g.auctionQueue = [];
   if (g.auction && g.auction.bidder === p.id) { g.auction.bidder = null; g.auction.bid = 0; }
-  log(room, heir ? `💀 ${p.name} أفلس — أملاكه راحت لـ ${heir.name}` : `💀 ${p.name} أفلس — أملاكه رجعت للبنك`);
+  const nm = (id) => (id ? (P(room, id) || {}).name || '' : 'البنك');
+  const paidTxt = paid.filter((x) => x.amount > 0).map((x) => `${fmt(x.amount)} لـ ${nm(x.to)}`).join('، ');
+  log(room, `💀 ${p.name} أفلس${paidTxt ? ` — مصاريه راحت: ${paidTxt}` : ''}${freed ? ` — ${freed} ${freed === 1 ? 'عقار رجع' : 'عقارات رجعوا'} للبنك وصاروا للبيع` : ''}`);
+  const first = paid.find((x) => x.to);
+  g.notice = { kind: 'bankrupt', from: p.id, to: first ? first.to : null, paidTo: paid, freed, seq: ++g.noticeSeq, moveSeq: g.moveSeq };
 
   const alive = active(room);
   if (alive.length <= 1) {
@@ -612,6 +730,9 @@ function bankrupt(room, p) {
 const MANAGE = new Set(['build', 'sell', 'mortgage', 'unmortgage']);
 
 function act(room, pid, type, data = {}) {
+  // A roll names the throw it answers (`seq` = the rollSeq the player saw). A stale or double click that lost
+  // the race (e.g. the autopilot already rolled) is simply ignored instead of rolling again or erroring.
+  if (type === 'roll' && data && data.seq != null && room.game && Number(data.seq) !== room.game.rollSeq) return;
   if (room.status !== 'playing') throw err('اللعبة مو شغالة');
   const g = room.game, p = P(room, pid);
   if (!p || p.bankrupt) throw err('ما عاد فيك تلعب بهالجولة');
@@ -656,6 +777,10 @@ function act(room, pid, type, data = {}) {
     case 'loanDecline': declineLoan(room, p, data && data.id); break;
     case 'loanRepay': repayLoan(room, p, data && data.id); break;
     case 'bankrupt': bankrupt(room, p); break;
+    case 'debtOffer': debtOffer(room, p, data); break;
+    case 'debtOfferAccept': need('debt'); debtOfferAccept(room, p, data && data.id); break;
+    case 'debtOfferDecline': debtOfferDecline(room, p, data && data.id); break;
+    case 'debtRelief': debtRelief(room, p, data); break;
     default: throw err('أمر غير معروف');
   }
 
@@ -663,11 +788,12 @@ function act(room, pid, type, data = {}) {
     const c = current(room);
     if (g.debts.length && c.money > 0) payDebts(room, c);
     pruneTrades(room);
+    pruneDebtOffers(room);
     settle(room);
   }
 }
 
 module.exports = {
   TT, newGame, act, endAuction, drawCard, current, active, log, err, fmt, P,
-  rentFor, ownsSet, cannotBuild, cannotSell, cannotMortgage, cannotUnmortgage, bankrupt,
+  rentFor, ownsSet, cannotBuild, cannotSell, cannotMortgage, cannotUnmortgage, bankrupt, owedTo,
 };
